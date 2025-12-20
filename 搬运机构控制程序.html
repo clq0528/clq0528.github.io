@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC 搬运机构控制程序 (修复版)</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --wire-off: #cbd5e0;
+            --wire-on: #e53e3e;     /* 通电红 */
+            --wire-active-shadow: 0 0 8px rgba(229, 62, 62, 0.6);
+            --sensor-active: #48bb78; /* 传感器亮绿 */
+            --text-primary: #2d3748;
+            --ladder-font: 'Consolas', 'Monaco', monospace;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* --- 标题与顶部栏 --- */
+        header {
+            width: 1300px; margin-bottom: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;
+        }
+        h1 { margin: 0; font-size: 24px; color: #2c5282; display: flex; align-items: center; gap: 12px; }
+        .tag { background: #4299e1; color: white; font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+
+        /* --- 主布局 (Grid) --- */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 500px; /* 右侧梯形图稍微给宽一点 */
+            gap: 20px;
+            width: 1300px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        .panel-header {
+            background: #edf2f7; padding: 10px 15px; font-weight: bold; font-size: 14px;
+            border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* --- 左侧：机械仿真视窗 --- */
+        .machine-view {
+            height: 500px; position: relative; background: #e6fffa;
+            overflow: hidden; perspective: 1000px;
+        }
+        
+        /* 地面与基座 */
+        .floor { position: absolute; bottom: 0; width: 100%; height: 20px; background: #718096; }
+        .base-l { position: absolute; bottom: 20px; left: 50px; width: 100px; height: 150px; background: #cbd5e0; border: 2px solid #a0aec0; }
+        .base-r { position: absolute; bottom: 20px; right: 50px; width: 100px; height: 150px; background: #cbd5e0; border: 2px solid #a0aec0; }
+        
+        /* 导轨 X轴 */
+        .rail-x {
+            position: absolute; top: 100px; left: 50px; right: 50px; height: 20px;
+            background: linear-gradient(to bottom, #cfd8dc, #b0bec5);
+            border-radius: 10px; z-index: 1;
+        }
+
+        /* 移动模组 (水平滑块) */
+        .carriage-x {
+            position: absolute; top: 90px; left: 100px; /* 初始位置 */
+            width: 80px; height: 40px;
+            background: #2b6cb0; border-radius: 6px;
+            z-index: 5;
+            transition: left 0.1s linear; /* 改为线性以便JS控制每一帧 */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: flex; justify-content: center;
+        }
+
+        /* 垂直气缸体 (Z轴) */
+        .cyl-z-body {
+            position: absolute; top: 40px; /* 相对于 carriage-x */
+            width: 40px; height: 120px;
+            background: #4a5568; border-radius: 4px;
+        }
+
+        /* 垂直活塞杆 */
+        .cyl-z-rod {
+            position: absolute; top: 110px; left: 50%; transform: translateX(-50%);
+            width: 12px; height: 100px;
+            background: #ecc94b; border: 1px solid #d69e2e;
+            transition: height 0.8s ease-in-out, top 0.8s ease-in-out;
+            height: 20px; /* 收缩状态 */
+        }
+        /* 伸出状态 class */
+        .z-extended .cyl-z-rod { height: 180px; }
+
+        /* 旋转组件 & 夹爪 */
+        .rotary-joint {
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 30px; background: #2c5282;
+            transition: transform 0.8s ease;
+        }
+        .gripper-l, .gripper-r {
+            position: absolute; bottom: -25px; width: 10px; height: 30px; background: #1a202c;
+            transition: transform 0.3s;
+        }
+        .gripper-l { left: 0; transform-origin: top left; }
+        .gripper-r { right: 0; transform-origin: top right; }
+
+        /* 夹紧状态 */
+        .gripped .gripper-l { transform: rotate(-25deg); }
+        .gripped .gripper-r { transform: rotate(25deg); }
+
+        /* 物料 */
+        .product {
+            width: 30px; height: 30px; background: #e53e3e; border: 2px solid #9b2c2c;
+            position: absolute; 
+            transition: opacity 0.5s, left 0.1s, bottom 0.1s; /* 添加透明度过渡 */
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        /* 传感器指示灯 */
+        .sensor-led {
+            width: 16px; height: 16px; background: #ccc; border-radius: 50%;
+            position: absolute; border: 1px solid #666; font-size: 10px; color: #000;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold;
+        }
+        .sensor-led.on { background: var(--sensor-active); box-shadow: 0 0 8px #0f0; border-color: #0f0; }
+        
+        /* 传感器位置修正 */
+        #sw-left { top: 60px; left: 60px; } /* X1 向左移，避免文字重叠 */
+        #sw-right { top: 60px; right: 60px; }
+        #sw-up { top: 5px; right: -25px; }   /* 附着在 carriage 上 */
+        #sw-down { top: 100px; right: -25px; } /* 附着在 carriage 上 */
+
+        /* --- 右侧：梯形图可视化 --- */
+        .ladder-stage {
+            padding: 10px; background: #fff; height: 500px; overflow-y: auto;
+            font-family: var(--ladder-font);
+        }
+        
+        .rung {
+            display: flex; align-items: center; position: relative; height: 60px;
+            border-bottom: 1px dashed #eee;
+            /* 增加内边距防止线断开 */
+            padding: 0 10px;
+        }
+        .rung:hover { background: #fafafa; }
+        
+        /* 母线 */
+        .rail-l { position: absolute; left: 5px; top: 0; bottom: 0; width: 4px; background: #333; }
+        .rail-r { position: absolute; right: 5px; top: 0; bottom: 0; width: 4px; background: #333; }
+
+        .elem {
+            position: relative; height: 40px; width: 60px; /* 固定宽度以便计算连线 */
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold; cursor: default;
+            z-index: 2; background: #fff; /* 遮挡背后的线 */
+        }
+        .elem-symbol { font-size: 18px; color: #4a5568; transition: color 0.1s; }
+        .elem-addr { font-size: 10px; color: #718096; margin-top: -4px; }
+        
+        /* 导线系统 - 修复连线问题 */
+        .wire-h {
+            position: absolute; height: 2px; background: var(--wire-off); top: 50%;
+            z-index: 1; transition: background 0.2s;
+        }
+        
+        /* 激活态 */
+        .active .elem-symbol { color: var(--wire-on); text-shadow: var(--wire-active-shadow); }
+        .active.wire-h { background: var(--wire-on); box-shadow: var(--wire-active-shadow); }
+
+        /* --- 底部：解说与控制 --- */
+        .bottom-deck {
+            margin-top: 20px;
+            display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; /* 右边给大一点 */
+            width: 1300px;
+        }
+        
+        .log-panel {
+            background: #2d3748; color: #63b3ed; padding: 10px; height: 180px;
+            font-family: monospace; font-size: 12px; overflow-y: auto;
+            border-radius: 6px;
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #4a5568; padding-bottom: 2px; }
+        .log-entry span { color: #f6ad55; }
+
+        .explanation {
+            background: #fffaf0; border: 1px solid #ed8936; padding: 15px; border-radius: 6px;
+            font-size: 14px; line-height: 1.6; color: #2d3748; overflow-y: auto; height: 180px;
+        }
+        .exp-highlight { background: #feeebc; padding: 0 4px; border-radius: 2px; font-weight: bold; color: #c05621; }
+        .exp-sub { display:block; margin-top:8px; font-weight:bold; color:#2b6cb0; }
+
+        /* --- 控件：移到顶部 Header --- */
+        .controls-in-header {
+            display: flex; gap: 10px;
+        }
+        button {
+            padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer;
+            font-weight: bold; transition: all 0.2s; font-size: 12px;
+        }
+        .btn-start { background: #48bb78; color: white; }
+        .btn-start:hover { background: #38a169; }
+        .btn-reset { background: #e53e3e; color: white; }
+        .btn-reset:hover { background: #c53030; }
+        
+        /* 变量监控仪表盘 */
+        .io-monitor {
+            position: absolute; top: 10px; right: 10px; 
+            background: rgba(255,255,255,0.95); padding: 5px; border-radius: 4px; border: 1px solid #ccc;
+            font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .io-bit { padding: 2px 5px; background: #eee; border-radius: 2px; text-align: center; color: #888;}
+        .io-bit.on { background: #f6ad55; color: #fff; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>
+        <span class="tag">PLC SIM</span>
+        搬运机构控制程序 (ST/Ladder 混合联动)
+    </h1>
+    <div style="font-size: 12px; color: #718096; text-align: right;">
+        修正项：连线修复 | Z轴行程 | 物料循环
+    </div>
+</header>
+
+<div class="main-layout">
+    <!-- 左侧：机械仿真 -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>机械视图 (Machine View)</span>
+            <!-- 按钮修正位置：放在这里更合理 -->
+            <div class="controls-in-header">
+                <button class="btn-start" onclick="plc.start()">▶ 启动循环 (X0)</button>
+                <button class="btn-reset" onclick="plc.reset()">■ 急停复位</button>
+            </div>
+        </div>
+        <div class="machine-view" id="stage">
+            
+            <!-- 传感器指示灯 (位置已修正) -->
+            <div id="sw-left" class="sensor-led" title="X1: 左限位">X1</div>
+            <div id="sw-right" class="sensor-led" title="X2: 右限位">X2</div>
+
+            <!-- X轴滑块 -->
+            <div class="carriage-x" id="carriage">
+                <div style="position: absolute; top:-20px; font-size:10px; color:#555; width:100px; text-align:center;">平移气缸(双控)</div>
+                
+                <!-- 附着在滑块上的 Z轴传感器 -->
+                <div id="sw-up" class="sensor-led" title="X3: 上限位">X3</div>
+                <div id="sw-down" class="sensor-led" title="X4: 下限位">X4</div>
+
+                <!-- Z轴机构 -->
+                <div class="cyl-z-body">
+                    <div class="cyl-z-rod" id="z-rod">
+                        <div class="rotary-joint" id="rotary">
+                            <div class="gripper-l" id="grip-l"></div>
+                            <div class="gripper-r" id="grip-r"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 左侧料台 -->
+            <div class="base-l">
+                <div style="text-align:center; padding-top:10px; font-size:12px; color:#777;">取料位</div>
+            </div>
+            <!-- 右侧料台 -->
+            <div class="base-r">
+                <div style="text-align:center; padding-top:10px; font-size:12px; color:#777;">放料位</div>
+            </div>
+
+            <!-- 地面 -->
+            <div class="floor"></div>
+
+            <!-- 动态生成的物料 -->
+            <div class="product" id="product" style="left: 85px; bottom: 170px;"></div>
+
+            <!-- 实时IO监控小窗 -->
+            <div class="io-monitor">
+                <div id="m-x0" class="io-bit">X0 启</div>
+                <div id="m-x1" class="io-bit">X1 左</div>
+                <div id="m-x2" class="io-bit">X2 右</div>
+                <div id="m-x3" class="io-bit">X3 上</div>
+                <div id="m-x4" class="io-bit">X4 下</div>
+                <div id="m-y0" class="io-bit">Y0 左</div>
+                <div id="m-y1" class="io-bit">Y1 右</div>
+                <div id="m-y2" class="io-bit">Y2 下</div>
+                <div id="m-y3" class="io-bit">Y3 夹</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：梯形图 -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>梯形图监控 (Ladder Logic)</span>
+            <span style="font-size:11px; color:#aaa;">Status: Online</span>
+        </div>
+        <div class="ladder-stage" id="ladder-container">
+            <!-- 梯形图由 JS 自动生成 -->
+        </div>
+    </div>
+</div>
+
+<div class="bottom-deck">
+    <!-- 左下：日志 -->
+    <div class="panel">
+        <div class="panel-header">系统日志 (System Log)</div>
+        <div class="log-panel" id="logger">
+            <div class="log-entry"> > 系统就绪，等待 X0 信号启动...</div>
+        </div>
+    </div>
+
+    <!-- 右下：解说与答题 -->
+    <div class="explanation">
+        <div style="font-weight:bold; color:#2c5282; margin-bottom:10px; font-size:16px;">上帝视角：逻辑与硬件深度解析</div>
+        
+        <p>
+            <span class="exp-highlight">题目：一个搬运机构由一个平移气缸、一个上下气缸、一个旋转气缸、一个夹爪组成。</span><br>
+            <span class="exp-highlight">现从原点搬运到终点，请用梯形图或 ST 编程，要求展示位置关系、逻辑动作；为防止通气碰撞哪些气缸必须使用双控电磁阀？</span><br>
+            <span class="exp-highlight">硬件：为什么必须用双控电磁阀？</span><br>
+            平移轴（X轴）和升降轴（Z轴）在空间上存在干涉区。如果使用单电控阀，当发生<strong>急停、断电或气压故障</strong>时，弹簧复位会导致气缸回到初始位置。
+            <br>例如：机械手正在模具内部抓料（Z轴伸出），此时若突然断电，单控阀会让X轴弹簧复位（缩回），导致机械手直接撞坏模具。<strong>双电控阀</strong>具有位置记忆功能，断电保持原地不动，确保安全。
+        </p>
+
+        <p>
+            <span class="exp-highlight">软件：梯形图互锁逻辑说明</span><br>
+            观察右侧梯形图的 <span style="color:#e53e3e; font-weight:bold;">Run 6 (上升后右移)</span>：
+            <br>条件中串联了 <strong>X3 (上限位)</strong>。这是为了防止气缸还在下面（Z轴未收回）时就开始横向移动，从而撞飞物料或损坏设备。
+            <br>这就是 PLC 编程中最核心的<strong>“不到位、不动作”</strong>安全互锁思想。
+        </p>
+
+        <span class="exp-sub">循环逻辑 (新物料生成)：</span>
+        本仿真演示了完整的流水线逻辑：当物料在右侧放置并被运走（Step 8 隐形）后，机械手回到左侧原点（Step 1），此时系统会自动在左侧台生成新的物料，等待下一次搬运。
+    </div>
+</div>
+
+<script>
+    // --- 1. PLC 核心数据结构 ---
+    const sys = {
+        // 输入
+        X: { 0:0, 1:0, 2:0, 3:0, 4:0 }, 
+        // 输出
+        Y: { 0:0, 1:0, 2:0, 3:0, 4:0 },
+        // 中间位
+        M: { 0:0, 10:0, 11:0, 12:0, 13:0 }, 
+        // 定时器
+        T: { 0: {val:0, set:15, done:false} }, 
+        
+        // 物理模拟数据
+        phys: {
+            xPos: 0,      // 0 = Left, 100 = Right
+            zPos: 0,      // 0 = Up,   100 = Down
+            grip: false,  // 夹爪状态
+            hasPart: false, // 夹爪上是否有料
+            partOnTableL: true, // 左侧台面是否有料
+            partOpacity: 1 // 物料透明度控制
+        }
+    };
+
+    // --- 2. 梯形图定义 (修复连线逻辑) ---
+    // ops: [地址, 类型]
+    const ladderLogic = [
+        { id: 'r0', type: 'coil',  ops: [['X0','OR','M0']], out: 'M0', desc: '系统运行保活' },
+        { id: 'r1', type: 'logic', ops: [['M0','AND'],['X1','INV']], out: 'Y0', desc: 'Step1: 回左原点' },
+        { id: 'r2', type: 'set',   ops: [['M0','AND'],['X1','AND'],['X3','AND'],['M10','INV']], out: 'Y2', desc: 'Step2: 到位下行' },
+        { id: 'r3', type: 'set',   ops: [['X4','AND'],['M11','INV']], out: 'Y3', desc: 'Step3: 触底夹紧' },
+        { id: 'r4', type: 'timer', ops: [['Y3','AND']], out: 'T0', desc: 'Step4: 夹紧延时' },
+        { id: 'r5', type: 'rst',   ops: [['T0','AND'],['M12','INV']], out: 'Y2', desc: 'Step5: 延时后上升' },
+        { id: 'r6', type: 'set',   ops: [['X3','AND'],['T0','AND'],['M13','INV']], out: 'Y1', desc: 'Step6: 上升后右移' },
+        { id: 'r7', type: 'set',   ops: [['X2','AND'],['X3','AND'],['Y1','AND']], out: 'Y2', desc: 'Step7: 右侧下放' },
+        { id: 'r8', type: 'rst',   ops: [['X2','AND'],['X4','AND'],['Y3','AND']], out: 'Y3', desc: 'Step8: 右侧松开' },
+        { id: 'r9', type: 'rst',   ops: [['Y3','INV'],['X4','AND'],['X2','AND']], out: 'Y2', desc: 'Step9: 松开后上升' }
+    ];
+
+    function log(msg) {
+        const pan = document.getElementById('logger');
+        const row = document.createElement('div');
+        row.className = 'log-entry';
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        row.innerHTML = `<span>[${time}]</span> ${msg}`;
+        pan.appendChild(row);
+        pan.scrollTop = pan.scrollHeight;
+    }
+
+    // --- 3. 梯形图渲染 (连线修复版) ---
+    function buildLadder() {
+        const container = document.getElementById('ladder-container');
+        let html = '';
+        
+        ladderLogic.forEach((rung, idx) => {
+            let elementsHtml = '';
+            
+            // 计算连线逻辑：
+            // 每个元件占位 60px (元素) + 40px (右侧连线) = 100px
+            // 总共用 flex 布局让它们自动对齐
+            
+            rung.ops.forEach((op, i) => {
+                const sym = op[1] === 'INV' ? '/| |/' : '| |';
+                const addr = op[0];
+                const isOr = op[1] === 'OR'; // 简化处理，这里只画单行串联
+                
+                // 元件
+                elementsHtml += `
+                    <div style="display:flex; align-items:center;">
+                        <!-- 元件本体 -->
+                        <div class="elem" id="el-${idx}-${i}">
+                            <span class="elem-symbol">${sym}</span>
+                            <span class="elem-addr">${addr}</span>
+                        </div>
+                        <!-- 右侧连接线 (固定长度确保连起来) -->
+                        <div class="wire-h" id="w-${idx}-${i}" style="position:relative; width:40px; left:0;"></div>
+                    </div>
+                `;
+            });
+
+            let outSym = '( )';
+            if(rung.type === 'set') outSym = '( S )';
+            if(rung.type === 'rst') outSym = '( R )';
+            if(rung.type === 'timer') outSym = '( T )';
+
+            html += `
+                <div class="rung" id="rung-${idx}">
+                    <div class="rail-l"></div>
+                    
+                    <!-- 左侧固定线 -->
+                    <div class="wire-h" style="width:20px; left:10px;"></div>
+                    
+                    <!-- 逻辑元件区 -->
+                    <div style="display:flex; margin-left:20px;">
+                        ${elementsHtml}
+                    </div>
+
+                    <!-- 自动填充右侧空余的线 (Flex-grow) -->
+                    <div class="wire-h" style="flex-grow:1; position:relative;"></div>
+
+                    <!-- 输出线圈 -->
+                    <div class="elem" id="out-${idx}" style="margin-right:20px;">
+                        <span class="elem-symbol">${outSym}</span>
+                        <span class="elem-addr">${rung.out}</span>
+                        <span style="position:absolute; bottom:-18px; width:200px; text-align:center; color:#a0aec0; font-size:10px;">${rung.desc}</span>
+                    </div>
+
+                    <div class="rail-r"></div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    // --- 4. 仿真逻辑 ---
+    const plc = {
+        start: () => {
+            sys.X[0] = 1; 
+            log("按钮 X0 被按下");
+            setTimeout(() => { sys.X[0] = 0; }, 200);
+        },
+        
+        reset: () => {
+            log("急停按下，系统复位");
+            sys.Y[0]=0; sys.Y[1]=0; sys.Y[2]=0; sys.Y[3]=0;
+            sys.M[0]=0; 
+            sys.phys.xPos = 0;
+            sys.phys.zPos = 0;
+            sys.phys.grip = false;
+            sys.phys.hasPart = false;
+            sys.phys.partOnTableL = true;
+            sys.phys.partOpacity = 1;
+            render(); // 立即刷新
+        },
+
+        scan: () => {
+            // A. 物理 -> 输入
+            sys.X[1] = sys.phys.xPos <= 1 ? 1 : 0; // X1 左
+            sys.X[2] = sys.phys.xPos >= 99 ? 1 : 0; // X2 右 (增加范围判定)
+            sys.X[3] = sys.phys.zPos <= 1 ? 1 : 0; // X3 上
+            sys.X[4] = sys.phys.zPos >= 99 ? 1 : 0; // X4 下
+
+            // B. 逻辑 (模拟 PLC 扫描)
+            
+            // R0: 保活
+            if(sys.X[0] || sys.M[0]) sys.M[0] = 1;
+
+            // R1: 回左
+            // 只有当运行中，且不在左，且没有往右的信号时
+            if(sys.M[0] && !sys.X[1] && !sys.Y[1]) sys.Y[0] = 1;
+            else sys.Y[0] = 0;
+
+            // R2: 到位下行 (去抓)
+            if(sys.M[0] && sys.X[1] && sys.X[3] && !sys.phys.hasPart && sys.phys.partOnTableL) {
+                sys.Y[2] = 1; // SET 下
+            }
+
+            // R3: 夹紧
+            if(sys.X[4] && sys.X[1] && !sys.phys.hasPart) {
+                sys.Y[3] = 1; // SET 夹
+            }
+
+            // R4: 定时器
+            if(sys.Y[3] && sys.X[4] && sys.X[1]) {
+                sys.T[0].val++;
+                if(sys.T[0].val >= sys.T[0].set) sys.T[0].done = true;
+            } else {
+                sys.T[0].val = 0; sys.T[0].done = false;
+            }
+
+            // R5: 延时后上升 (抓完)
+            if(sys.T[0].done && sys.X[1]) {
+                sys.Y[2] = 0; // RST 下 -> 缩回
+                if(sys.phys.grip && sys.phys.partOnTableL) {
+                    sys.phys.hasPart = true;
+                    sys.phys.partOnTableL = false;
+                    log("抓取成功，准备右移");
+                }
+            }
+
+            // R6: 上升后右移
+            if(sys.X[3] && sys.phys.hasPart && sys.X[1]) {
+                sys.Y[1] = 1; 
+                sys.Y[0] = 0;
+            }
+            if(sys.X[2]) sys.Y[1] = 0; // 到右停止
+
+            // R7: 右侧下放
+            if(sys.X[2] && sys.X[3] && sys.phys.hasPart) {
+                sys.Y[2] = 1;
+            }
+
+            // R8: 松开
+            if(sys.X[2] && sys.X[4] && sys.phys.hasPart) {
+                sys.Y[3] = 0;
+                sys.phys.hasPart = false;
+                sys.phys.partOpacity = 0; // 模拟物料掉落消失
+                log("物料已放置于右侧，物料运走");
+            }
+
+            // R9: 松开后上升
+            if(sys.X[2] && sys.X[4] && !sys.phys.grip) {
+                sys.Y[2] = 0;
+            }
+
+            // 循环逻辑: 回到左边后生成新物料
+            if(sys.X[1] && !sys.phys.partOnTableL && !sys.phys.hasPart) {
+                // 简单的防抖延时生成
+                if(Math.random() > 0.95) {
+                    sys.phys.partOnTableL = true;
+                    sys.phys.partOpacity = 1;
+                    log("新物料已送达左侧台面");
+                }
+            }
+            // 回程逻辑
+            if(sys.X[2] && sys.X[3] && !sys.phys.hasPart) {
+                sys.Y[0] = 1; // 触发回左 (R1)
+            }
+
+            // C. 物理积分
+            // X轴速度
+            if(sys.Y[0] && sys.phys.xPos > 0) sys.phys.xPos -= 1.0;
+            if(sys.Y[1] && sys.phys.xPos < 100) sys.phys.xPos += 1.0;
+            
+            // Z轴速度
+            if(sys.Y[2] && sys.phys.zPos < 100) sys.phys.zPos += 2.0;
+            if(!sys.Y[2] && sys.phys.zPos > 0)  sys.phys.zPos -= 2.0;
+
+            sys.phys.grip = (sys.Y[3] === 1);
+
+            requestAnimationFrame(render);
+        }
+    };
+
+    // --- 5. 渲染 ---
+    function render() {
+        // IO 灯
+        const setBit = (id, val) => {
+            const el = document.getElementById(id);
+            if(val) el.classList.add('on'); else el.classList.remove('on');
+        }
+        setBit('sw-left', sys.X[1]);
+        setBit('sw-right', sys.X[2]);
+        setBit('sw-up', sys.X[3]);
+        setBit('sw-down', sys.X[4]);
+        
+        setBit('m-x0', sys.X[0]); setBit('m-x1', sys.X[1]); setBit('m-x2', sys.X[2]);
+        setBit('m-x3', sys.X[3]); setBit('m-x4', sys.X[4]);
+        setBit('m-y0', sys.Y[0]); setBit('m-y1', sys.Y[1]);
+        setBit('m-y2', sys.Y[2]); setBit('m-y3', sys.Y[3]);
+
+        // 机械位置修正
+        // 容器宽 800px (grid 1fr) 约. 左侧 100px 是起点.
+        // 总行程需要能到达右侧底座上方。
+        // Base-L left: 50, width 100 -> Center 100.
+        // Base-R right: 50, width 100 -> Center (PanelWidth - 100). 
+        // 假设 Panel 宽 ~780px. 右侧中心在 680px. 距离 580px.
+        const carriage = document.getElementById('carriage');
+        const startX = 60; // 左侧对齐中心
+        const rangeX = 580; // 移动总距离
+        const currentPx = startX + (sys.phys.xPos / 100) * rangeX;
+        carriage.style.left = currentPx + 'px';
+
+        // Z轴
+        const rod = document.getElementById('z-rod');
+        rod.style.height = (20 + (sys.phys.zPos/100)*130) + 'px'; // 增加伸出长度
+        if(sys.phys.zPos > 10) rod.parentNode.classList.add('z-extended');
+
+        // 夹爪动画
+        if(sys.phys.grip) carriage.classList.add('gripped'); else carriage.classList.remove('gripped');
+
+        // 物料
+        const prod = document.getElementById('product');
+        prod.style.opacity = sys.phys.partOpacity;
+        
+        if(sys.phys.hasPart) {
+            prod.style.left = (currentPx + 25) + 'px'; // 跟随夹爪
+            prod.style.bottom = (170 - (sys.phys.zPos/100)*130) + 'px';
+        } else {
+            // 在台子上
+            if(sys.phys.partOnTableL) {
+                prod.style.left = '85px';
+                prod.style.bottom = '170px';
+            } else {
+                // 右侧暂时位置 (会马上消失)
+                prod.style.left = (startX + rangeX + 25) + 'px';
+                prod.style.bottom = '170px';
+            }
+        }
+
+        // 梯形图高亮
+        const highlightRung = (idx, active) => {
+            const r = document.getElementById(`rung-${idx}`);
+            const wires = r.querySelectorAll('.wire-h');
+            const out = document.getElementById(`out-${idx}`);
+            if(active) {
+                wires.forEach(w => w.classList.add('active'));
+                out.classList.add('active');
+            } else {
+                wires.forEach(w => w.classList.remove('active'));
+                out.classList.remove('active');
+            }
+        };
+
+        highlightRung(0, sys.M[0]);
+        highlightRung(1, sys.Y[0]);
+        highlightRung(2, sys.Y[2] && sys.phys.xPos < 50); // 只有在左边下行才高亮这个
+        highlightRung(3, sys.Y[3]);
+        highlightRung(4, sys.Y[3]);
+        highlightRung(6, sys.Y[1]);
+        highlightRung(7, sys.Y[2] && sys.phys.xPos > 50); // 右边下行
+        highlightRung(8, !sys.Y[3] && sys.X[2]); // 松开瞬间
+    }
+
+    // --- Init ---
+    buildLadder();
+    setInterval(plc.scan, 20);
+
+</script>
+</body>
+</html>

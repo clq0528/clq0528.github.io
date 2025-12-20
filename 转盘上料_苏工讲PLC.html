@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC 步进控制仿真：转盘搬运闭环系统 (Final Version)</title>
+    <style>
+        :root {
+            --bg-color: #eef2f5;
+            --panel-bg: #ffffff;
+            --plc-dark: #2c3e50;
+            --wire-off: #bdc3c7;
+            --wire-on: #e74c3c;  /* 通电红 */
+            --wire-shadow: rgba(231, 76, 60, 0.6);
+            --text-main: #34495e;
+            --led-off: #95a5a6;
+            --led-on: #ff9f43;   /* 亮橙色 */
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-color);
+            margin: 0; padding: 20px;
+            color: var(--text-main);
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        h1 { margin: 0 0 20px 0; font-size: 24px; color: var(--plc-dark); display: flex; align-items: center; gap: 10px; }
+        .badge { background: #3498db; color: white; padding: 4px 8px; border-radius: 4px; font-size: 14px; }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 500px 1fr;
+            gap: 20px;
+            width: 1300px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 15px;
+            border: 1px solid #dcdcdc;
+            position: relative;
+        }
+        .panel-title {
+            font-weight: bold; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* --- 左侧：机械仿真区 --- */
+        .machine-stage {
+            height: 480px;
+            background: #f1f2f6;
+            border: 1px solid #e9ecef;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            perspective: 1000px;
+        }
+
+        /* 转盘 */
+        .turntable {
+            position: absolute; bottom: -120px; left: 50%; 
+            width: 400px; height: 400px;
+            background: conic-gradient(from 0deg, #bdc3c7 0%, #ecf0f1 25%, #bdc3c7 50%, #ecf0f1 75%, #bdc3c7 100%);
+            border-radius: 50%;
+            border: 10px solid #95a5a6;
+            transform: translateX(-50%) rotateX(60deg) rotateZ(0deg);
+            transition: transform 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+            box-shadow: 0 20px 30px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        /* 转盘上的工位标记 */
+        .station-mark {
+            position: absolute; width: 60px; height: 60px;
+            border: 2px dashed #7f8c8d; border-radius: 50%;
+            left: 50%; top: 20px; transform: translateX(-50%);
+        }
+        .station-label {
+            position: absolute; top: 90px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; color: #555; font-weight: bold;
+        }
+
+        /* Z轴气缸组件 */
+        .robot-assy {
+            position: absolute; left: 50%; top: 20px;
+            transform: translateX(-50%);
+            width: 100px; height: 260px;
+            z-index: 10;
+        }
+        .cyl-body {
+            width: 60px; height: 110px; 
+            background: linear-gradient(90deg, #7f8c8d, #95a5a6, #7f8c8d);
+            margin: 0 auto; border-radius: 4px; border: 1px solid #555;
+            position: relative; transition: box-shadow 0.3s;
+        }
+        .cyl-body.air-in { box-shadow: 0 0 15px rgba(52, 152, 219, 0.8); border-color: #3498db; }
+        
+        .cyl-rod {
+            width: 18px; height: 140px;
+            background: linear-gradient(90deg, #ecf0f1, #fff, #ecf0f1);
+            margin: 0 auto; position: relative; top: -10px; z-index: -1;
+            transition: transform 1.0s ease-in-out;
+            transform: translateY(0); border: 1px solid #bdc3c7;
+        }
+        /* 提升动作 */
+        .robot-assy.lift-up .cyl-rod { transform: translateY(-90px); }
+
+        .gripper-head {
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 80px; height: 30px; background: #34495e; border-radius: 4px;
+        }
+        .clamp-finger {
+            position: absolute; top: 30px; width: 15px; height: 40px; background: #2c3e50;
+            transition: transform 0.2s;
+        }
+        .cf-l { left: 10px; border-radius: 0 0 0 5px; } 
+        .cf-r { right: 10px; border-radius: 0 0 5px 0; }
+        .clamped .cf-l { transform: translateX(20px); }
+        .clamped .cf-r { transform: translateX(-20px); }
+
+        /* 物料 (红色方块) */
+        .material {
+            width: 32px; height: 32px; background: #e74c3c;
+            border-radius: 4px; border: 1px solid #c0392b;
+            box-shadow: 0 4px 0 #922b21;
+            position: absolute; z-index: 5;
+            transition: opacity 0.3s;
+            display: none; /* 由JS生成 */
+        }
+        /* 物料位置状态 */
+        .material.on-table { bottom: 50px; left: 50%; transform: translateX(-50%); } 
+        .material.picked { bottom: auto; top: 200px; left: 50%; transform: translateX(-50%); z-index: 12; transition: top 1.0s ease-in-out; }
+        .robot-assy.lift-up ~ .material.picked { top: 110px; } /* 跟随提升 */
+
+        /* 传感器 X004 */
+        .sensor-group {
+            position: absolute; bottom: 150px; left: 100px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .sensor-beam {
+            width: 150px; height: 2px; background: rgba(255,0,0,0.1);
+            position: absolute; left: 20px; top: 10px; transform-origin: left; transform: rotate(-15deg);
+            pointer-events: none;
+        }
+        .sensor-body {
+            width: 24px; height: 24px; background: #bdc3c7; border: 2px solid #7f8c8d; border-radius: 4px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .sensor-led {
+            width: 10px; height: 10px; background: #555; border-radius: 50%; transition: 0.1s;
+        }
+        .sensor-body.active { border-color: #e74c3c; }
+        .sensor-body.active .sensor-led { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+
+        /* 控制面板 */
+        .control-deck {
+            margin-top: 15px; background: #dfe4ea; padding: 10px; border-radius: 6px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .io-tag {
+            padding: 5px 10px; background: #34495e; color: #fff; font-size: 12px; border-radius: 4px;
+            transition: background 0.5s; /* 灯光延时熄灭 */
+            text-align: center; min-width: 60px;
+        }
+        .io-tag.on { background: var(--led-on); transition: none; box-shadow: 0 0 8px var(--led-on); }
+        .io-tag.step { background: #57606f; }
+
+        /* --- 右侧：梯形图重构 (Flex/Grid 混合布局以对齐线条) --- */
+        .ladder-container {
+            height: 520px; overflow-y: auto; background: #fff; border: 1px solid #ccc;
+            font-family: 'Consolas', monospace; position: relative;
+        }
+        .rail { position: absolute; top:0; bottom:0; width:4px; background:#222; z-index:1; }
+        .rail.l { left:10px; } .rail.r { right:10px; }
+
+        .rung {
+            position: relative; margin: 0 20px; border-bottom: 1px dashed #eee;
+            transition: background 0.2s;
+        }
+        .rung-1 { height: 100px; }
+        .rung-2 { height: 220px; } /* 增加高度给分支 */
+        .rung.scan-on { background: rgba(255, 159, 67, 0.05); }
+
+        /* 通用元件样式 */
+        .w { position: absolute; background: #333; transition: background 0.1s; }
+        .w.h { height: 2px; top: 50%; }
+        .w.v { width: 2px; }
+        
+        .sym { position: absolute; width: 50px; height: 40px; top: 50%; transform: translateY(-50%); text-align: center; background: #fff; z-index: 5; }
+        .sym-draw { font-size: 20px; font-weight: bold; color: #333; }
+        .sym-txt { font-size: 10px; color: #2980b9; position: absolute; top: -14px; width: 100%; }
+        .sym-addr { font-size: 10px; color: #d35400; position: absolute; bottom: -14px; width: 100%; }
+
+        .box {
+            position: absolute; height: 36px; border: 2px solid #333; background: #fff;
+            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px;
+            top: 50%; transform: translateY(-50%); z-index: 5; padding: 0 5px;
+        }
+        
+        /* 高亮逻辑 (带延时) */
+        .w.on, .sym.on .sym-draw, .box.on {
+            color: var(--wire-on); border-color: var(--wire-on); background-color: var(--wire-on);
+            box-shadow: 0 0 3px var(--wire-shadow);
+            transition: all 0.5s ease; /* 熄灭延时 */
+        }
+        .box.on { background-color: #fff; } /* 框内部保持白 */
+        .w.on-flash, .sym.on-flash .sym-draw, .box.on-flash { transition: none !important; }
+
+        /* 日志 */
+        .logger {
+            height: 120px; background: #2f3640; color: #f1f2f6; padding: 8px;
+            font-size: 12px; font-family: monospace; overflow-y: auto; border-top: 4px solid #3498db;
+        }
+        .log-row { margin-bottom: 3px; opacity: 0.7; }
+        .log-row.new { color: #f1c40f; opacity: 1; font-weight: bold; }
+
+        /* 解说区 */
+        .explanation {
+            background: #fffbf0; border: 1px solid #f39c12; padding: 20px; border-radius: 8px; width: 1300px;
+        }
+        .highlight-text { background: rgba(231, 76, 60, 0.15); padding: 0 4px; color: #c0392b; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<h1>
+    <span class="badge">PLC SIM</span>
+    运料小车/转盘步进控制程序 (完整闭环版)
+</h1>
+
+<div class="main-container">
+    
+    <!-- 左侧：仿真区 -->
+    <div class="panel">
+        <div class="panel-title">
+            <span>现场机械 (Machine View)</span>
+            <span style="font-size:12px; color:#aaa;">Z轴伺服 | 气动夹爪 | 旋转转盘</span>
+        </div>
+
+        <div class="machine-stage">
+            <!-- 传感器 -->
+            <div class="sensor-group">
+                <div class="sensor-body" id="sen-body">
+                    <div class="sensor-led"></div>
+                </div>
+                <div class="sensor-beam"></div>
+                <div style="font-size:12px; color:#7f8c8d; margin-top:5px;">X004 来料检测</div>
+            </div>
+
+            <!-- 机械臂 -->
+            <div class="robot-assy" id="robot-assy">
+                <div class="cyl-body" id="cyl-body">
+                    <div style="position:absolute; top:40%; width:100%; text-align:center; font-size:10px; color:#fff;">Y011 提升</div>
+                </div>
+                <div class="cyl-rod">
+                    <div class="gripper-head">
+                        <div class="clamp-finger cf-l" id="finger-l"></div>
+                        <div class="clamp-finger cf-r" id="finger-r"></div>
+                    </div>
+                    <div style="position:absolute; bottom:-20px; width:100%; text-align:center; font-size:10px;">Y006 夹紧</div>
+                </div>
+            </div>
+
+            <!-- 物料 (由JS控制显示) -->
+            <div class="material on-table" id="material"></div>
+
+            <!-- 转盘 -->
+            <div class="turntable" id="turntable">
+                <div class="station-mark"></div>
+                <div class="station-label">工位 A</div>
+            </div>
+            <div style="position:absolute; bottom:10px; width:100%; text-align:center; font-size:12px; color:#aaa;">Station Turntable</div>
+        </div>
+
+        <div class="control-deck">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="checkbox" id="auto-sw" onchange="sim.toggleAuto()">
+                <label for="auto-sw" style="font-weight:bold; color:#2c3e50; cursor:pointer;">全自动循环 (Auto Run)</label>
+            </div>
+            <div style="display:flex; gap:5px;">
+                <div class="io-tag" id="tag-x4">X004</div>
+                <div class="io-tag" id="tag-y6">Y006 夹</div>
+                <div class="io-tag" id="tag-y11">Y011 升</div>
+                <div class="io-tag step" id="tag-d50">Step: 1</div>
+            </div>
+            <button onclick="sim.reset()" style="cursor:pointer; padding:5px 10px;">重置</button>
+        </div>
+    </div>
+
+    <!-- 右侧：梯形图区 -->
+    <div class="panel">
+        <div class="panel-title">
+            <span>梯形图监控 (Ladder Monitor)</span>
+            <input type="range" min="1" max="10" value="4" onchange="sim.speed=this.value/4" title="速度调节">
+        </div>
+
+        <div class="ladder-container">
+            <div class="rail l"></div><div class="rail r"></div>
+
+            <!-- Rung 1 -->
+            <div class="rung rung-1" id="rung-1">
+                <div class="w h" style="left:10px; width:30px;"></div>
+                <!-- = D50 K1 -->
+                <div class="box" id="i-cmp" style="left:40px; width:80px;">= D50 K1</div>
+                <div class="w h" id="w1-1" style="left:120px; width:40px;"></div>
+                <!-- X004 -->
+                <div class="sym" id="s-x4" style="left:160px;">
+                    <div class="sym-txt">来料检测</div><div class="sym-draw">| |</div><div class="sym-addr">X004</div>
+                </div>
+                <div class="w h" id="w1-2" style="left:210px; width:180px;"></div>
+                <!-- SET Y006 -->
+                <div class="box" id="i-y6" style="right:60px; width:70px;">
+                    SET Y006
+                    <span style="position:absolute; top:-18px; font-size:9px; color:#555;">右夹气缸</span>
+                </div>
+                <div class="w h" id="w1-3" style="right:10px; width:50px;"></div>
+            </div>
+
+            <!-- Rung 2: 修复连线版 -->
+            <div class="rung rung-2" id="rung-2">
+                <!-- Y006 Contact -->
+                <div class="w h" style="left:10px; width:30px; top:30px;"></div>
+                <div class="sym" id="s-y6" style="left:40px; top:30px;">
+                    <div class="sym-txt">右夹料</div><div class="sym-draw">| |</div><div class="sym-addr">Y006</div>
+                </div>
+                <div class="w h" id="w2-1" style="left:90px; width:300px; top:30px;"></div>
+                
+                <!-- T202 Coil -->
+                <div class="sym" id="c-t202" style="right:60px; top:30px;">
+                    <div class="sym-txt">夹紧延时</div><div class="sym-draw">( T202 )</div>
+                </div>
+                <div class="w h" style="right:10px; width:50px; top:30px;"></div>
+
+                <!-- Vertical Down from Y006 Output -->
+                <div class="w v" id="wv-1" style="left:130px; top:30px; height:60px;"></div> <!-- 向下引出 -->
+                <div class="w h" id="w2-2" style="left:130px; width:30px; top:90px;"></div>
+                
+                <!-- T202 Contact -->
+                <div class="sym" id="s-t202" style="left:160px; top:90px;">
+                    <div class="sym-txt">时间到</div><div class="sym-draw">| |</div><div class="sym-addr">T202</div>
+                </div>
+                <div class="w h" id="w2-3" style="left:210px; width:30px; top:90px;"></div>
+
+                <!-- 分支点 (Split) -->
+                <div class="w v" id="wv-2" style="left:240px; top:90px; height:60px;"></div> <!-- 分流竖线 -->
+
+                <!-- Upper Branch: SET Y011 -->
+                <div class="w h" id="w2-4" style="left:240px; width:150px; top:90px;"></div>
+                <div class="box" id="i-y11" style="right:60px; width:70px; top:90px;">
+                    SET Y011
+                    <span style="position:absolute; top:-18px; font-size:9px; color:#555;">右提升</span>
+                </div>
+                <div class="w h" style="right:10px; width:50px; top:90px;"></div>
+
+                <!-- Lower Branch: MOV K2 D50 -->
+                <div class="w h" id="w2-5" style="left:240px; width:150px; top:150px;"></div>
+                <div class="box" id="i-mov" style="right:60px; width:80px; top:150px;">MOV K2 D50</div>
+                <div class="w h" style="right:10px; width:50px; top:150px;"></div>
+            </div>
+
+            <div style="text-align:center; margin-top:10px; color:#999; font-size:12px;">--- 截图逻辑区域结束 ---</div>
+        </div>
+
+        <div class="logger" id="logger">
+            <div class="log-row">系统就绪，等待启动或自动运行...</div>
+        </div>
+    </div>
+</div>
+
+<div class="explanation">
+    <div class="exp-title" style="font-weight:bold; font-size:18px; color:#d35400; margin-bottom:10px;">上帝视角：逻辑实现与联动解析</div>
+    <div class="exp-content" style="line-height:1.6; color:#444;">
+        <p>本动画演示了一个典型的<strong>“检测-搬运-变步”</strong>闭环控制系统。通过右侧梯形图与左侧机械结构的实时联动，您可以直观理解 PLC 步进控制的核心思想。</p>
+        
+        <p><strong>1. 红色方块是什么？</strong><br>
+        即截图中的<span class="highlight-text">物料（工件）</span>。当它出现在传感器 X004 下方时，代表来料，系统将启动搬运流程。</p>
+
+        <p><strong>2. 梯形图逻辑修正 (Ladder Fixes)：</strong><br>
+        针对您指出的“线没画好”的问题，本仿真优化了 Rung 2 的走线：
+        <br>• <strong>T202 触点闭合后</strong>，电流明确地分为两路（并在右侧清晰对齐）。
+        <br>• <strong>一路置位 Y011</strong>：气缸提升，将物料从转盘工位提起。
+        <br>• <strong>一路执行 MOV K2 D50</strong>：修改步序寄存器，系统瞬间从 Step 1 切换至 Step 2。</p>
+
+        <p><strong>3. 完整搬运循环 (Full Cycle)：</strong><br>
+        系统执行顺序：<span style="font-weight:bold; color:#2980b9;">Step 1 (夹紧提升)</span> -> <span style="font-weight:bold; color:#2980b9;">Step 2 (转盘旋转90°)</span> -> <span style="font-weight:bold; color:#2980b9;">放下物料</span> -> <span style="font-weight:bold; color:#2980b9;">转盘复位</span>。
+        <br>这种逻辑确保了动作的连贯性，避免了动作冲突。</p>
+    </div>
+</div>
+
+<script>
+    // --- 系统内核 ---
+    const sys = {
+        running: true,
+        autoMode: false,
+        speed: 1.0,
+        
+        // 核心寄存器
+        D50: 1,      // 步序
+        
+        // I/O 状态
+        X4: false,   // 传感器
+        Y6: false,   // 夹紧
+        Y11: false,  // 提升
+        
+        // 定时器
+        T202: { val: 0, set: 60, done: false },
+
+        // 机械状态
+        angle: 0,
+        hasMaterial: false
+    };
+
+    // --- 日志工具 ---
+    const logger = document.getElementById('logger');
+    const log = (msg) => {
+        const div = document.createElement('div');
+        div.className = 'log-row new';
+        div.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
+        logger.appendChild(div);
+        logger.scrollTop = logger.scrollHeight;
+        setTimeout(() => div.classList.remove('new'), 1000);
+    };
+
+    // --- 仿真控制 ---
+    const sim = {
+        toggleAuto: () => {
+            sys.autoMode = document.getElementById('auto-sw').checked;
+            if(sys.autoMode && sys.D50 === 1 && !sys.hasMaterial) {
+                sim.spawnMaterial();
+            }
+        },
+        spawnMaterial: () => {
+            if(sys.hasMaterial) return;
+            sys.hasMaterial = true;
+            const mat = document.getElementById('material');
+            mat.style.display = 'block';
+            mat.style.opacity = '0';
+            mat.classList.remove('picked');
+            mat.className = 'material on-table'; // Reset class
+            
+            setTimeout(() => {
+                mat.style.opacity = '1';
+                sys.X4 = true; // 传感器检测到
+                log("检测到来料 (X004 ON)");
+            }, 600);
+        },
+        reset: () => {
+            sys.D50 = 1; sys.X4 = false; sys.Y6 = false; sys.Y11 = false;
+            sys.T202.val = 0; sys.T202.done = false; sys.angle = 0; sys.hasMaterial = false;
+            
+            document.getElementById('turntable').style.transform = `translateX(-50%) rotateX(60deg) rotateZ(0deg)`;
+            const mat = document.getElementById('material');
+            mat.style.display = 'none'; mat.className = 'material on-table';
+            
+            log("系统复位完成");
+            if(sys.autoMode) setTimeout(sim.spawnMaterial, 1000);
+        }
+    };
+
+    // --- 视觉渲染器 ---
+    function render() {
+        // 1. 梯形图高亮 (Logic Highlight with Persistence)
+        const setOn = (id, isActive) => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            if(isActive) {
+                el.classList.add('on-flash'); // Remove transition for instant ON
+                el.classList.add('on');
+                void el.offsetWidth; // Trigger reflow
+                el.classList.remove('on-flash'); // Add transition back for fade out
+            } else {
+                el.classList.remove('on');
+            }
+        };
+
+        const d50_1 = (sys.D50 === 1);
+        
+        // Rung 1
+        setOn('i-cmp', d50_1);
+        setOn('w1-1', d50_1);
+        setOn('s-x4', sys.X4);
+        setOn('w1-2', d50_1 && sys.X4);
+        setOn('i-y6', sys.Y6);
+        setOn('w1-3', sys.Y6);
+
+        // Rung 2
+        setOn('s-y6', sys.Y6);
+        setOn('w2-1', sys.Y6);
+        setOn('c-t202', sys.Y6); // Coil active
+        setOn('wv-1', sys.Y6);   // Down wire
+        
+        setOn('w2-2', sys.Y6);
+        setOn('s-t202', sys.T202.done);
+        
+        const branchOn = sys.Y6 && sys.T202.done;
+        setOn('w2-3', branchOn);
+        setOn('wv-2', branchOn); // Split wire
+        
+        setOn('w2-4', branchOn);
+        setOn('i-y11', sys.Y11);
+        
+        setOn('w2-5', branchOn);
+        setOn('i-mov', branchOn); // MOV executes
+
+        // 2. 机械动作
+        const mat = document.getElementById('material');
+        const senBody = document.getElementById('sen-body');
+        
+        // 传感器 LED
+        if(sys.X4) senBody.classList.add('active'); else senBody.classList.remove('active');
+        
+        // 气缸
+        const cylBody = document.getElementById('cyl-body');
+        const robotAssy = document.getElementById('robot-assy');
+        if(sys.Y11) {
+            robotAssy.classList.add('lift-up');
+            cylBody.classList.add('air-in');
+        } else {
+            robotAssy.classList.remove('lift-up');
+            cylBody.classList.remove('air-in');
+        }
+
+        // 夹爪
+        const l = document.getElementById('finger-l');
+        const r = document.getElementById('finger-r');
+        if(sys.Y6) {
+            l.style.transform = "translateX(20px)";
+            r.style.transform = "translateX(-20px)";
+            // 如果夹住了，物料状态改变
+            if(sys.hasMaterial && sys.D50 === 1) mat.className = 'material picked';
+        } else {
+            l.style.transform = "translateX(0)";
+            r.style.transform = "translateX(0)";
+        }
+
+        // 仪表盘 IO Tags
+        const setTag = (id, s) => {
+            const t = document.getElementById(id);
+            if(s) t.classList.add('on'); else t.classList.remove('on');
+        };
+        setTag('tag-x4', sys.X4);
+        setTag('tag-y6', sys.Y6);
+        setTag('tag-y11', sys.Y11);
+        document.getElementById('tag-d50').innerText = "Step: " + sys.D50;
+    }
+
+    // --- 主循环 (20ms PLC Scan) ---
+    setInterval(() => {
+        if(!sys.running) return;
+
+        // === Step 1: 抓取逻辑 ===
+        if(sys.D50 === 1 && sys.X4) {
+            if(!sys.Y6) {
+                sys.Y6 = true;
+                log("Step 1: 条件满足 -> 夹紧 (Y006)");
+            }
+        }
+
+        if(sys.Y6) {
+            if(sys.T202.val < sys.T202.set) sys.T202.val += 1 * sys.speed;
+            else sys.T202.done = true;
+        } else {
+            sys.T202.val = 0; sys.T202.done = false;
+        }
+
+        // Step 1 -> Step 2 变步
+        if(sys.T202.done && sys.D50 === 1) {
+            sys.Y11 = true;
+            sys.D50 = 2; // MOV K2 D50
+            log("T202 到时 -> 提升 (Y011) & 变步 Step 2");
+            
+            // 模拟物料离开传感器
+            setTimeout(() => { sys.X4 = false; }, 400);
+
+            // === 触发 Step 2 外部逻辑 (转盘搬运) ===
+            setTimeout(() => {
+                log("Step 2: 转盘旋转 90度...");
+                sys.angle = 90;
+                document.getElementById('turntable').style.transform = `translateX(-50%) rotateX(60deg) rotateZ(${sys.angle}deg)`;
+                
+                // 等待旋转结束 -> 放料
+                setTimeout(() => {
+                    log("到达放料位 -> 松开夹爪 (RST Y6)");
+                    sys.Y6 = false; // 松夹
+                    // 物料落下消失 (模拟被取走)
+                    const mat = document.getElementById('material');
+                    mat.style.opacity = '0'; 
+                    sys.hasMaterial = false;
+
+                    // 气缸下降
+                    setTimeout(() => {
+                        sys.Y11 = false; // 下降
+                        log("气缸复位 -> 转盘回原点");
+                        
+                        // 转盘复位
+                        setTimeout(() => {
+                            sys.angle = 0;
+                            document.getElementById('turntable').style.transform = `translateX(-50%) rotateX(60deg) rotateZ(0deg)`;
+                            
+                            // 循环结束，回到 Step 1
+                            sys.D50 = 1;
+                            log("单次循环结束，系统就绪");
+                            
+                            if(sys.autoMode) {
+                                setTimeout(sim.spawnMaterial, 1500);
+                            }
+                        }, 1000);
+                    }, 800);
+                }, 1600); // 旋转耗时
+
+            }, 800); // 提升稳定后旋转
+        }
+
+        render();
+    }, 20);
+
+    // Init
+    sim.reset();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN 原理可视化 (Convolutional Neural Network)</title>
+    <style>
+        /* --- 全局配色与变量 (复刻 PLC 风格) --- */
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #fff;
+            --primary-blue: #2c3e50;
+            --cell-default: #3498db;
+            --cell-active: #2980b9;     /* 激活态 */
+            --cell-relu: #aed6f1;       /* ReLU后 */
+            --scanner-border: #ff9800;  /* 扫描框橙色 */
+            --highlight: #fff9c4;       /* 日志高亮 */
+            --text-grey: #555;
+            --math-bg: #fafafa;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            display: flex; flex-direction: column; align-items: center;
+            margin: 0; padding: 20px; user-select: none;
+        }
+
+        h2 { color: #333; margin-bottom: 5px; }
+        .sub-title { color: #666; font-size: 14px; margin-bottom: 20px; }
+
+        /* --- 主容器布局 (Grid) --- */
+        .container {
+            display: grid;
+            grid-template-columns: 480px 1fr;
+            gap: 20px;
+            width: 1000px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 1px solid #e0e0e0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 10px 15px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+            font-weight: bold; color: #555;
+        }
+
+        /* --- 左侧：可视化视图 (Visual View) --- */
+        #left-panel { height: 500px; align-items: center; justify-content: center; position: relative; }
+
+        .grid-container {
+            position: relative;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        /* 5x5 矩阵 */
+        #cnn-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            grid-template-rows: repeat(5, 60px);
+            gap: 10px;
+        }
+
+        .cell {
+            width: 60px; height: 60px;
+            background-color: var(--cell-default);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: bold;
+            border-radius: 8px;
+            transition: all 0.5s ease;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* ReLU 激活样式 */
+        .cell.relu-mode {
+            background-color: var(--cell-relu);
+            color: var(--primary-blue);
+            transform: scale(0.92);
+            border: 2px solid var(--cell-default);
+        }
+
+        /* 扫描框 (Kernel / Pool Window) */
+        #scanner {
+            position: absolute;
+            top: 20px; left: 20px; /* Initial align with padding */
+            border: 4px solid var(--scanner-border);
+            border-radius: 10px;
+            box-sizing: border-box;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 20;
+            box-shadow: 0 0 15px rgba(255, 152, 0, 0.4);
+        }
+
+        /* 扫描框标签 */
+        #scanner-label {
+            position: absolute;
+            top: -25px; left: 0;
+            background: var(--scanner-border);
+            color: white;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* --- 右侧：逻辑控制与上帝视角 (Logic & Control) --- */
+        #right-panel { height: 500px; gap: 15px; padding: 0; }
+        .right-content { padding: 15px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+
+        /* 顶部控制栏 */
+        .controls {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+        }
+        .btn {
+            background: var(--primary-blue); color: #fff; border: none; padding: 8px 20px;
+            border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .btn:hover { background: #34495e; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .status-badge {
+            background: #eee; padding: 5px 10px; border-radius: 12px; font-size: 12px; color: #666; font-weight: bold;
+        }
+
+        /* 原理展示区 (替代梯形图) */
+        .math-box {
+            flex: 1; background: var(--math-bg); border: 1px solid #ddd; border-radius: 8px;
+            padding: 20px; position: relative; font-family: 'Consolas', monospace;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        
+        .math-title { color: var(--primary-blue); font-weight: bold; margin-bottom: 10px; font-size: 16px; }
+        .math-formula { font-size: 20px; color: #333; margin-bottom: 10px; text-align: center; }
+        .math-desc { font-size: 13px; color: #777; text-align: center; line-height: 1.5; }
+        
+        .visual-icon {
+            font-size: 40px; margin-bottom: 10px; color: var(--scanner-border);
+        }
+
+        /* 日志区域 */
+        .logger {
+            height: 180px; background: #fafafa; border-top: 1px solid #eee; padding: 10px; overflow-y: auto; margin-top: 15px;
+        }
+        .log-line { 
+            font-size: 13px; color: #555; padding: 6px 10px; 
+            margin-bottom: 4px; border-radius: 4px; border-left: 3px solid transparent; 
+            transition: 0.2s; 
+        }
+        .log-line.active { 
+            background: var(--highlight); color: #333; font-weight: bold; border-left-color: var(--scanner-border); 
+        }
+
+    </style>
+</head>
+<body>
+
+    <h2>CNN 神经网络结构演示</h2>
+    <div class="sub-title">上帝视角解说：观察 Input Grid 如何依次经过 卷积、激活、池化 处理。</div>
+
+    <div class="container">
+        <!-- 左侧：可视化动画 -->
+        <div class="panel" id="left-panel">
+            <div class="header">可视化视图 (Feature Map)</div>
+            
+            <div class="grid-container">
+                <div id="cnn-grid">
+                    <!-- JS生成格子 -->
+                </div>
+                <!-- 浮动的扫描框 -->
+                <div id="scanner">
+                    <div id="scanner-label">Kernel</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：控制与原理解说 -->
+        <div class="panel" id="right-panel">
+            <div class="right-content">
+                <!-- 控制按钮 -->
+                <div class="controls">
+                    <span class="status-badge" id="status-text">系统就绪 (Ready)</span>
+                    <button class="btn" id="start-btn" onclick="ctl.startSequence()">开始演示 (Start)</button>
+                </div>
+
+                <!-- 核心逻辑展示 (类似梯形图区域) -->
+                <div class="math-box" id="math-view">
+                    <div class="visual-icon">⚙️</div>
+                    <div class="math-title">等待指令</div>
+                    <div class="math-formula">...</div>
+                    <div class="math-desc">点击上方按钮开始处理流程</div>
+                </div>
+
+                <!-- 日志 (类似 PLC Logger) -->
+                <div class="logger">
+                    <div class="log-line active" id="log-idle">0. 就绪：输入矩阵 (5x5) 已加载，包含随机像素值。</div>
+                    <div class="log-line" id="log-conv">1. 卷积层 (Conv): 3x3 卷积核滑动，提取局部特征。</div>
+                    <div class="log-line" id="log-relu">2. 激活层 (ReLU): 过滤负值，引入非线性特性。</div>
+                    <div class="log-line" id="log-pool">3. 池化层 (Pooling): 2x2 窗口最大值采样，降低维度。</div>
+                    <div class="log-line" id="log-done">4. 完成：特征提取完毕，准备传入全连接层。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. 数据配置 ---
+    const config = {
+        gridSize: 5,
+        cellSize: 60,
+        gapSize: 10,
+        stepTime: 1200 // 动画每步间隔 ms
+    };
+
+    // --- 2. 视图层 (UI) ---
+    const ui = {
+        grid: document.getElementById('cnn-grid'),
+        scanner: document.getElementById('scanner'),
+        scannerLabel: document.getElementById('scanner-label'),
+        mathBox: document.getElementById('math-view'),
+        statusBadge: document.getElementById('status-text'),
+        startBtn: document.getElementById('start-btn'),
+
+        // 初始化网格
+        initGrid: () => {
+            ui.grid.innerHTML = '';
+            for (let i = 0; i < config.gridSize * config.gridSize; i++) {
+                let cell = document.createElement('div');
+                cell.className = 'cell';
+                // 随机数值 -2 ~ 5
+                let val = Math.floor(Math.random() * 8) - 2;
+                cell.innerText = val;
+                cell.dataset.val = val; 
+                cell.id = `c-${Math.floor(i/5)}-${i%5}`; // c-row-col
+                ui.grid.appendChild(cell);
+            }
+        },
+
+        // 更新扫描框位置
+        moveScanner: (r, c, size, label) => {
+            // 计算 CSS
+            const padding = 20; // 父容器 padding
+            const left = padding + c * (config.cellSize + config.gapSize);
+            const top = padding + r * (config.cellSize + config.gapSize);
+            const w = size * config.cellSize + (size - 1) * config.gapSize;
+            
+            ui.scanner.style.width = w + 'px';
+            ui.scanner.style.height = w + 'px'; // 正方形
+            ui.scanner.style.left = left + 'px';
+            ui.scanner.style.top = top + 'px';
+            ui.scanner.style.opacity = 1;
+            ui.scannerLabel.innerText = label;
+        },
+
+        hideScanner: () => {
+            ui.scanner.style.opacity = 0;
+        },
+
+        // 更新单个格子显示 (用于 ReLU)
+        updateCell: (el, val, mode) => {
+            el.innerText = val;
+            if (mode === 'relu') el.classList.add('relu-mode');
+            else el.classList.remove('relu-mode');
+        },
+
+        // 更新“上帝视角”数学面板
+        updateMath: (title, formula, desc, icon) => {
+            ui.mathBox.innerHTML = `
+                <div class="visual-icon">${icon}</div>
+                <div class="math-title">${title}</div>
+                <div class="math-formula">${formula}</div>
+                <div class="math-desc">${desc}</div>
+            `;
+        },
+
+        // 日志高亮
+        highlightLog: (id) => {
+            document.querySelectorAll('.log-line').forEach(l => l.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        },
+
+        // 按钮状态
+        setRunning: (isRunning) => {
+            ui.startBtn.disabled = isRunning;
+            ui.startBtn.innerText = isRunning ? "演示进行中..." : "重新开始演示";
+            ui.statusBadge.innerText = isRunning ? "运行中 (Running)" : "待机 (Standby)";
+            ui.statusBadge.style.color = isRunning ? "#2980b9" : "#666";
+        }
+    };
+
+    // --- 3. 控制层 (Controller) ---
+    const ctl = {
+        // 辅助：等待函数
+        wait: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+
+        // 核心流程
+        startSequence: async () => {
+            ui.setRunning(true);
+            
+            // 0. 重置
+            ui.initGrid();
+            ui.highlightLog('log-idle');
+            ui.updateMath("准备就绪", "Input Matrix (5x5)", "原始图像像素值", "🎲");
+            await ctl.wait(1000);
+
+            // 1. 卷积
+            await ctl.runConvolution();
+
+            // 2. 激活
+            await ctl.runReLU();
+
+            // 3. 池化
+            await ctl.runPooling();
+
+            // 4. 结束
+            ui.highlightLog('log-done');
+            ui.updateMath("处理完成", "Output Feature Map", "数据已准备好进入全连接层", "🏁");
+            ui.setRunning(false);
+        },
+
+        runConvolution: async () => {
+            ui.highlightLog('log-conv');
+            
+            const kSize = 3;
+            const limit = config.gridSize - kSize;
+
+            for (let r = 0; r <= limit; r++) {
+                for (let c = 0; c <= limit; c++) {
+                    // 为了演示不至于太长，只演示部分路径 (例如对角线或特定点)，或者加快速度
+                    // 这里我们演示第一行的移动
+                    if (r > 0 && c > 0 && r < limit && c < limit) continue; // 跳过中间部分以节省时间
+
+                    ui.moveScanner(r, c, kSize, "Kernel 3x3");
+                    
+                    // 动态更新数学面板
+                    ui.updateMath(
+                        `卷积运算 (Step ${r},${c})`, 
+                        `Output = ∑ (Input × Kernel) + Bias`, 
+                        `卷积核与对应区域像素相乘求和。<br>提取边缘、纹理等特征。`,
+                        "✖️"
+                    );
+                    
+                    await ctl.wait(config.stepTime);
+                }
+            }
+            ui.hideScanner();
+            await ctl.wait(500);
+        },
+
+        runReLU: async () => {
+            ui.highlightLog('log-relu');
+            ui.updateMath(
+                "ReLU 激活函数", 
+                "f(x) = max(0, x)", 
+                "遍历所有像素：<br>如果是负数则置为0，正数保持不变。",
+                "📈"
+            );
+
+            const cells = document.querySelectorAll('.cell');
+            // 模拟快速扫描处理
+            for (let i = 0; i < cells.length; i++) {
+                let val = parseInt(cells[i].dataset.val);
+                if (val < 0) {
+                    ui.updateCell(cells[i], 0, 'relu');
+                } else {
+                    ui.updateCell(cells[i], val, 'relu');
+                }
+                // 每隔几个格子停顿一下，制造“扫描感”
+                if (i % 5 === 0) await ctl.wait(200);
+            }
+            await ctl.wait(1000);
+        },
+
+        runPooling: async () => {
+            ui.highlightLog('log-pool');
+            
+            const pSize = 2;
+            const stride = 2;
+            
+            // 遍历 stride
+            for (let r = 0; r < config.gridSize - 1; r += stride) {
+                for (let c = 0; c < config.gridSize - 1; c += stride) {
+                    ui.moveScanner(r, c, pSize, "Max Pool");
+                    
+                    ui.updateMath(
+                        "最大池化 (Max Pooling)", 
+                        "Output = Max(Window)", 
+                        `在 2x2 窗口中保留最大值。<br>压缩数据量，保留显著特征。`,
+                        "🔍"
+                    );
+                    
+                    await ctl.wait(config.stepTime);
+                }
+            }
+            ui.hideScanner();
+        }
+    };
+
+    // 初始化
+    window.onload = () => {
+        ui.initGrid();
+    };
+
+</script>
+</body>
+</html>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三菱PLC 顺序联锁控制仿真 (Sequence Control)</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --panel-bg: #ffffff;
+            --plc-body: #2d3436;
+            --wire-off: #b2bec3;
+            --wire-on: #e74c3c; /* 通电红 */
+            --logic-on: #00b894; /* 逻辑通绿 */
+            --highlight-text: #ffeaa7; /* 文字高亮黄 */
+            --active-text-bg: #dff9fb; /* 激活的文本块背景 */
+            --active-text-border: #00cec9;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            user-select: none;
+        }
+
+        /* --- 布局结构 --- */
+        .main-stage {
+            display: grid;
+            grid-template-columns: 480px 1fr; /* 左侧实物，右侧逻辑+说明 */
+            gap: 20px;
+            width: 1200px;
+            margin-top: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #dfe6e9;
+        }
+
+        .panel-header {
+            background: #dfe6e9; padding: 10px 15px;
+            font-weight: bold; color: #2d3436;
+            border-bottom: 1px solid #b2bec3;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* --- 左侧：实物接线 --- */
+        #phy-view { height: 600px; }
+
+        /* PLC 外观 */
+        .plc-unit {
+            position: absolute; top: 30px; left: 140px;
+            width: 220px; height: 160px;
+            background: var(--plc-body);
+            border-radius: 4px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+            color: #fff; z-index: 10;
+            display: flex; flex-direction: column;
+        }
+        .plc-top { padding: 10px; border-bottom: 1px solid #636e72; font-weight: bold; font-size: 14px; }
+        .plc-io { padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .led-row { display: flex; gap: 8px; }
+        .led {
+            width: 14px; height: 14px; background: #636e72; border-radius: 50%;
+            border: 1px solid #000; position: relative;
+        }
+        .led span { position: absolute; top: -16px; left: 0; font-size: 10px; color: #b2bec3; width: 100%; text-align: center; }
+        .led.on-in { background: #e74c3c; box-shadow: 0 0 8px #e74c3c; } /* 输入红 */
+        .led.on-out { background: #00b894; box-shadow: 0 0 8px #00b894; } /* 输出绿 */
+
+        /* 外部设备：按钮 */
+        .btn-rack {
+            position: absolute; bottom: 30px; left: 20px;
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            z-index: 20;
+        }
+        .btn-wrapper { text-align: center; }
+        .push-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            border: 3px solid #636e72; cursor: pointer;
+            box-shadow: 0 3px 0 #2d3436; margin: 0 auto;
+            position: relative; transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: white; font-size: 12px;
+        }
+        .push-btn:active, .push-btn.pressed { transform: translateY(3px); box-shadow: none; }
+        .bg-green { background: #27ae60; }
+        .bg-red { background: #c0392b; }
+        .btn-label { margin-top: 5px; font-size: 11px; color: #2d3436; font-weight: bold; }
+
+        /* 外部设备：电机 */
+        .motor-rack {
+            position: absolute; top: 250px; right: 20px;
+            display: flex; flex-direction: column; gap: 30px; z-index: 20;
+        }
+        .motor-unit {
+            width: 120px; padding: 10px; background: #ecf0f1;
+            border: 2px solid #bdc3c7; border-radius: 8px;
+            text-align: center; position: relative;
+        }
+        .motor-unit::before {
+            content: 'Contactor'; position: absolute; top: -20px; left: 0; width: 100%;
+            text-align: center; font-size: 10px; color: #636e72;
+        }
+        .motor-shaft {
+            width: 50px; height: 50px; margin: 10px auto;
+            background: #95a5a6; border-radius: 50%;
+            border: 4px dashed #7f8c8d;
+            transition: transform 0.1s linear;
+        }
+        /* 状态指示 */
+        .motor-unit.running { border-color: #00b894; background: #e6fffa; }
+        .motor-unit.running .motor-shaft { border-color: #00b894; }
+
+        /* SVG 连线 */
+        .wires-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+        }
+        path {
+            fill: none; stroke: var(--wire-off); stroke-width: 2;
+            stroke-linejoin: round; stroke-linecap: round;
+            transition: stroke 0.2s;
+        }
+        path.hot { stroke: var(--wire-on); stroke-width: 3; }
+
+        /* 虚拟手指 */
+        .finger {
+            position: absolute; font-size: 36px; z-index: 100; pointer-events: none;
+            opacity: 0; transition: transform 0.1s;
+        }
+        .finger.tap { animation: tapAnim 0.3s forwards; }
+        @keyframes tapAnim {
+            0% { opacity: 1; transform: scale(1.2) rotate(-15deg); }
+            50% { transform: scale(0.9) rotate(-15deg) translateY(5px); }
+            100% { opacity: 0; transform: scale(1) rotate(-15deg); }
+        }
+
+        /* --- 右侧：逻辑与说明 --- */
+        .logic-container {
+            display: grid; grid-template-rows: 1fr 1fr;
+            height: 600px;
+        }
+
+        /* 梯形图区域 */
+        .ladder-view {
+            padding: 10px 20px; font-family: 'Consolas', monospace;
+            border-bottom: 1px solid #dfe6e9; position: relative;
+        }
+        .scan-line {
+            position: absolute; left: 0; width: 100%; height: 4px;
+            background: rgba(255, 159, 67, 0.4); pointer-events: none; display: none;
+            z-index: 50; transition: top 0.1s;
+        }
+
+        .rung {
+            display: flex; align-items: center; height: 80px;
+            border-bottom: 1px dashed #b2bec3; position: relative;
+        }
+        .rail-l, .rail-r { position: absolute; top:0; bottom:0; width:4px; background:#000; }
+        .rail-l { left: 10px; } .rail-r { right: 10px; }
+
+        /* 元件符号 */
+        .symbol {
+            min-width: 60px; text-align: center; margin: 0 5px; cursor: help;
+        }
+        .sym-icon { font-size: 20px; font-weight: bold; color: #2d3436; }
+        .sym-tag { font-size: 12px; color: #0984e3; }
+        .sym-meta { font-size: 10px; color: #636e72; margin-bottom: -5px; }
+        
+        /* 状态样式 */
+        .active-logic .sym-icon { color: var(--logic-on); text-shadow: 0 0 3px var(--logic-on); }
+        .wire-seg { height: 2px; background: #2d3436; flex-grow: 1; transition: background 0.1s; }
+        .wire-seg.active-logic { background: var(--logic-on); box-shadow: 0 0 2px var(--logic-on); height: 3px; }
+
+        /* 关键点高亮 */
+        .dependency-box {
+            border: 2px dotted #e17055; border-radius: 4px; padding: 2px 5px;
+            animation: pulseRed 2s infinite;
+        }
+        @keyframes pulseRed { 0% { border-color:#e17055; } 50% { border-color: transparent; } 100% { border-color:#e17055; } }
+
+        /* 动态说明区域 */
+        .explain-view {
+            background: #fdfdfd; padding: 20px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .exp-card {
+            padding: 10px 15px; border-radius: 6px; border-left: 4px solid #b2bec3;
+            background: #fff; color: #636e72; font-size: 13px;
+            transition: all 0.3s; opacity: 0.6;
+        }
+        .exp-card h4 { margin: 0 0 5px 0; color: #2d3436; }
+        .exp-card.active {
+            opacity: 1; border-left-color: var(--active-text-border);
+            background: var(--active-text-bg); transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* 底部控制 */
+        .controls {
+            margin-top: 15px; display: flex; gap: 20px; align-items: center;
+            background: #fff; padding: 10px 20px; border-radius: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+    <h2 style="margin-bottom:5px;">PLC 顺序联锁控制 (Sequence Interlock)</h2>
+    <div style="font-size:14px; color:#666;">场景：<b>油泵 (Pump)</b> 必须先启动，<b>主轴 (Main)</b> 才能启动。油泵一停，主轴全停。</div>
+
+    <div class="main-stage">
+        <!-- 左侧：实物仿真 -->
+        <div class="panel" id="phy-view">
+            <div class="panel-header">实物接线 (Physical Wiring)</div>
+            
+            <div class="finger" id="finger">👆</div>
+
+            <svg class="wires-layer">
+                <!-- X0, X1, X2, X3 to PLC -->
+                <path id="w-x0" d="M 45 450 V 380 H 155 V 155" />
+                <path id="w-x1" d="M 100 450 V 390 H 175 V 155" />
+                <path id="w-x2" d="M 155 450 V 400 H 195 V 155" />
+                <path id="w-x3" d="M 210 450 V 410 H 215 V 155" />
+
+                <!-- PLC Y0 to Pump -->
+                <path id="w-y0" d="M 175 240 V 300 H 380 V 300" />
+                <!-- PLC Y1 to Main -->
+                <path id="w-y1" d="M 195 240 V 350 H 380 V 450" />
+            </svg>
+
+            <div class="plc-unit">
+                <div class="plc-top">MITSUBISHI FX3U</div>
+                <div class="plc-io">
+                    <span style="font-size:10px; color:#aaa;">IN (X)</span>
+                    <div class="led-row">
+                        <div class="led" id="led-x0"><span>0</span></div>
+                        <div class="led" id="led-x1"><span>1</span></div>
+                        <div class="led" id="led-x2"><span>2</span></div>
+                        <div class="led" id="led-x3"><span>3</span></div>
+                    </div>
+                </div>
+                <div class="plc-io">
+                    <span style="font-size:10px; color:#aaa;">OUT (Y)</span>
+                    <div class="led-row">
+                        <div class="led" id="led-y0"><span>0</span></div>
+                        <div class="led" id="led-y1"><span>1</span></div>
+                        <div class="led" id="led-y2"><span>2</span></div>
+                        <div class="led" id="led-y3"><span>3</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="btn-rack">
+                <div class="btn-wrapper">
+                    <div class="push-btn bg-green" id="btn-x0" onmousedown="press('x0')" onmouseup="release('x0')">X0</div>
+                    <div class="btn-label">启动油泵</div>
+                </div>
+                <div class="btn-wrapper">
+                    <div class="push-btn bg-red" id="btn-x1" onmousedown="press('x1')" onmouseup="release('x1')">X1</div>
+                    <div class="btn-label">停止油泵</div>
+                </div>
+                <div class="btn-wrapper">
+                    <div class="push-btn bg-green" id="btn-x2" onmousedown="press('x2')" onmouseup="release('x2')">X2</div>
+                    <div class="btn-label">启动主轴</div>
+                </div>
+                <div class="btn-wrapper">
+                    <div class="push-btn bg-red" id="btn-x3" onmousedown="press('x3')" onmouseup="release('x3')">X3</div>
+                    <div class="btn-label">停止主轴</div>
+                </div>
+            </div>
+
+            <!-- 电机组 -->
+            <div class="motor-rack">
+                <div class="motor-unit" id="motor-y0">
+                    <div style="font-weight:bold; font-size:12px; color:#2d3436;">油泵电机 (Pump)</div>
+                    <div class="motor-shaft" id="shaft-y0"></div>
+                    <div id="stat-y0" style="font-size:10px; color:#b2bec3;">OFF</div>
+                </div>
+                <div class="motor-unit" id="motor-y1">
+                    <div style="font-weight:bold; font-size:12px; color:#2d3436;">主轴电机 (Main)</div>
+                    <div class="motor-shaft" id="shaft-y1"></div>
+                    <div id="stat-y1" style="font-size:10px; color:#b2bec3;">OFF</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：逻辑与说明 -->
+        <div class="panel logic-container">
+            <!-- 梯形图 -->
+            <div class="ladder-view">
+                <div class="panel-header" style="background:none; border:none; padding:0 0 10px 0;">梯形图 (Ladder Logic)</div>
+                <div class="rail-l"></div> <div class="rail-r"></div>
+                <div class="scan-line" id="scan-line"></div>
+
+                <!-- Rung 1: 油泵控制 -->
+                <div class="rung">
+                    <div class="wire-seg" id="wr-1-1"></div>
+                    <div class="symbol" id="sym-x0">
+                        <div class="sym-meta">X0</div>
+                        <div class="sym-icon">| |</div>
+                        <div class="sym-tag">启泵</div>
+                    </div>
+                    <div class="wire-seg" id="wr-1-2"></div>
+                    <div class="symbol" id="sym-x1">
+                        <div class="sym-meta">X1</div>
+                        <div class="sym-icon">|/|</div>
+                        <div class="sym-tag">停泵</div>
+                    </div>
+                    <div class="wire-seg" id="wr-1-3"></div>
+                    <div class="symbol" id="sym-y0">
+                        <div class="sym-meta">Y0</div>
+                        <div class="sym-icon">( )</div>
+                        <div class="sym-tag">油泵</div>
+                    </div>
+                    <!-- 自锁回路 (Visual only) -->
+                    <div style="position:absolute; bottom:10px; left:40px; width:70px; height:15px; border-left:2px solid #333; border-bottom:2px solid #333; border-right:2px solid #333; display:flex; justify-content:center;">
+                        <span style="font-size:10px; margin-top:5px; background:#fff;">Y0</span>
+                    </div>
+                </div>
+
+                <!-- Rung 2: 主轴控制 (带联锁) -->
+                <div class="rung">
+                    <div class="wire-seg" id="wr-2-1"></div>
+                    <div class="symbol" id="sym-x2">
+                        <div class="sym-meta">X2</div>
+                        <div class="sym-icon">| |</div>
+                        <div class="sym-tag">启主</div>
+                    </div>
+                    <div class="wire-seg" id="wr-2-2"></div>
+                    <!-- 联锁点 -->
+                    <div class="symbol dependency-box" id="sym-y0-dep">
+                        <div class="sym-meta">Y0</div>
+                        <div class="sym-icon">| |</div>
+                        <div class="sym-tag">联锁</div>
+                    </div>
+                    <div class="wire-seg" id="wr-2-3"></div>
+                    <div class="symbol" id="sym-x3">
+                        <div class="sym-meta">X3</div>
+                        <div class="sym-icon">|/|</div>
+                        <div class="sym-tag">停主</div>
+                    </div>
+                    <div class="wire-seg" id="wr-2-4"></div>
+                    <div class="symbol" id="sym-y1">
+                        <div class="sym-meta">Y1</div>
+                        <div class="sym-icon">( )</div>
+                        <div class="sym-tag">主轴</div>
+                    </div>
+                     <!-- 自锁回路 -->
+                     <div style="position:absolute; bottom:10px; left:40px; width:70px; height:15px; border-left:2px solid #333; border-bottom:2px solid #333; border-right:2px solid #333; display:flex; justify-content:center;">
+                        <span style="font-size:10px; margin-top:5px; background:#fff;">Y1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 动态说明控制台 -->
+            <div class="explain-view" id="console-log">
+                <div class="panel-header" style="background:none; border:none; padding:0;">逻辑运行日志 (Logic Log)</div>
+                
+                <div class="exp-card" id="card-idle">
+                    <h4>系统待机</h4>
+                    等待操作。请先按 <b>X0</b> 启动油泵，再按 <b>X2</b> 启动主轴。
+                </div>
+
+                <div class="exp-card" id="card-scan-in">
+                    <h4>阶段 1: 输入采样</h4>
+                    PLC 正在读取外部按钮的状态 (X0-X3) 并存入输入映像寄存器。
+                </div>
+
+                <div class="exp-card" id="card-rung1">
+                    <h4>阶段 2: 油泵逻辑 (Y0)</h4>
+                    判断 X0(启动) 或 Y0(自锁) 是否接通，且 X1(停止) 未按下。
+                </div>
+
+                <div class="exp-card" id="card-rung2-block">
+                    <h4>阶段 2: 主轴逻辑 (Y1) - <span style="color:#e74c3c">联锁阻断</span></h4>
+                    尝试启动主轴，但检测到 <b>油泵(Y0) 未运行</b>。电路断开，主轴被禁止启动。
+                </div>
+
+                <div class="exp-card" id="card-rung2-pass">
+                    <h4>阶段 2: 主轴逻辑 (Y1) - <span style="color:#00b894">联锁通过</span></h4>
+                    <b>油泵(Y0) 正在运行</b>，常开触点闭合。允许启动主轴。
+                </div>
+
+                <div class="exp-card" id="card-out">
+                    <h4>阶段 3: 输出刷新</h4>
+                    将逻辑计算结果 (Y0, Y1) 写入物理端口，驱动外部接触器和电机。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <label>扫描速度:</label>
+        <input type="range" min="300" max="2000" value="1000" oninput="changeSpeed(this.value)">
+        <span id="spd-display">1000ms</span>
+    </div>
+
+<script>
+    // --- 核心变量 ---
+    const plc = {
+        in: { x0:0, x1:0, x2:0, x3:0 },
+        mem: { y0:0, y1:0 },
+        out: { y0:0, y1:0 },
+        phase: 0 // 0:Idle/Input, 1:Rung1, 2:Rung2, 3:Output
+    };
+
+    let timer = null;
+    let interval = 1000;
+
+    // --- 交互系统 ---
+    function press(id) {
+        plc.in[id] = 1;
+        document.getElementById('btn-'+id).classList.add('pressed');
+        document.getElementById('w-'+id).classList.add('hot');
+        triggerFinger(id);
+    }
+
+    function release(id) {
+        plc.in[id] = 0;
+        document.getElementById('btn-'+id).classList.remove('pressed');
+        document.getElementById('w-'+id).classList.remove('hot');
+    }
+
+    function triggerFinger(btnId) {
+        const finger = document.getElementById('finger');
+        const btn = document.getElementById('btn-'+btnId);
+        const rect = btn.getBoundingClientRect();
+        const base = document.getElementById('phy-view').getBoundingClientRect();
+        
+        finger.style.left = (rect.left - base.left + 10) + 'px';
+        finger.style.top = (rect.top - base.top + 10) + 'px';
+        
+        finger.classList.remove('tap');
+        void finger.offsetWidth; 
+        finger.classList.add('tap');
+    }
+
+    // --- 视觉辅助 ---
+    function setActive(id, isActive, type='logic') {
+        const el = document.getElementById(id);
+        if(!el) return;
+        if(type === 'logic') {
+            isActive ? el.classList.add('active-logic') : el.classList.remove('active-logic');
+        } else if (type === 'led-in') {
+            isActive ? el.classList.add('on-in') : el.classList.remove('on-in');
+        } else if (type === 'led-out') {
+            isActive ? el.classList.add('on-out') : el.classList.remove('on-out');
+        }
+    }
+
+    function highlightText(cardId) {
+        // 清除所有高亮
+        document.querySelectorAll('.exp-card').forEach(c => c.classList.remove('active'));
+        // 滚动并高亮
+        const card = document.getElementById(cardId);
+        if(card) {
+            card.classList.add('active');
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    function moveScanLine(top) {
+        const line = document.getElementById('scan-line');
+        if (top === null) {
+            line.style.display = 'none';
+        } else {
+            line.style.display = 'block';
+            line.style.top = top + 'px';
+        }
+    }
+
+    // --- 扫描周期逻辑 ---
+    function scanCycle() {
+        // Phase 1: 输入采样
+        if (plc.phase === 0) {
+            moveScanLine(null);
+            highlightText('card-scan-in');
+            
+            // LED 更新
+            setActive('led-x0', plc.in.x0, 'led-in');
+            setActive('led-x1', plc.in.x1, 'led-in');
+            setActive('led-x2', plc.in.x2, 'led-in');
+            setActive('led-x3', plc.in.x3, 'led-in');
+            
+            plc.phase = 1;
+        }
+
+        // Phase 2: Rung 1 (油泵 Y0)
+        else if (plc.phase === 1) {
+            moveScanLine(40);
+            highlightText('card-rung1');
+
+            // 逻辑: (X0 OR Y0) AND (NOT X1)
+            // 注意：X1是常闭停止按钮。物理按下X1=1，逻辑取反断开。
+            // 物理没按X1=0，逻辑通常闭为通。
+            // 为了模拟真实：梯形图 X1 为 |/|。
+            // 如果 内存X1=0，|/|通。如果内存X1=1，|/|断。
+            const stopBtnNotPressed = plc.in.x1 === 0;
+            const startCond = plc.in.x0 || plc.mem.y0;
+            
+            setActive('sym-x0', plc.in.x0);
+            setActive('sym-x1', stopBtnNotPressed); // 没按时高亮(导通)
+            
+            // 线路流
+            setActive('wr-1-1', true);
+            setActive('wr-1-2', startCond);
+            setActive('wr-1-3', startCond && stopBtnNotPressed);
+
+            plc.mem.y0 = (startCond && stopBtnNotPressed) ? 1 : 0;
+            setActive('sym-y0', plc.mem.y0);
+
+            plc.phase = 2;
+        }
+
+        // Phase 3: Rung 2 (主轴 Y1) - 核心联锁逻辑
+        else if (plc.phase === 2) {
+            moveScanLine(120);
+            
+            // 依赖检查：Y0 必须为 1
+            const dependencyMet = plc.mem.y0 === 1;
+            
+            // 逻辑：(X2 OR Y1) AND Y0_Dependency AND (NOT X3)
+            const stopBtnNotPressed = plc.in.x3 === 0;
+            const startCond = plc.in.x2 || plc.mem.y1;
+
+            setActive('sym-x2', plc.in.x2);
+            setActive('sym-y0-dep', dependencyMet); // 联锁点
+            setActive('sym-x3', stopBtnNotPressed);
+
+            // 线路流
+            setActive('wr-2-1', true);
+            setActive('wr-2-2', startCond);
+            
+            // 关键：如果前面通了，但是联锁没通，线路断在这里
+            const afterInterlock = startCond && dependencyMet;
+            setActive('wr-2-3', afterInterlock);
+            
+            const final = afterInterlock && stopBtnNotPressed;
+            setActive('wr-2-4', final);
+
+            plc.mem.y1 = final ? 1 : 0;
+            setActive('sym-y1', plc.mem.y1);
+
+            // 动态文字反馈
+            if (plc.in.x2 && !dependencyMet) {
+                // 如果按了启动主轴，但油泵没开 -> 阻断警告
+                highlightText('card-rung2-block');
+            } else {
+                // 正常逻辑说明
+                highlightText(dependencyMet ? 'card-rung2-pass' : 'card-rung2-block');
+            }
+
+            plc.phase = 3;
+        }
+
+        // Phase 4: 输出刷新
+        else if (plc.phase === 3) {
+            moveScanLine(null);
+            highlightText('card-out');
+
+            plc.out.y0 = plc.mem.y0;
+            plc.out.y1 = plc.mem.y1;
+
+            // 物理 LED
+            setActive('led-y0', plc.out.y0, 'led-out');
+            setActive('led-y1', plc.out.y1, 'led-out');
+
+            // 物理连线和电机
+            updateMotor('y0', plc.out.y0);
+            updateMotor('y1', plc.out.y1);
+            
+            // 如果油泵关了，主轴必须关 (再次确认，虽然逻辑层已处理，这里是物理层表现)
+            
+            plc.phase = 0;
+        }
+    }
+
+    function updateMotor(id, state) {
+        const motor = document.getElementById('motor-'+id);
+        const shaft = document.getElementById('shaft-'+id);
+        const txt = document.getElementById('stat-'+id);
+        const wire = document.getElementById('w-'+id);
+
+        if(state) {
+            motor.classList.add('running');
+            txt.innerText = "RUNNING";
+            txt.style.color = "#00b894";
+            wire.classList.add('hot');
+            // 旋转动画靠 CSS transition 和 JS 持续更新角度实现会更平滑，这里简化
+        } else {
+            motor.classList.remove('running');
+            txt.innerText = "OFF";
+            txt.style.color = "#b2bec3";
+            wire.classList.remove('hot');
+        }
+    }
+
+    // 独立的旋转动画循环
+    function animateLoop() {
+        const now = Date.now();
+        if(plc.out.y0) {
+            document.getElementById('shaft-y0').style.transform = `rotate(${now/2}deg)`;
+        }
+        if(plc.out.y1) {
+            document.getElementById('shaft-y1').style.transform = `rotate(${now/2}deg)`;
+        }
+        requestAnimationFrame(animateLoop);
+    }
+
+    function changeSpeed(val) {
+        interval = parseInt(val);
+        document.getElementById('spd-display').innerText = val + 'ms';
+        clearInterval(timer);
+        timer = setInterval(scanCycle, interval);
+    }
+
+    // Start
+    timer = setInterval(scanCycle, interval);
+    animateLoop();
+
+</script>
+</body>
+</html>

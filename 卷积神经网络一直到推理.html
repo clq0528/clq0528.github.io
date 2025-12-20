@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN 原理可视化 (Convolutional Neural Network)</title>
+    <style>
+        /* --- 全局变量与基础样式 --- */
+        :root {
+            --bg-color: #f0f4f8;
+            --panel-bg: #ffffff;
+            --primary-blue: #2980b9;
+            --light-blue: #ebf5fb;
+            --cell-input: #bdc3c7;
+            --cell-active: #3498db;
+            --cell-weight: #aed6f1;
+            --scanner-border: #e67e22;
+            --text-dark: #2c3e50;
+            --text-light: #7f8c8d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-color);
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            height: 100vh; box-sizing: border-box;
+        }
+
+        h1 { color: var(--text-dark); margin-bottom: 5px; font-size: 24px; }
+        .subtitle { color: var(--text-light); font-size: 14px; margin-bottom: 20px; }
+
+        /* --- 主布局容器 --- */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 380px; /* 右侧稍微加宽以容纳日志 */
+            gap: 20px;
+            width: 1100px;
+            max-width: 100%;
+            height: 650px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+
+        /* --- 左侧：可视化舞台 (Stage) --- */
+        #visual-stage {
+            align-items: center; justify-content: center;
+            position: relative;
+            border: 1px solid #e1e8ed;
+        }
+
+        .grid-wrapper { display: grid; gap: 5px; transition: all 0.5s ease; position: relative; }
+        
+        .cell {
+            width: 40px; height: 40px;
+            background: var(--cell-input);
+            border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; color: rgba(255,255,255,0.8);
+            transition: background-color 1.0s, transform 1.0s;
+        }
+        .cell.relu { background: var(--cell-active); }
+        .cell.weight { background: var(--cell-weight); color: var(--text-dark); font-weight: bold; }
+        
+        #scanner {
+            position: absolute; border: 3px solid var(--scanner-border);
+            border-radius: 6px; box-shadow: 0 0 10px rgba(230, 126, 34, 0.4);
+            pointer-events: none;
+            transition: top 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), left 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), width 0.3s, height 0.3s;
+            z-index: 10; display: none;
+        }
+        .scanner-label {
+            position: absolute; top: -25px; left: 0;
+            background: var(--scanner-border); color: #fff;
+            padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap;
+        }
+
+        #flatten-container { display: flex; gap: 10px; display: none; }
+        #fc-container { display: none; flex-direction: row; align-items: center; gap: 40px; }
+        .matrix-box { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
+        .vector-col { display: flex; flex-direction: column; gap: 5px; }
+
+        #connection-lines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+        }
+        path {
+            stroke: var(--scanner-border); stroke-width: 2; fill: none;
+            stroke-dasharray: 1000; stroke-dashoffset: 1000; opacity: 0.5;
+        }
+        .draw-line { animation: dash 1s linear forwards; }
+        @keyframes dash { to { stroke-dashoffset: 0; } }
+
+        #output-stage { display: none; width: 300px; flex-direction: column; gap: 15px; }
+        .prob-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-dark); }
+        .progress-bg { flex: 1; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--primary-blue); width: 0%; transition: width 1s cubic-bezier(0.1, 0.7, 1.0, 0.1); }
+        .prob-val { width: 40px; text-align: right; font-weight: bold; }
+
+        /* --- 右侧：逻辑控制面板 (修改版) --- */
+        .controls {
+            display: flex; justify-content: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px; flex-shrink: 0;
+        }
+        #start-btn {
+            background: var(--primary-blue); color: #fff; border: none; padding: 8px 25px; border-radius: 20px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        #start-btn:hover:not(:disabled) { background: #1f618d; transform: translateY(-2px); }
+        #start-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        /* 日志滚动容器 */
+        .logic-box {
+            background: #fafafa; border: 1px solid #e0e0e0;
+            border-radius: 8px; 
+            flex: 1; /* 占满剩余高度 */
+            overflow-y: auto; /* 允许垂直滚动 */
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            display: flex; flex-direction: column; gap: 10px;
+            scroll-behavior: smooth;
+        }
+
+        /* 单个日志条目 */
+        .log-entry {
+            background: #fff;
+            border-left: 4px solid #ccc;
+            padding: 12px;
+            border-radius: 0 6px 6px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            opacity: 0.6; /* 默认稍微变暗，突出最新的 */
+        }
+
+        /* 最新激活的日志 */
+        .log-entry.active {
+            border-left-color: var(--scanner-border);
+            opacity: 1;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .step-tag {
+            display: inline-block; background: var(--text-dark); color: #fff;
+            padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-bottom: 6px;
+        }
+        .log-entry.active .step-tag { background: var(--primary-blue); }
+
+        .logic-title { color: var(--text-dark); font-size: 15px; margin-bottom: 5px; font-weight: bold; }
+        .log-entry.active .logic-title { color: var(--primary-blue); }
+
+        .logic-formula { 
+            font-size: 12px; color: #888; margin-bottom: 5px; font-style: italic;
+            border-bottom: 1px dashed #eee; padding-bottom: 4px; display: inline-block;
+        }
+        .logic-desc { font-size: 13px; color: #555; line-height: 1.4; }
+
+    </style>
+</head>
+<body>
+
+    <h1>CNN 神经网络原理可视化</h1>
+    <div class="subtitle">Forward Propagation Workflow Visualization</div>
+
+    <div class="container">
+        <!-- 左侧面板 -->
+        <div class="panel" id="visual-stage">
+            <div id="grid-stage" class="grid-wrapper"></div>
+            <div id="flatten-container"></div>
+            <div id="fc-container">
+                <div class="vector-col" id="fc-input-vec"></div>
+                <div style="font-size:20px; color:#aaa;">×</div>
+                <div class="matrix-box" id="fc-weights"></div>
+                <div style="font-size:20px; color:#aaa;">+ b</div>
+            </div>
+            <div id="output-stage">
+                <div class="prob-row"><span style="width:30px">🐱</span><div class="progress-bg"><div class="progress-bar" id="bar-cat"></div></div><span class="prob-val" id="val-cat">0%</span></div>
+                <div class="prob-row"><span style="width:30px">🐶</span><div class="progress-bg"><div class="progress-bar" id="bar-dog"></div></div><span class="prob-val" id="val-dog">0%</span></div>
+                <div class="prob-row"><span style="width:30px">🚗</span><div class="progress-bg"><div class="progress-bar" id="bar-car"></div></div><span class="prob-val" id="val-car">0%</span></div>
+            </div>
+            <div id="scanner"><div class="scanner-label">Scanner</div></div>
+            <svg id="connection-lines"></svg>
+        </div>
+
+        <!-- 右侧面板：累积日志 -->
+        <div class="panel">
+            <div class="controls">
+                <button id="start-btn" onclick="startAnimation()">▶ 开始动画 (Start)</button>
+            </div>
+            <!-- 这里现在是空的，由JS动态填充 -->
+            <div class="logic-box" id="logic-panel"></div>
+        </div>
+    </div>
+
+<script>
+    // --- 配置 ---
+    const config = {
+        gridSize: 5,
+        cellSize: 40,
+        gap: 5,
+    };
+
+    const els = {
+        stage: document.getElementById('visual-stage'),
+        grid: document.getElementById('grid-stage'),
+        scanner: document.getElementById('scanner'),
+        scannerLabel: document.querySelector('.scanner-label'),
+        flattenCont: document.getElementById('flatten-container'),
+        fcCont: document.getElementById('fc-container'),
+        fcInput: document.getElementById('fc-input-vec'),
+        fcWeights: document.getElementById('fc-weights'),
+        outputStage: document.getElementById('output-stage'),
+        svg: document.getElementById('connection-lines'),
+        logicPanel: document.getElementById('logic-panel'),
+        btn: document.getElementById('start-btn'),
+        bars: { cat: document.getElementById('bar-cat'), dog: document.getElementById('bar-dog'), car: document.getElementById('bar-car') },
+        vals: { cat: document.getElementById('val-cat'), dog: document.getElementById('val-dog'), car: document.getElementById('val-car') }
+    };
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // --- 核心修改：追加日志而不是覆盖 ---
+    function updateLogic(tag, title, formula, desc) {
+        // 1. 移除旧日志的激活状态
+        const oldEntries = document.querySelectorAll('.log-entry');
+        oldEntries.forEach(e => e.classList.remove('active'));
+
+        // 2. 创建新日志条目
+        const entry = document.createElement('div');
+        entry.className = 'log-entry active'; // 默认新条目激活
+        entry.innerHTML = `
+            <div class="step-tag">${tag}</div>
+            <div class="logic-title">${title}</div>
+            <div><span class="logic-formula">${formula}</span></div>
+            <div class="logic-desc">${desc}</div>
+        `;
+
+        // 3. 追加到容器
+        els.logicPanel.appendChild(entry);
+
+        // 4. 自动滚动到底部
+        els.logicPanel.scrollTop = els.logicPanel.scrollHeight;
+    }
+
+    // --- 1. 初始化 ---
+    function initScene() {
+        // 视觉重置
+        els.grid.style.display = 'grid';
+        els.grid.style.opacity = '1';
+        els.grid.style.gridTemplateColumns = `repeat(${config.gridSize}, ${config.cellSize}px)`;
+        els.grid.innerHTML = '';
+        els.flattenCont.style.display = 'none';
+        els.fcCont.style.display = 'none';
+        els.outputStage.style.display = 'none';
+        els.svg.innerHTML = '';
+        els.scanner.style.display = 'none';
+        
+        Object.values(els.bars).forEach(b => b.style.width = '0%');
+        Object.values(els.vals).forEach(v => v.innerText = '0%');
+
+        // 清空日志面板
+        els.logicPanel.innerHTML = '';
+
+        // 生成初始像素
+        for (let i = 0; i < config.gridSize * config.gridSize; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.innerText = Math.floor(Math.random() * 9); 
+            els.grid.appendChild(cell);
+        }
+
+        // 添加第一条日志
+        updateLogic("Step 0", "输入层 (Input Layer)", "Matrix: 5x5", "加载原始图像数据。每个网格代表一个像素点的亮度值（0-9）。");
+    }
+
+    // --- 动画主流程 ---
+    async function startAnimation() {
+        els.btn.disabled = true;
+        els.btn.innerText = "演示进行中...";
+        
+        initScene();
+        await sleep(1000);
+
+        // 卷积
+        await runConvolution();
+
+        // ReLU
+        await runReLU();
+
+        // 池化准备 + 执行
+        await prepareForPooling(); 
+        await runPooling();
+
+        // 展平
+        await runFlatten();
+
+        // 全连接
+        await runFC();
+
+        // Softmax
+        await runSoftmax();
+
+        els.btn.disabled = false;
+        els.btn.innerText = "↺ 重新开始演示";
+        
+        // 结束日志
+        updateLogic("Done", "前向传播结束", "Forward Pass Complete", "神经网络已完成对图像的推理，并输出了分类概率。");
+    }
+
+    // --- 子流程逻辑 ---
+
+    async function runConvolution() {
+        updateLogic("Step 1", "卷积层 (Convolution)", "Feature Map = Input ⊛ Kernel", 
+            "3x3 卷积核在图像上滑动扫描。每个位置进行点积运算（相乘后求和），提取边缘、纹理等局部特征。");
+        
+        const kSize = 3;
+        els.scanner.style.display = 'block';
+        els.scannerLabel.innerText = "Kernel (3x3)";
+
+        const steps = [
+            {r:0, c:0}, {r:0, c:1}, {r:0, c:2}, // 演示第一行
+            {r:1, c:0}, {r:1, c:1}, {r:1, c:2}  // 演示第二行
+        ];
+
+        // 缓存偏移量
+        const gridRect = els.grid.getBoundingClientRect();
+        const stageRect = els.stage.getBoundingClientRect();
+        let gridOffsetLeft = els.grid.offsetLeft;
+        let gridOffsetTop = els.grid.offsetTop;
+
+        for (let step of steps) {
+            let top = step.r * (config.cellSize + config.gap);
+            let left = step.c * (config.cellSize + config.gap);
+            let size = (kSize * config.cellSize) + ((kSize-1) * config.gap);
+
+            els.scanner.style.width = size + 'px';
+            els.scanner.style.height = size + 'px';
+            els.scanner.style.top = (gridOffsetTop + top) + 'px';
+            els.scanner.style.left = (gridOffsetLeft + left) + 'px';
+            
+            await sleep(600);
+        }
+        els.scanner.style.display = 'none';
+        await sleep(500);
+    }
+
+    async function runReLU() {
+        updateLogic("Step 2", "激活层 (ReLU)", "f(x) = max(0, x)", 
+            "引入非线性特性。将所有负数值（如果有）修正为0，保留正特征。在视觉上，我们将特征图点亮为蓝色。");
+        
+        const cells = els.grid.querySelectorAll('.cell');
+        // 模拟逐个激活的视觉效果
+        for (let i = 0; i < cells.length; i++) {
+            cells[i].classList.add('relu');
+            // 稍微停顿一下增加动感，不用全停
+            if(i % 5 === 0) await sleep(50);
+        }
+        await sleep(1000);
+    }
+
+    async function prepareForPooling() {
+        updateLogic("Processing", "边界调整 (Padding)", "Padding/Stride Adjust", 
+            "为了演示池化效果，将特征图维度规范化（模拟 Valid Padding 后的输出尺寸）。");
+        
+        els.grid.style.opacity = '0';
+        await sleep(500);
+        
+        els.grid.innerHTML = '';
+        els.grid.style.gridTemplateColumns = `repeat(4, ${config.cellSize}px)`;
+        
+        for (let i=0; i<16; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell relu';
+            cell.innerText = Math.floor(Math.random() * 9);
+            els.grid.appendChild(cell);
+        }
+        
+        els.grid.style.opacity = '1';
+        await sleep(800);
+    }
+
+    async function runPooling() {
+        updateLogic("Step 3", "池化层 (Max Pooling)", "Output = Max(Window 2x2)", 
+            "使用 2x2 窗口，步幅为 2 进行下采样。只保留窗口内的最大值，减少数据量并防止过拟合。");
+
+        const pSize = 2;
+        els.scanner.style.display = 'block';
+        els.scannerLabel.innerText = "Max-Pool (2x2)";
+
+        let gridOffsetLeft = els.grid.offsetLeft;
+        let gridOffsetTop = els.grid.offsetTop;
+        let size = (pSize * config.cellSize) + ((pSize-1) * config.gap);
+        els.scanner.style.width = size + 'px';
+        els.scanner.style.height = size + 'px';
+
+        const positions = [{r:0, c:0}, {r:0, c:2}, {r:2, c:0}, {r:2, c:2}];
+
+        for (let pos of positions) {
+            let top = pos.r * (config.cellSize + config.gap);
+            let left = pos.c * (config.cellSize + config.gap);
+            els.scanner.style.top = (gridOffsetTop + top) + 'px';
+            els.scanner.style.left = (gridOffsetLeft + left) + 'px';
+            await sleep(800);
+        }
+
+        els.scanner.style.display = 'none';
+
+        // 变为 2x2
+        els.grid.style.opacity = '0';
+        await sleep(500);
+        els.grid.style.gridTemplateColumns = `repeat(2, ${config.cellSize}px)`;
+        els.grid.innerHTML = '';
+        for(let i=0; i<4; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell relu';
+            cell.innerText = "P" + i;
+            cell.style.fontWeight = "bold";
+            els.grid.appendChild(cell);
+        }
+        els.grid.style.opacity = '1';
+        await sleep(1000);
+    }
+
+    async function runFlatten() {
+        updateLogic("Step 4", "展平 (Flatten)", "2x2 Matrix → 1x4 Vector", 
+            "将二维特征图拉直为一维向量，以便与全连接层的神经元进行连接。");
+
+        els.grid.style.display = 'none';
+        els.flattenCont.style.display = 'flex';
+        els.flattenCont.innerHTML = '';
+
+        for(let i=0; i<4; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell relu';
+            cell.innerText = "x" + i;
+            cell.style.transform = 'scale(0)';
+            els.flattenCont.appendChild(cell);
+            await sleep(50); 
+            cell.style.transform = 'scale(1)';
+        }
+        await sleep(1500);
+    }
+
+    async function runFC() {
+        updateLogic("Step 5", "全连接层 (Fully Connected)", "y = Weights · x + bias", 
+            "模拟矩阵乘法。输入向量与预训练的权重矩阵相乘，计算每个类别的原始得分（Logits）。");
+
+        els.flattenCont.style.display = 'none';
+        els.fcCont.style.display = 'flex';
+        
+        // 填充UI
+        els.fcInput.innerHTML = '';
+        for(let i=0; i<4; i++){
+            let cell = document.createElement('div');
+            cell.className = 'cell relu';
+            cell.innerText = "x" + i;
+            els.fcInput.appendChild(cell);
+        }
+        els.fcWeights.innerHTML = '';
+        for(let i=0; i<12; i++){
+            let cell = document.createElement('div');
+            cell.className = 'cell weight';
+            cell.innerText = "w";
+            cell.style.fontSize = "10px";
+            els.fcWeights.appendChild(cell);
+        }
+
+        // 连线动画
+        const svgRect = els.stage.getBoundingClientRect();
+        const inputRect = els.fcInput.getBoundingClientRect();
+        const weightRect = els.fcWeights.getBoundingClientRect();
+
+        const createLine = (x1, y1, x2, y2) => {
+            let path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M${x1} ${y1} L${x2} ${y2}`);
+            path.classList.add('draw-line');
+            els.svg.appendChild(path);
+        };
+
+        // 简单示意线
+        let x1 = inputRect.right - svgRect.left;
+        let y1 = inputRect.top + inputRect.height/2 - svgRect.top;
+        let x2 = weightRect.left - svgRect.left;
+        let y2 = weightRect.top + weightRect.height/2 - svgRect.top;
+
+        createLine(x1, y1, x2, y2);
+        
+        await sleep(1500);
+        els.svg.innerHTML = ''; 
+    }
+
+    async function runSoftmax() {
+        els.fcCont.style.display = 'none';
+        els.outputStage.style.display = 'flex';
+        
+        updateLogic("Step 6", "输出层 (Softmax)", "Probability = exp(z) / Σ", 
+            "将得分转换为概率分布。可以看到 Cat 的概率最高，神经网络将其识别为猫。");
+
+        const targets = [
+            { id: 'cat', val: 62 },
+            { id: 'dog', val: 27 },
+            { id: 'car', val: 11 }
+        ];
+
+        for (let t of targets) {
+            els.bars[t.id].style.width = t.val + '%';
+            setTimeout(() => {
+                els.vals[t.id].innerText = t.val + '%';
+            }, 600);
+        }
+        await sleep(1500);
+    }
+
+    // 初始化
+    window.onload = initScene;
+
+</script>
+</body>
+</html>

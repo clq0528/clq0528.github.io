@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Modbus RTU 深度交互仿真控制台 - 掌控版</title>
+    <style>
+        :root {
+            --bg: #0d1117; --panel: #161b22; --border: #30363d;
+            --plc-blue: #005fb8; --slave-cyan: #0891b2; --text: #c9d1d9;
+            --accent-green: #3fb950; --accent-red: #f85149; --accent-gold: #d29922;
+            --highlight: #58a6ff; --bin-on: #238636;
+        }
+
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', monospace; margin: 0;
+            display: grid; grid-template-columns: 420px 1fr 420px;
+            grid-template-rows: 80px 1fr 260px; height: 100vh;
+            gap: 10px; padding: 10px; overflow: hidden;
+        }
+
+        .box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+        .box-title { background: rgba(255,255,255,0.05); padding: 10px; font-weight: bold; border-bottom: 1px solid var(--border); color: var(--highlight); display: flex; justify-content: space-between; }
+
+        /* 控制中心 */
+        .header { grid-column: 1 / 4; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: linear-gradient(90deg, #161b22 0%, #0d419d 50%, #161b22 100%); border-bottom: 2px solid var(--highlight); }
+        .controller { display: flex; gap: 10px; }
+        button { background: var(--highlight); border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; color: #000; transition: 0.2s; }
+        button:hover { background: var(--accent-green); }
+        button:disabled { background: #444; cursor: not-allowed; }
+
+        /* 左侧：PLC */
+        .bit-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; padding: 10px; }
+        .bit-box { font-size: 10px; text-align: center; border: 1px solid #333; padding: 5px 0; background: #000; transition: 0.3s; }
+        .bit-box.active { background: var(--bin-on); color: white; box-shadow: inset 0 0 5px #fff; }
+
+        /* FB块 */
+        .fb-block { border: 2px solid var(--plc-blue); margin: 15px; border-radius: 4px; background: #000; }
+        .fb-io { display: flex; justify-content: space-between; padding: 10px; font-size: 12px; line-height: 1.8; }
+        .led { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: #333; margin: 0 5px; }
+        .led.on { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+        /* 中间：链路与解说 */
+        .center-stage { position: relative; display: flex; flex-direction: column; }
+        .step-info { background: #000; border: 1px solid var(--accent-gold); margin: 15px; padding: 15px; border-radius: 6px; min-height: 100px; }
+        .step-title { color: var(--accent-gold); font-weight: bold; margin-bottom: 8px; font-size: 16px; border-bottom: 1px solid #333; }
+        .packet-display { display: flex; justify-content: center; gap: 8px; margin-top: 40px; }
+        .byte-unit { border: 1px solid var(--border); padding: 8px; text-align: center; background: #222; min-width: 40px; border-radius: 4px; position: relative; }
+        .byte-unit.active { border-color: var(--highlight); background: #0d419d; transform: scale(1.1); }
+        .byte-label { font-size: 10px; color: #888; margin-top: 5px; }
+
+        /* 右侧：从站 */
+        .slave-table { width: 90%; margin: 10px auto; border-collapse: collapse; font-size: 12px; }
+        .slave-table td, .slave-table th { border: 1px solid #333; padding: 8px; text-align: center; }
+        .reg-input { width: 50px; background: #000; color: var(--accent-green); border: 1px solid #444; text-align: center; }
+
+        /* 底部日志 */
+        .bottom-log { grid-column: 1 / 3; background: #000; padding: 15px; overflow-y: auto; border-top: 1px solid var(--border); }
+        .log-line { margin-bottom: 5px; font-size: 13px; border-left: 2px solid #444; padding-left: 10px; }
+        .log-master { border-color: var(--highlight); }
+        .log-slave { border-color: var(--slave-cyan); }
+        .log-god { border-color: var(--accent-gold); color: var(--accent-gold); font-style: italic; }
+
+        /* 转换实验室 */
+        .converter { grid-column: 3; background: #000; padding: 15px; border-top: 1px solid var(--border); font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div style="font-size: 18px; font-weight: bold;">MODBUS RTU 全链路逻辑掌控台</div>
+    <div class="controller">
+        <button id="btn-next" onclick="nextStep()">▶ 下一步 (Next Step)</button>
+        <button id="btn-reset" onclick="resetSim()" style="background: var(--accent-red);">↺ 重置</button>
+    </div>
+    <div id="cycle-pos">步骤: 0 / 8</div>
+</div>
+
+<!-- 左侧：PLC 主站 -->
+<div class="box">
+    <div class="box-title">三菱 FX3U 主站 <span>(D8120 配置中心)</span></div>
+    <div class="bit-grid" id="d8120-bits"></div>
+    <div style="padding: 0 15px; font-size: 11px; color: #888;">
+        D8120: <span id="hex-8120" style="color:var(--accent-gold)">H0C81</span> | 9600-8-N-1
+    </div>
+
+    <div class="fb-block">
+        <div style="background: var(--plc-blue); padding: 5px; font-size: 12px; text-align: center;">ADPRW (MODBUS Master FB)</div>
+        <div class="fb-io">
+            <div>
+                <span class="led" id="led-en"></span> EN (使能)<br>
+                <span class="led" id="led-req"></span> REQ (请求)<br>
+                S1: 1 (站号)<br>
+                S2: 03 (功能码)<br>
+                S3: 0 (地址)
+            </div>
+            <div style="text-align: right;">
+                DONE <span class="led" id="led-done"></span><br>
+                BUSY <span class="led" id="led-busy"></span><br>
+                ERR <span class="led" id="led-err"></span><br>
+                D-OUT: <span id="master-val" style="color:var(--highlight)">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 中间：核心链路与解说 -->
+<div class="box center-stage">
+    <div class="step-info">
+        <div class="step-title" id="step-title">等待操作...</div>
+        <div id="step-desc" style="font-size: 14px; line-height: 1.5;">请点击“下一步”开始一个完整的 Modbus 通信周期。</div>
+    </div>
+
+    <div class="packet-display" id="packet-box">
+        <!-- 动态生成报文 -->
+    </div>
+
+    <div style="position: absolute; bottom: 20px; width: 100%; text-align: center; color: #444; font-size: 12px;">
+        数据链路层: RS-485 半双工 | 物理波形: 差分电平
+    </div>
+</div>
+
+<!-- 右侧：从站设备 -->
+<div class="box">
+    <div class="box-title">从站仪表 (ID: 01) <span>(可手动修改数据)</span></div>
+    <div style="padding: 10px; font-size: 11px; background: #111; margin: 10px; border-radius: 4px; color: var(--slave-cyan);">
+        MODBUS 手册对照：<br>
+        • 地址 0000H -> 寄存器 40001 (温度)<br>
+        • 范围: -40.0 ~ 120.0 ℃ (缩放 10 倍)
+    </div>
+
+    <table class="slave-table">
+        <tr style="background: #222;"><th>寄存器</th><th>描述</th><th>物理值</th><th>Hex数据</th></tr>
+        <tr>
+            <td>0000H</td><td>温度</td>
+            <td><input type="number" id="s-temp" class="reg-input" value="25.5" step="0.1"> ℃</td>
+            <td id="s-temp-hex">00FF</td>
+        </tr>
+    </table>
+
+    <div style="margin-top: auto; padding: 15px; border-top: 1px solid #333;">
+        <div style="font-size: 12px; color: var(--accent-gold);">从站内部逻辑：</div>
+        <div id="slave-log" style="font-size: 11px; font-family: monospace; color: #888;">监听中...</div>
+    </div>
+</div>
+
+<!-- 底部：日志与实验室 -->
+<div class="box bottom-log" id="log-stack">
+    <div class="log-line log-god">上帝视角：系统初始化。Modbus RTU 通信必须由主站发起，从站严禁主动出声。</div>
+</div>
+
+<div class="box converter">
+    <div style="color: var(--accent-gold); font-weight: bold; margin-bottom: 5px;">CRC-16 校验实验室</div>
+    <div id="crc-lab" style="font-family: monospace; line-height: 1.4; color: #aaa;">
+        等待报文组装...
+    </div>
+</div>
+
+<script>
+    let currentStep = 0;
+    const totalSteps = 8;
+    const d8120Config = "0000110010000001"; // H0C81
+
+    // 初始化 D8120 位
+    const grid = document.getElementById('d8120-bits');
+    for(let i=15; i>=0; i--) {
+        const div = document.createElement('div');
+        div.className = `bit-box ${d8120Config[15-i] === '1' ? 'active' : ''}`;
+        div.innerHTML = `b${i}<br>${d8120Config[15-i]}`;
+        div.id = `bit-${i}`;
+        grid.appendChild(div);
+    }
+
+    function addLog(msg, type='god') {
+        const div = document.createElement('div');
+        div.className = `log-line log-${type}`;
+        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        const stack = document.getElementById('log-stack');
+        stack.appendChild(div);
+        stack.scrollTop = stack.scrollHeight;
+    }
+
+    function updatePacket(bytes, labels) {
+        const box = document.getElementById('packet-box');
+        box.innerHTML = '';
+        bytes.forEach((b, i) => {
+            box.innerHTML += `
+                <div class="byte-unit">
+                    <div style="font-size:18px; font-weight:bold;">${b}</div>
+                    <div class="byte-label">${labels[i]}</div>
+                </div>
+            `;
+        });
+    }
+
+    function resetSim() {
+        currentStep = 0;
+        document.getElementById('cycle-pos').innerText = `步骤: 0 / 8`;
+        document.getElementById('step-title').innerText = "等待操作...";
+        document.getElementById('step-desc').innerText = "请点击“下一步”开始一个完整的 Modbus 通信周期。";
+        document.getElementById('packet-box').innerHTML = '';
+        document.getElementById('led-en').classList.remove('on');
+        document.getElementById('led-req').classList.remove('on');
+        document.getElementById('led-busy').classList.remove('on');
+        document.getElementById('led-done').classList.remove('on');
+        document.getElementById('master-val').innerText = '0';
+        addLog("系统已重置。");
+    }
+
+    function nextStep() {
+        currentStep++;
+        if(currentStep > totalSteps) { resetSim(); return; }
+        document.getElementById('cycle-pos').innerText = `步骤: ${currentStep} / 8`;
+
+        switch(currentStep) {
+            case 1:
+                document.getElementById('led-en').classList.add('on');
+                document.getElementById('step-title').innerText = "1. PLC 扫描逻辑触发";
+                document.getElementById('step-desc').innerText = "用户拨动开关 M0，PLC 执行到 ADPRW 指令。CPU 检查 D8120 确认通信格式（9600-8-N-1）。";
+                addLog("主站：扫描到 ADPRW 指令，使能灯亮起。", "master");
+                break;
+
+            case 2:
+                document.getElementById('led-req').classList.add('on');
+                document.getElementById('led-busy').classList.add('on');
+                document.getElementById('step-title').innerText = "2. FB 块参数锁定";
+                document.getElementById('step-desc').innerText = "FB 块读取输入引脚：站号=1，功能码=03，起始地址=0000H，长度=1。准备进入发送缓存。";
+                addLog("主站：参数已锁定，准备进行 CRC 计算。", "master");
+                break;
+
+            case 3:
+                document.getElementById('step-title').innerText = "3. CRC-16 校验计算";
+                document.getElementById('step-desc').innerText = "主站对数据 [01 03 00 00 00 01] 进行多项式异或运算。";
+                document.getElementById('crc-lab').innerHTML = "Init: FFFF <br> XOR 01 -> FFFE <br> ... <br> <span style='color:var(--accent-green)'>Result: 840A (Low-High Swap)</span>";
+                updatePacket(['01','03','00','00','00','01','84','0A'], ['ID','CMD','AddrH','AddrL','NumH','NumL','CRCL','CRCH']);
+                addLog("上帝视角：CRC 是为了确保传输过程中如果 A/B 线受到电磁干扰，数据不错乱。", "god");
+                break;
+
+            case 4:
+                document.getElementById('step-title').innerText = "4. 请求报文在总线广播";
+                document.getElementById('step-desc').innerText = "报文通过 RS-485 收发器转换成差分电平，发送到双绞线上。";
+                addLog("主站：TX -> 01 03 00 00 00 01 84 0A", "master");
+                document.querySelectorAll('.byte-unit').forEach(el => el.classList.add('active'));
+                break;
+
+            case 5:
+                document.getElementById('step-title').innerText = "5. 从站接收并核对 ID";
+                document.getElementById('step-desc').innerText = "从站 01 收到数据。首先检查第一个字节是否为 01。如果是 02 或是其他，它将保持沉默。";
+                document.getElementById('slave-log').innerHTML = "侦测到 01 站号... 匹配成功!<br>正在执行 CRC 校验...";
+                addLog("从站：收到我的站号，准备处理请求。", "slave");
+                break;
+
+            case 6:
+                const tempVal = parseFloat(document.getElementById('s-temp').value);
+                const hexVal = (tempVal * 10).toString(16).toUpperCase().padStart(4, '0');
+                document.getElementById('s-temp-hex').innerText = hexVal;
+                document.getElementById('step-title').innerText = "6. 从站组建响应报文";
+                document.getElementById('step-desc').innerText = `从站查询内存：温度为 ${tempVal}℃，对应十六进制为 ${hexVal}H。开始组建回复报文。`;
+                updatePacket(['01','03','02', hexVal.substring(0,2), hexVal.substring(2,4), 'CRC','CRC'], ['ID','CMD','Bytes','DataH','DataL','CRCL','CRCH']);
+                addLog("从站：准备发送数据 -> " + hexVal, "slave");
+                break;
+
+            case 7:
+                document.getElementById('step-title').innerText = "7. 数据回传主站";
+                document.getElementById('step-desc').innerText = "从站控制 A/B 线电平，将包含温数据的报文发回。主站 BUSY 灯保持常亮。";
+                addLog("从站：RX -> 01 03 02 ...", "slave");
+                break;
+
+            case 8:
+                const finalTemp = parseFloat(document.getElementById('s-temp').value);
+                document.getElementById('master-val').innerText = finalTemp;
+                document.getElementById('led-busy').classList.remove('on');
+                document.getElementById('led-done').classList.add('on');
+                document.getElementById('step-title').innerText = "8. 主站解码与赋值";
+                document.getElementById('step-desc').innerText = "主站验证从站回传的 CRC 成功，提取数据段。将 16 进制转换为物理值，并存入 D 寄存器。本次通信成功。";
+                addLog("主站：数据读取成功，存入指定 D 区域。", "master");
+                document.getElementById('btn-next').innerText = "🔁 重新开始";
+                break;
+        }
+    }
+</script>
+</body>
+</html>

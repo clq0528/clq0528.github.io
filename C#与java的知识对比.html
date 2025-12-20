@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Java to C# 架构师核心迁移指南</title>
+    <style>
+        :root {
+            --bg-side: #252526;
+            --bg-main: #1e1e1e;
+            --border: #333;
+            --accent: #007acc;
+            --text: #d4d4d4;
+            --java-color: #ce9178;
+            --cs-color: #4ec9b0;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-side);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 25px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            border-bottom: 1px solid var(--border);
+            letter-spacing: 1px;
+        }
+
+        .menu-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .menu-item {
+            padding: 14px 20px;
+            cursor: pointer;
+            font-size: 13px;
+            border-left: 4px solid transparent;
+            transition: 0.2s;
+            color: #999;
+        }
+
+        .menu-item:hover { background: #2d2d2d; color: #ccc; }
+        .menu-item.active {
+            background: #37373d;
+            border-left-color: var(--accent);
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* 主内容 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 30px 40px;
+        }
+
+        .header h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 400; }
+        .header p { color: #888; margin: 10px 0 25px 0; line-height: 1.6; }
+
+        .comparison {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .code-box {
+            flex: 1;
+            background: #151515;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .code-title {
+            padding: 8px 15px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #252526;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        pre {
+            margin: 0;
+            padding: 15px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ccc;
+            overflow-x: auto;
+        }
+
+        .insight {
+            background: #262626;
+            border-radius: 4px;
+            padding: 20px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .insight h3 { margin: 0 0 10px 0; font-size: 16px; color: var(--accent); }
+        .insight ul { margin: 0; padding-left: 20px; color: #aaa; font-size: 14px; }
+        .insight li { margin-bottom: 8px; }
+
+        b { color: #eee; }
+        code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">ARCHITECT MIGRATION</div>
+        <div class="menu-list" id="menu"></div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h1 id="title">加载中...</h1>
+            <p id="desc"></p>
+        </div>
+
+        <div class="comparison">
+            <div class="code-box">
+                <div class="code-title"><span style="color:var(--java-color)">JAVA / SPRING</span></div>
+                <pre id="java-code"></pre>
+            </div>
+            <div class="code-box">
+                <div class="code-title"><span style="color:var(--cs-color)">C# / .NET CORE</span></div>
+                <pre id="cs-code"></pre>
+            </div>
+        </div>
+
+        <div class="insight">
+            <h3>架构师深思 (Insight)</h3>
+            <div id="insight-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const data = [
+            {
+                title: "1. 组件注册 (@Component)",
+                desc: "Spring 依赖类路径扫描 (@Component, @Service)。.NET 推崇在 Program.cs 中显式注册，或使用第三方库实现扫描。",
+                java: "@Service\npublic class TradeService {\n    // 自动扫描并装配\n}",
+                cs: "// 在 Program.cs 中手动或按约定注册\nbuilder.Services.AddScoped<ITradeService, TradeService>();\n\n// 构造函数接收\npublic class TradeService(IRepo repo) : ITradeService { }",
+                insight: "<ul><li>Java 的扫描机制更“魔法”，中大型项目启动慢。</li><li>C# 的<b>显式注册</b>让依赖链极度清晰，性能更高。</li><li>.NET 8 的<b>Primary Constructor</b>（代码中示例）让 DI 写法比 Lombok 更简洁。</li></ul>"
+            },
+            {
+                title: "2. 配置注入 (@Value)",
+                desc: "Java 常用 @Value 注入单个配置。C# 推崇强类型的 Options 模式，实现配置的热更新和分组管理。",
+                java: "@Value(\"${timeout:1000}\")\nprivate int timeout;\n\n@Value(\"#{config.nodes}\")\nprivate List<String> nodes;",
+                cs: "// 定义强类型对象\nvar timeout = config.GetValue<int>(\"Timeout\");\n\n// 推荐：Options 模式 (可热更新)\npublic class MySettings {\n    public int Timeout { get; set; }\n}\nservices.Configure<MySettings>(config.GetSection(\"My\"));",
+                insight: "<ul><li>Java 的 <code>@Value</code> 散落在各处，重构极其痛苦。</li><li>C# 的 <b>IOptions&lt;T&gt;</b> 模式实现了配置的类映射，支持 <b>IConfiguration</b> 统一抽象，可无缝对接 Apollo、Consul 或 K8s ConfigMap。</li></ul>"
+            },
+            {
+                title: "3. 事件解耦 (@EventListener)",
+                desc: "Java 通过 ApplicationEventPublisher 发布事件。C# 除了传统的 event/delegate，架构级解耦常使用 MediatR 或原生委托。",
+                java: "// 发布\npublisher.publishEvent(new OrderEvent(order));\n\n// 监听\n@EventListener\npublic void handle(OrderEvent event) { ... }",
+                cs: "// 方案 A: 使用 MediatR (类似 Spring Event)\nawait _mediator.Publish(new OrderNotification(order));\n\n// 方案 B: 原生事件\npublic event Action<Order> OnOrderCreated;\nOnOrderCreated?.Invoke(order);",
+                insight: "<ul><li>Java 的事件机制是单进程的同步/异步。</li><li>C# 程序员更习惯用 <b>MediatR</b> 库来实现进程内中介者模式，或者利用 <b>Delegate/Action</b> 实现轻量级回调。</li></ul>"
+            },
+            {
+                title: "4. 委托与事件 (Delegates)",
+                desc: "Java 使用函数式接口 (FunctionalInterface)。C# 拥有原生关键字 delegate 和 event，这是语言级的观察者模式。",
+                java: "// Java 只有接口回调\nConsumer<String> logger = (msg) -> System.out.println(msg);\nlogger.accept(\"Hello\");",
+                cs: "// 委托定义\npublic delegate void Logger(string msg);\n\n// 委托链 (多播)\nLogger logger = Console.WriteLine;\nlogger += File.AppendAllText;\n\nlogger(\"Hello\"); // 同时触发两个方法",
+                insight: "<ul><li>C# 的委托支持 <b>+=</b> 符号，本质上是一个方法链表。</li><li><b>Action</b> (无返回) 和 <b>Func</b> (有返回) 是预定义的通用委托，覆盖了 Java 90% 的函数式场景。</li></ul>"
+            },
+            {
+                title: "5. 真泛型 vs 伪泛型",
+                desc: "Java 泛型在运行时被擦除 (Erasure)。C# 泛型是具象化的 (Reification)，运行时保留类型信息。",
+                java: "// 运行时 list.get(0) 实际上是 (Object)\nList<String> list = new ArrayList<>();\n\n// 无法做这种操作\nif (list instanceof List<String>) // 报错",
+                cs: "// 运行时知道它是 string 类型\nvar list = new List<string>();\n\n// 合法操作\nif (list is List<string> sList) \n{\n   // 甚至能反射获取具体类型: typeof(T)\n}",
+                insight: "<ul><li>由于 Java 擦除了类型，导致 <code>List&lt;int&gt;</code> 必须装箱为 <code>Integer</code>，性能损耗大。</li><li>C# <b>真泛型</b> 避免了装箱，对内存极度友好，且可以在运行时根据泛型参数做逻辑分支。</li></ul>"
+            },
+            {
+                title: "6. AOP vs 中间件 (Middleware)",
+                desc: "Java 习惯用 AOP 切面。C# Web 架构核心是中间件管道 (Pipeline)，处理请求比 AOP 更直观。",
+                java: "@Around(\"execution(* com.service.*.*(..))\")\npublic Object log(ProceedingJoinPoint joinPoint) {\n    // 环绕通知\n}",
+                cs: "// Program.cs\napp.Use(async (context, next) => {\n    // Request 进来时逻辑\n    await next();\n    // Response 出去时逻辑\n});",
+                insight: "<ul><li>Java AOP 基于反射或字节码增强（CGLIB/AspectJ）。</li><li>.NET 的 <b>Middleware</b> 是装饰器模式的完美实现，所有 HTTP 请求像剥洋葱一样经过每一层，非常适合做鉴权、日志、异常全局处理。</li></ul>"
+            },
+            {
+                title: "7. 扩展方法 (Extension)",
+                desc: "Java 必须写大量的 Utils 工具类。C# 允许“优雅地插队”，为现有类注入新功能。",
+                java: "StringUtils.isEmpty(str); // 丑陋的静态调用",
+                cs: "public static class StringExt {\n    public static bool IsEmpty(this string s) => string.IsNullOrEmpty(s);\n}\n\nstr.IsEmpty(); // 像原生方法一样调用",
+                insight: "<ul><li>这是 C# 架构优雅的核心。你可以给 <code>IServiceCollection</code> 写扩展方法来封装复杂的组件初始化逻辑，让 <code>Program.cs</code> 保持清爽。</li></ul>"
+            }
+        ];
+
+        const menuEl = document.getElementById('menu');
+        const titleEl = document.getElementById('title');
+        const descEl = document.getElementById('desc');
+        const javaCodeEl = document.getElementById('java-code');
+        const csCodeEl = document.getElementById('cs-code');
+        const insightContentEl = document.getElementById('insight-content');
+
+        function init() {
+            data.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'menu-item';
+                div.innerText = item.title;
+                div.onclick = () => loadModule(index, div);
+                menuEl.appendChild(div);
+            });
+            if(data.length > 0) loadModule(0, menuEl.firstChild);
+        }
+
+        function loadModule(index, el) {
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+            el.classList.add('active');
+
+            const item = data[index];
+            titleEl.innerText = item.title;
+            descEl.innerText = item.desc;
+            javaCodeEl.innerText = item.java;
+            csCodeEl.innerText = item.cs;
+            insightContentEl.innerHTML = item.insight;
+        }
+
+        init();
+    </script>
+</body>
+</html>

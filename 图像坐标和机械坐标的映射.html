@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual vs Machine Coordinates</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f4f6f8;
+            overflow: hidden;
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 影院容器，保持16:9比例 */
+        #cinema-container {
+            width: 1280px;
+            height: 720px;
+            background: #ffffff;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            transform-origin: center center;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 字幕区域 */
+        #subtitle-box {
+            position: absolute;
+            bottom: 60px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .sub-cn {
+            display: block;
+            font-size: 28px;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+        }
+
+        .sub-en {
+            display: block;
+            font-size: 16px;
+            font-weight: 400;
+            color: #86868b;
+            letter-spacing: 0.5px;
+        }
+
+        /* 标签样式 (绝对定位，动态更新) */
+        .label {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.1s;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* 进度条 */
+        #progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #007aff, #34c759);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* 装饰背景 */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 50%, rgba(230, 240, 255, 0.5) 0%, transparent 40%),
+                        radial-gradient(circle at 70% 50%, rgba(255, 240, 230, 0.5) 0%, transparent 40%);
+            z-index: 0;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="cinema-container">
+        <div class="bg-decoration"></div>
+        <canvas id="mainCanvas" width="1280" height="720"></canvas>
+        
+        <!-- 动态标签容器 -->
+        <div id="labels-container"></div>
+
+        <div id="subtitle-box">
+            <span class="sub-cn" id="sub-cn"></span>
+            <span class="sub-en" id="sub-en"></span>
+        </div>
+        <div id="progress-bar"></div>
+    </div>
+
+<script>
+/**
+ * 动画脚本引擎
+ */
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const subCn = document.getElementById('sub-cn');
+const subEn = document.getElementById('sub-en');
+const labelContainer = document.getElementById('labels-container');
+const progressBar = document.getElementById('progress-bar');
+
+// 状态管理
+const state = {
+    time: 0,
+    scene: 0, // 0: Intro, 1: Image, 2: Machine, 3: Mapping, 4: Action
+    
+    // 摄像机参数
+    cameraOpacity: 0,
+    cameraGridOpacity: 0,
+    targetPixel: { u: 300, v: 200, opacity: 0 },
+    
+    // 机械臂参数
+    robotOpacity: 0,
+    robotTarget: { x: 300, y: 300, z: 50 }, // 目标物理坐标
+    currentEffector: { x: 0, y: 300, z: 200 }, // 当前末端位置
+    robotBase: { x: 900, y: 500 }, // 屏幕上的绘制基准点
+    
+    // 连接线
+    connectionLine: 0, // 0 to 1
+    
+    // 全局缩放
+    globalScale: 1
+};
+
+// 颜色定义
+const colors = {
+    camera: '#007aff', // 蓝色系
+    robot: '#ff9500',  // 橙色系
+    grid: '#e5e5ea',
+    text: '#1d1d1f',
+    axisX: '#ff3b30',
+    axisY: '#34c759',
+    axisZ: '#007aff'
+};
+
+// 响应式缩放
+function resize() {
+    const container = document.getElementById('cinema-container');
+    const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    container.style.transform = `scale(${scale * 0.95})`;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- 绘图辅助函数 ---
+
+function drawGrid(ctx, x, y, w, h, step, color, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= w; i += step) {
+        ctx.moveTo(x + i, y);
+        ctx.lineTo(x + i, y + h);
+    }
+    for (let j = 0; j <= h; j += step) {
+        ctx.moveTo(x, y + j);
+        ctx.lineTo(x + w, y + j);
+    }
+    ctx.stroke();
+    
+    // 绘制UV坐标轴
+    if (alpha > 0.1) {
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        // U axis
+        ctx.strokeStyle = colors.axisX;
+        ctx.moveTo(x, y); ctx.lineTo(x + 100, y);
+        // V axis
+        ctx.strokeStyle = colors.axisY;
+        ctx.moveTo(x, y); ctx.lineTo(x, y + 100);
+        ctx.stroke();
+        
+        ctx.fillStyle = colors.text;
+        ctx.font = "bold 16px Inter";
+        ctx.fillText("0,0", x - 10, y - 10);
+        ctx.fillStyle = colors.axisX;
+        ctx.fillText("U (Pixel)", x + 110, y + 5);
+        ctx.fillStyle = colors.axisY;
+        ctx.fillText("V", x - 15, y + 110);
+    }
+    ctx.restore();
+}
+
+// 3D 等轴测投影转换
+function isoToScreen(x, y, z, centerX, centerY) {
+    // 简单的等轴测投影
+    const scale = 0.6;
+    const isoX = (x - y) * Math.cos(Math.PI / 6) * scale + centerX;
+    const isoY = (x + y) * Math.sin(Math.PI / 6) * scale - z * scale + centerY;
+    return { x: isoX, y: isoY };
+}
+
+function drawRobotArm(ctx, targetX, targetY, targetZ, opacity) {
+    if (opacity <= 0) return;
+    
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    const cx = state.robotBase.x;
+    const cy = state.robotBase.y;
+
+    // 绘制底座平面 (Grid)
+    ctx.strokeStyle = '#d1d1d6';
+    ctx.lineWidth = 1;
+    const gridSize = 400;
+    const step = 50;
+    
+    ctx.beginPath();
+    for(let i = -gridSize/2; i<=gridSize/2; i+=step) {
+        let p1 = isoToScreen(i, -gridSize/2, 0, cx, cy);
+        let p2 = isoToScreen(i, gridSize/2, 0, cx, cy);
+        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+        
+        p1 = isoToScreen(-gridSize/2, i, 0, cx, cy);
+        p2 = isoToScreen(gridSize/2, i, 0, cx, cy);
+        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+    }
+    ctx.stroke();
+
+    // 绘制坐标轴
+    const origin = isoToScreen(0,0,0, cx, cy);
+    const xAxis = isoToScreen(150,0,0, cx, cy);
+    const yAxis = isoToScreen(0,150,0, cx, cy);
+    const zAxis = isoToScreen(0,0,150, cx, cy);
+
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.strokeStyle = colors.axisX; ctx.moveTo(origin.x, origin.y); ctx.lineTo(xAxis.x, xAxis.y); ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = colors.axisY; ctx.moveTo(origin.x, origin.y); ctx.lineTo(yAxis.x, yAxis.y); ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = colors.axisZ; ctx.moveTo(origin.x, origin.y); ctx.lineTo(zAxis.x, zAxis.y); ctx.stroke();
+    
+    ctx.font = "bold 14px Inter";
+    ctx.fillStyle = colors.axisX; ctx.fillText("X (mm)", xAxis.x, xAxis.y);
+    ctx.fillStyle = colors.axisY; ctx.fillText("Y (mm)", yAxis.x, yAxis.y);
+    ctx.fillStyle = colors.axisZ; ctx.fillText("Z (mm)", zAxis.x, zAxis.y - 10);
+
+    // --- 极简 IK (反向运动学) 模拟绘制 ---
+    // 假设这是一个简单的两连杆机械臂 + 升降底座
+    const basePos = isoToScreen(0,0,0, cx, cy);
+    const shoulderZ = 100;
+    const shoulderPos = isoToScreen(0,0,shoulderZ, cx, cy);
+    const targetScreen = isoToScreen(targetX, targetY, targetZ, cx, cy);
+    
+    // 计算中间关节 (肘部) - 纯视觉模拟，非精确解
+    const midX = targetX * 0.5;
+    const midY = targetY * 0.5;
+    const midZ = Math.max(targetZ, shoulderZ) + 50; 
+    const elbowPos = isoToScreen(midX, midY, midZ, cx, cy);
+
+    // 绘制机械臂
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Base cylinder
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#555';
+    ctx.beginPath(); ctx.moveTo(basePos.x, basePos.y); ctx.lineTo(shoulderPos.x, shoulderPos.y); ctx.stroke();
+
+    // Arms
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = colors.robot;
+    ctx.beginPath(); 
+    ctx.moveTo(shoulderPos.x, shoulderPos.y); 
+    ctx.lineTo(elbowPos.x, elbowPos.y); 
+    ctx.lineTo(targetScreen.x, targetScreen.y); 
+    ctx.stroke();
+
+    // Joint dots
+    ctx.fillStyle = '#333';
+    [basePos, shoulderPos, elbowPos, targetScreen].forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fill();
+    });
+
+    // 夹爪
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - 5, targetScreen.y);
+    ctx.lineTo(targetScreen.x - 5, targetScreen.y + 15);
+    ctx.moveTo(targetScreen.x + 5, targetScreen.y);
+    ctx.lineTo(targetScreen.x + 5, targetScreen.y + 15);
+    ctx.stroke();
+
+    ctx.restore();
+    return targetScreen; // 返回末端在屏幕上的位置，用于连接动画
+}
+
+// 绘制目标物体
+function drawTarget(ctx, is3D, x, y, z, opacity) {
+    if (opacity <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = '#ff3b30'; // 苹果红
+    
+    if (!is3D) {
+        // 2D 视图下的目标 (圆点)
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        // 虚线引导
+        ctx.strokeStyle = '#ff3b30';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y); ctx.lineTo(x, 150); // to Top
+        ctx.moveTo(x, y); ctx.lineTo(150, y); // to Left
+        ctx.stroke();
+    } else {
+        // 3D 视图下的目标 (小立方体)
+        const center = isoToScreen(x, y, z, state.robotBase.x, state.robotBase.y);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 投影到底面
+        const floor = isoToScreen(x, y, 0, state.robotBase.x, state.robotBase.y);
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.beginPath(); ctx.arc(floor.x, floor.y, 6, 0, Math.PI*2); ctx.fill();
+        
+        ctx.strokeStyle = '#ff3b30';
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(floor.x, floor.y); ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// 主渲染循环
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. 绘制左侧：图像坐标系 (Camera View)
+    const camOriginX = 150;
+    const camOriginY = 150;
+    
+    // 背景卡片
+    if (state.cameraOpacity > 0) {
+        ctx.save();
+        ctx.globalAlpha = state.cameraOpacity;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.05)';
+        ctx.shadowBlur = 20;
+        ctx.fillRect(100, 100, 400, 300); // 4:3 比例照片
+        ctx.strokeStyle = '#eee';
+        ctx.strokeRect(100, 100, 400, 300);
+        ctx.restore();
+    }
+
+    // 网格
+    drawGrid(ctx, camOriginX, camOriginY, 300, 200, 25, colors.grid, state.cameraGridOpacity);
+    
+    // 2D 目标点
+    const p2d = { x: camOriginX + state.targetPixel.u/2, y: camOriginY + state.targetPixel.v/2 }; // 缩放映射
+    drawTarget(ctx, false, p2d.x, p2d.y, 0, state.targetPixel.opacity);
+
+    // 2. 绘制右侧：机械坐标系 (Robot View)
+    // 机械臂
+    const robotTipScreenPos = drawRobotArm(ctx, state.currentEffector.x, state.currentEffector.y, state.currentEffector.z, state.robotOpacity);
+    
+    // 3D 目标点 (逻辑位置)
+    drawTarget(ctx, true, state.robotTarget.x, state.robotTarget.y, state.robotTarget.z, state.robotOpacity);
+
+    // 3. 绘制连接线 (Transformation Matrix Visualization)
+    if (state.connectionLine > 0) {
+        const p3d = isoToScreen(state.robotTarget.x, state.robotTarget.y, state.robotTarget.z, state.robotBase.x, state.robotBase.y);
+        
+        ctx.save();
+        ctx.globalAlpha = state.connectionLine;
+        
+        // 绘制一条贝塞尔曲线连接 2D点 和 3D点
+        ctx.beginPath();
+        ctx.moveTo(p2d.x, p2d.y);
+        const cp1 = { x: p2d.x + 200, y: p2d.y };
+        const cp2 = { x: p3d.x - 200, y: p3d.y };
+        ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, p3d.x, p3d.y);
+        
+        // 渐变色线条
+        const grad = ctx.createLinearGradient(p2d.x, p2d.y, p3d.x, p3d.y);
+        grad.addColorStop(0, colors.camera);
+        grad.addColorStop(1, colors.robot);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 10]);
+        // 让虚线动起来
+        ctx.lineDashOffset = -Date.now() / 20;
+        ctx.stroke();
+
+        // 中间的矩阵图标
+        const midX = (p2d.x + p3d.x) / 2;
+        const midY = (p2d.y + p3d.y) / 2;
+        
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(midX - 60, midY - 30, 120, 60);
+        ctx.fillStyle = '#333';
+        ctx.font = "14px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("[ T_matrix ]", midX, midY);
+        
+        ctx.restore();
+    }
+
+    // 4. 动态标签渲染 (利用DOM覆盖在Canvas上)
+    updateLabels(p2d, robotTipScreenPos);
+
+    requestAnimationFrame(render);
+}
+
+// 标签更新逻辑
+function updateLabels(p2d, p3d) {
+    labelContainer.innerHTML = '';
+    
+    if (state.targetPixel.opacity > 0.5) {
+        const el = document.createElement('div');
+        el.className = 'label';
+        el.style.left = (p2d.x + 15) + 'px';
+        el.style.top = (p2d.y - 30) + 'px';
+        el.style.opacity = 1;
+        el.style.color = colors.camera;
+        el.innerHTML = `Pixel (u:${state.targetPixel.u}, v:${state.targetPixel.v})`;
+        labelContainer.appendChild(el);
+    }
+
+    if (state.robotOpacity > 0.5) {
+        // 目标位置标签
+        const targetScreen = isoToScreen(state.robotTarget.x, state.robotTarget.y, state.robotTarget.z, state.robotBase.x, state.robotBase.y);
+        const el = document.createElement('div');
+        el.className = 'label';
+        el.style.left = (targetScreen.x + 15) + 'px';
+        el.style.top = (targetScreen.y - 30) + 'px';
+        el.style.opacity = 1;
+        el.style.color = colors.robot;
+        el.innerHTML = `World (x:${state.robotTarget.x}, y:${state.robotTarget.y})`;
+        labelContainer.appendChild(el);
+    }
+}
+
+// --- 动画编排 (Director) ---
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setSubtitle(cn, en) {
+    const box = document.getElementById('subtitle-box');
+    box.style.opacity = 0;
+    setTimeout(() => {
+        subCn.textContent = cn;
+        subEn.textContent = en;
+        box.style.opacity = 1;
+    }, 500);
+}
+
+function animateValue(obj, prop, to, duration) {
+    const start = obj[prop];
+    const startTime = performance.now();
+    return new Promise(resolve => {
+        function update(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease in out
+            const ease = progress < .5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+            
+            obj[prop] = start + (to - start) * ease;
+            
+            if (progress < 1) {
+                requestAnimationFrame(update);
+            } else {
+                resolve();
+            }
+        }
+        requestAnimationFrame(update);
+    });
+}
+
+async function playMovie() {
+    // 0. Intro
+    setSubtitle("这就是我们的挑战：图像坐标与机械坐标", "The Challenge: Image Coordinates vs. Machine Coordinates");
+    await wait(3000);
+
+    // 1. Camera World
+    setSubtitle("首先，这是摄像机看到的“图像世界”", "First, this is the 'Image World' seen by the camera.");
+    await animateValue(state, 'cameraOpacity', 1, 1000);
+    await wait(1000);
+
+    setSubtitle("图像是由像素组成的二维网格 (u, v)", "Images are 2D grids made of pixels (u, v).");
+    await animateValue(state, 'cameraGridOpacity', 1, 1000);
+    await wait(1500);
+
+    setSubtitle("摄像机发现了一个目标，位于像素 (300, 200)", "The camera detects a target at pixel (300, 200).");
+    await animateValue(state.targetPixel, 'opacity', 1, 500);
+    await wait(3000);
+
+    // 2. Machine World
+    setSubtitle("但在右边，是机器人的“物理世界”", "But on the right, we have the robot's 'Physical World'.");
+    await animateValue(state, 'robotOpacity', 1, 1500);
+    await wait(1000);
+
+    setSubtitle("机器人不理解像素，它只懂毫米和空间坐标 (x, y, z)", "Robots don't understand pixels. They only know millimeters (x, y, z).");
+    await wait(3000);
+
+    setSubtitle("这就是问题所在：两个世界互不相通", "This is the problem: The two worlds are disconnected.");
+    await wait(2500);
+
+    // 3. Transformation
+    setSubtitle("我们需要一座桥梁：坐标变换矩阵", "We need a bridge: The Coordinate Transformation Matrix.");
+    await animateValue(state, 'connectionLine', 1, 1500);
+    await wait(1000);
+
+    setSubtitle("通过标定算法，我们将像素映射为物理距离", "Through calibration, we map pixels to physical distance.");
+    // 视觉效果：数据流动
+    await wait(2000);
+
+    // 4. Action
+    setSubtitle("现在，机器人知道目标的确切位置了", "Now, the robot knows the exact physical location.");
+    
+    // Move Robot
+    const moveTime = 2000;
+    const p1 = animateValue(state.currentEffector, 'x', state.robotTarget.x, moveTime);
+    const p2 = animateValue(state.currentEffector, 'y', state.robotTarget.y, moveTime);
+    const p3 = animateValue(state.currentEffector, 'z', state.robotTarget.z + 20, moveTime); // slightly above
+    await Promise.all([p1, p2, p3]);
+    
+    // Grab
+    await animateValue(state.currentEffector, 'z', state.robotTarget.z, 500);
+    setSubtitle("执行抓取任务", "Executing grasp task.");
+    await wait(1000);
+    
+    // Lift
+    await animateValue(state.currentEffector, 'z', 200, 1000);
+    setSubtitle("任务完成：从图像到现实的跨越", "Mission Complete: Bridging Image to Reality.");
+    
+    await wait(4000);
+    // Loop or End
+    setSubtitle("重播", "Replaying...");
+    await wait(2000);
+    location.reload();
+}
+
+// 启动
+window.onload = () => {
+    render();
+    playMovie();
+    
+    // 简单的进度条动画
+    progressBar.style.width = '100%';
+    progressBar.style.transition = 'width 35s linear';
+};
+
+</script>
+</body>
+</html>

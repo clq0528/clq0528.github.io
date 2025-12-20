@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物料分拣平台定位系统 - PLC 联动仿真</title>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --wire-off: #555;
+            --wire-on: #0f0; /* 逻辑通电绿色 */
+            --highlight: #ffd700;
+            --text-main: #e0e0e0;
+            --accent: #2196f3;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', 'Consolas', monospace;
+            display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden;
+        }
+
+        /* --- 顶部控制台 --- */
+        .top-bar {
+            height: 60px; background: #333; border-bottom: 2px solid #444;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        .title { font-size: 18px; font-weight: bold; color: var(--highlight); }
+        .controls { display: flex; gap: 15px; align-items: center; }
+        
+        button {
+            padding: 8px 16px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-start { background: #2e7d32; color: #fff; box-shadow: 0 4px 0 #1b5e20; }
+        .btn-start:active { transform: translateY(4px); box-shadow: none; }
+        .btn-stop { background: #c62828; color: #fff; box-shadow: 0 4px 0 #b71c1c; }
+        .btn-stop:active { transform: translateY(4px); box-shadow: none; }
+        
+        .speed-ctrl { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+        input[type="range"] { cursor: pointer; }
+
+        /* --- 主内容区 (左右布局) --- */
+        .main-container {
+            display: flex; flex: 1; overflow: hidden;
+        }
+
+        /* 左侧：梯形图逻辑 (60%) */
+        .ladder-pane {
+            flex: 6; border-right: 2px solid #444; display: flex; flex-direction: column;
+            background: #fff; /* 梯形图背景通常为白/浅色以易读 */
+            color: #000; overflow-y: auto; position: relative;
+        }
+        .ladder-header {
+            padding: 5px 10px; background: #e0e0e0; font-size: 12px; border-bottom: 1px solid #ccc;
+            position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between;
+        }
+
+        /* 梯形图绘制样式 */
+        .rung {
+            display: flex; align-items: center; height: 100px; border-bottom: 1px dashed #ccc;
+            padding: 0 20px; position: relative; font-family: 'Consolas', monospace; font-size: 14px;
+        }
+        .rung-num { position: absolute; left: 2px; top: 2px; font-size: 10px; color: #888; }
+        .comment { position: absolute; left: 40px; top: 2px; font-size: 11px; color: #2e7d32; font-style: italic;}
+        
+        .power-rail-left { position: absolute; left: 30px; top: 0; bottom: 0; width: 4px; background: #000; z-index: 5; }
+        .power-rail-right { position: absolute; right: 30px; top: 0; bottom: 0; width: 4px; background: #000; z-index: 5; }
+
+        .wire { height: 2px; background: #000; transition: background 0.1s, box-shadow 0.1s; position: absolute; z-index: 1; }
+        .wire.active { background: #0f0; box-shadow: 0 0 5px #0f0; height: 3px; z-index: 2; }
+
+        .symbol {
+            width: 40px; text-align: center; position: absolute; cursor: default;
+            font-weight: bold; background: #fff; z-index: 3;
+        }
+        .symbol-label { font-size: 10px; color: #0000aa; position: absolute; top: -14px; width: 100%; text-align: center; }
+        .symbol-val { font-size: 10px; color: #d32f2f; position: absolute; bottom: -14px; width: 100%; text-align: center; }
+        .symbol.active { color: #00c853; text-shadow: 0 0 2px #00c853; }
+        
+        /* 扫描线已移除 */
+
+        /* 右侧：物理场景与日志 (40%) */
+        .scene-pane {
+            flex: 4; display: flex; flex-direction: column; background: var(--panel-bg);
+        }
+
+        /* 1. 物理模型区 */
+        .machine-stage {
+            height: 350px; position: relative; border-bottom: 2px solid #444;
+            background: radial-gradient(circle at center, #3a3a3a, #222);
+            overflow: hidden;
+        }
+        
+        /* 丝杆 */
+        .screw-rod {
+            position: absolute; top: 150px; left: 50px; right: 50px; height: 10px;
+            background: linear-gradient(0deg, #999, #eee, #999);
+            border-radius: 5px;
+        }
+        .screw-thread {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.2) 5px, transparent 6px);
+            animation: rotateScrew 0.2s linear infinite; animation-play-state: paused;
+        }
+        @keyframes rotateScrew { from { background-position: 0 0; } to { background-position: 10px 0; } }
+
+        /* 电机 */
+        .motor {
+            position: absolute; top: 125px; left: 10px; width: 40px; height: 60px;
+            background: #444; border: 2px solid #666; border-radius: 4px;
+        }
+        .motor-shaft {
+            position: absolute; right: -10px; top: 25px; width: 10px; height: 10px; background: #888;
+        }
+
+        /* 平台小车 */
+        .platform {
+            position: absolute; top: 110px; width: 60px; height: 50px;
+            background: #ff9800; border: 2px solid #e65100; border-radius: 6px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: center; font-size: 10px; color: #3e2723; font-weight: bold;
+            transform: translateX(0); /* 通过JS控制 */
+            transition: left 0.1s linear; /* 运动平滑 */
+            z-index: 5;
+        }
+        .platform::after { content: '▼'; position: absolute; bottom: -15px; color: #ff9800; }
+
+        /* 刻度尺 */
+        .ruler {
+            position: absolute; top: 180px; left: 50px; right: 50px; height: 20px;
+            display: flex; justify-content: space-between; color: #888; font-size: 10px;
+        }
+        .mark { position: absolute; height: 10px; width: 1px; background: #888; top: 0; }
+        .mark-label { position: absolute; top: 12px; transform: translateX(-50%); }
+
+        /* 传感器 */
+        .sensor {
+            position: absolute; top: 140px; width: 12px; height: 20px; background: #555; border: 1px solid #777;
+            z-index: 4; transition: 0.1s;
+        }
+        .sensor.triggered { background: #f00; box-shadow: 0 0 8px #f00; }
+        .sensor-label { position: absolute; top: -15px; left: -10px; font-size: 10px; color: #aaa; width: 30px; text-align: center; }
+
+        /* 2. 状态指示灯区 */
+        .io-panel {
+            padding: 10px; background: #222; display: flex; gap: 20px; justify-content: center; border-bottom: 1px solid #444;
+        }
+        .led-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .led-row { display: flex; gap: 8px; }
+        .led {
+            width: 14px; height: 14px; border-radius: 50%; background: #333; border: 1px solid #555;
+            transition: background 0.05s; position: relative;
+        }
+        .led.on { background: #00e676; box-shadow: 0 0 8px #00e676; }
+        .led-name { font-size: 10px; color: #888; text-align: center; margin-top: 2px; }
+        
+        /* 3. 系统日志区 */
+        .log-panel {
+            flex: 1; background: #111; color: #00e676; font-family: 'Consolas', monospace;
+            padding: 10px; overflow-y: auto; font-size: 12px; border-top: 2px solid #444;
+        }
+        .log-line { margin-bottom: 4px; border-left: 2px solid transparent; padding-left: 5px; opacity: 0.9; }
+        .log-debug { color: #888; }
+        .log-info { border-left-color: #2196f3; color: #e3f2fd; }
+        .log-action { border-left-color: #ffd700; color: #fff9c4; font-weight: bold; }
+        
+        /* 覆盖层：上帝视角解说 */
+        .hud {
+            position: absolute; top: 10px; right: 10px; width: 200px; background: rgba(0,0,0,0.7);
+            padding: 10px; border-radius: 4px; border: 1px solid #555; color: #fff; font-size: 12px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <div class="title">PLC 自动化分拣平台仿真 (FX3U 逻辑)</div>
+    <div class="controls">
+        <div class="speed-ctrl">
+            <span>仿真速度:</span>
+            <input type="range" id="simSpeed" min="0.5" max="3" step="0.5" value="1">
+        </div>
+        <button class="btn-start" onclick="plc.input('X0', true); setTimeout(()=>plc.input('X0',false), 200)">启动 (X0)</button>
+        <button class="btn-stop" onclick="plc.input('stop', true); setTimeout(()=>plc.input('stop',false), 200)">停止 (Reset)</button>
+    </div>
+</div>
+
+<div class="main-container">
+    <!-- 左侧：梯形图 -->
+    <div class="ladder-pane" id="ladderContainer">
+        <div class="ladder-header">
+            <span>Main Routine</span>
+            <span>Scan Cycle: <span id="scanTime">5</span>ms</span>
+        </div>
+        <!-- 扫描线已移除 -->
+
+        <!-- 梯形图将通过 JS 动态生成，以确保可控性 -->
+    </div>
+
+    <!-- 右侧：场景 -->
+    <div class="scene-pane">
+        <!-- 物理场景 -->
+        <div class="machine-stage">
+            <div class="hud" id="hudText">系统待机中...<br>请按下 [启动] 按钮</div>
+            
+            <div class="screw-rod">
+                <div class="screw-thread" id="screwAnim"></div>
+            </div>
+            <div class="motor"><div class="motor-shaft"></div></div>
+            
+            <!-- 传感器布局：原点(X3), P1(150), P2(300), P3(500) -->
+            <!-- 轨道总长映射为 600mm -->
+            <div class="sensor" id="sen-x3" style="left: 50px;"><div class="sensor-label">X3(原点)</div></div>
+            <div class="sensor" style="left: calc(50px + 25%);"><div class="sensor-label">150mm</div></div>
+            <div class="sensor" style="left: calc(50px + 50%);"><div class="sensor-label">300mm</div></div>
+            <div class="sensor" style="left: calc(50px + 83.3%);"><div class="sensor-label">500mm</div></div>
+
+            <div class="platform" id="platform" style="left: 50px;">
+                <span>LOAD</span>
+            </div>
+
+            <div class="ruler">
+                <div class="mark" style="left: 0;"><span class="mark-label">0</span></div>
+                <div class="mark" style="left: 25%;"><span class="mark-label">150</span></div>
+                <div class="mark" style="left: 50%;"><span class="mark-label">300</span></div>
+                <div class="mark" style="left: 83.3%;"><span class="mark-label">500</span></div>
+                <div class="mark" style="left: 100%;"><span class="mark-label">600mm</span></div>
+            </div>
+        </div>
+
+        <!-- IO 监控 -->
+        <div class="io-panel">
+            <div class="led-group">
+                <div class="led-row">
+                    <div><div class="led" id="led-X0"></div><div class="led-name">X0</div></div>
+                    <div><div class="led" id="led-X3"></div><div class="led-name">X3</div></div>
+                </div>
+                <span style="font-size:10px; color:#666">Inputs</span>
+            </div>
+            <div style="width:1px; background:#444;"></div>
+            <div class="led-group">
+                <div class="led-row">
+                    <div><div class="led" id="led-Y0"></div><div class="led-name">Y0<br>PLS</div></div>
+                    <div><div class="led" id="led-Y3"></div><div class="led-name">Y3<br>DIR</div></div>
+                </div>
+                <span style="font-size:10px; color:#666">Outputs</span>
+            </div>
+            <div style="width:1px; background:#444;"></div>
+            <div class="led-group">
+                <div class="led-row">
+                    <div><div class="led" id="led-M0"></div><div class="led-name">M0<br>运行</div></div>
+                </div>
+                <span style="font-size:10px; color:#666">State</span>
+            </div>
+        </div>
+
+        <!-- 实时日志 -->
+        <div class="log-panel" id="logBox">
+            <div class="log-line log-info">System initialized. Waiting for command.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ================= 定义 PLC 数据结构与逻辑 ================= */
+    const sys = {
+        scanInterval: 30, // PLC 扫描周期 ms
+        speedMultiplier: 1.0,
+        running: true,
+        pos_mm: 0.0, // 当前物理位置 mm
+        target_mm: 0.0, // 目标位置
+        state: 0, // 0:Idle, 10:ToP1, 11:WaitP1, 20:ToP2, 21:WaitP2, 30:ToP3, 31:WaitP3, 40:ToHome
+        timers: {}, // 软定时器
+        scanCount: 0
+    };
+
+    // 软元件状态
+    const mem = {
+        X: { X0:0, X3:1, stop:0 }, // X3是原点常闭/常开逻辑，这里模拟：位置在0时接通
+        Y: { Y0:0, Y3:0 },
+        M: { M0:0, M8029:0, M10:0, M20:0, M30:0, M40:0 }, // M0:启动标志, M8029:指令完成
+        D: { currentPos: 0 },
+        T: { T1:0, T2:0, T3:0 } // 定时器当前值
+    };
+
+    // 日志系统
+    const logger = {
+        add: (msg, type='info') => {
+            const box = document.getElementById('logBox');
+            const div = document.createElement('div');
+            div.className = `log-line log-${type}`;
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            div.innerText = `[${time}] ${msg}`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+    };
+
+    /* ================= 梯形图渲染引擎 (动态生成 DOM) ================= */
+    const ladderDefs = [
+        {
+            id: 'r1', comment: '启动逻辑: 按钮X0置位M0 (保持运行)',
+            logic: () => mem.X.X0 || mem.M.M0, // 这里的逻辑用于判断高亮
+            elements: [
+                { type: 'contact', label:'X0', x: 50, val: ()=>mem.X.X0 },
+                { type: 'or-branch', label:'M0', x: 50, y_off: 30, val: ()=>mem.M.M0 },
+                { type: 'coil', label:'M0', x: 400, val: ()=>mem.M.M0, action: '(S)' } // Set
+            ]
+        },
+        {
+            id: 'r2', comment: '步骤1: 前往 P1 (150mm/15000脉冲)',
+            logic: () => mem.M.M0 && sys.state === 10,
+            elements: [
+                { type: 'contact', label:'M0', x: 50, val: ()=>mem.M.M0 },
+                { type: 'contact', label:'S10', x: 150, val: ()=>sys.state===10 }, // 使用状态模拟步进
+                { type: 'func', label:'DRVA', x: 350, args: 'K15000 1500 Y0 Y3', val: ()=>sys.state===10 }
+            ]
+        },
+        {
+            id: 'r3', comment: 'P1 到达暂停: 延时 1s (T1)',
+            logic: () => sys.state === 11,
+            elements: [
+                { type: 'contact', label:'M8029', x: 50, val: ()=>sys.state===11 }, // 模拟指令完成
+                { type: 'coil', label:'T1', x: 400, val: ()=>mem.T.T1 >= 10, action: 'K10' }
+            ]
+        },
+        {
+            id: 'r4', comment: '步骤2: 前往 P2 (300mm/30000脉冲)',
+            logic: () => mem.M.M0 && sys.state === 20,
+            elements: [
+                { type: 'contact', label:'T1', x: 50, val: ()=>sys.state===20 }, // T1触发下一步
+                { type: 'func', label:'DRVA', x: 350, args: 'K30000 2000 Y0 Y3', val: ()=>sys.state===20 }
+            ]
+        },
+        {
+            id: 'r5', comment: 'P2 到达暂停: 延时 1s (T2)',
+            logic: () => sys.state === 21,
+            elements: [
+                { type: 'contact', label:'M8029', x: 50, val: ()=>sys.state===21 },
+                { type: 'coil', label:'T2', x: 400, val: ()=>mem.T.T2 >= 10, action: 'K10' }
+            ]
+        },
+        {
+            id: 'r6', comment: '步骤3: 前往 P3 (500mm/50000脉冲)',
+            logic: () => mem.M.M0 && sys.state === 30,
+            elements: [
+                { type: 'contact', label:'T2', x: 50, val: ()=>sys.state===30 },
+                { type: 'func', label:'DRVA', x: 350, args: 'K50000 3000 Y0 Y3', val: ()=>sys.state===30 }
+            ]
+        },
+        {
+            id: 'r7', comment: 'P3 到达暂停: 延时 1s (T3)',
+            logic: () => sys.state === 31,
+            elements: [
+                { type: 'contact', label:'M8029', x: 50, val: ()=>sys.state===31 },
+                { type: 'coil', label:'T3', x: 400, val: ()=>mem.T.T3 >= 10, action: 'K10' }
+            ]
+        },
+        {
+            id: 'r8', comment: '回原点: 原路返回 (0mm)',
+            logic: () => mem.M.M0 && sys.state === 40,
+            elements: [
+                { type: 'contact', label:'T3', x: 50, val: ()=>sys.state===40 },
+                { type: 'func', label:'DRVA', x: 350, args: 'K0 5000 Y0 Y3', val: ()=>sys.state===40 }
+            ]
+        }
+    ];
+
+    function initLadder() {
+        const container = document.getElementById('ladderContainer');
+        ladderDefs.forEach((rung, idx) => {
+            const rDiv = document.createElement('div');
+            rDiv.className = 'rung';
+            rDiv.id = `rung-${rung.id}`;
+            rDiv.innerHTML = `
+                <div class="rung-num">${idx+1}</div>
+                <div class="comment">// ${rung.comment}</div>
+                <div class="power-rail-left"></div>
+                <div class="power-rail-right"></div>
+            `;
+            
+            // --- 自动画线逻辑 ---
+            let currentX = 34; // 从左母线旁开始
+
+            // 过滤出主线上的元件（不包括并联分支）
+            const mainElements = rung.elements.filter(e => e.type !== 'or-branch');
+            
+            // 绘制并联分支（先画，以免覆盖主线计算）
+            const branches = rung.elements.filter(e => e.type === 'or-branch');
+            branches.forEach(br => {
+                // 垂直线 (竖线)
+                rDiv.innerHTML += `<div class="wire" style="left:${br.x-20}px; top:50px; height:30px; width:2px;"></div>`;
+                rDiv.innerHTML += `<div class="wire" style="left:${br.x+60}px; top:50px; height:32px; width:2px;"></div>`;
+                
+                // 水平线 & 元件
+                rDiv.innerHTML += `<div class="wire" style="left:${br.x-20}px; top:80px; width:20px;"></div>`;
+                rDiv.innerHTML += `<div class="symbol" id="sym-${rung.id}-${br.label}-branch" style="left:${br.x}px; top:70px;">
+                                    <div class="symbol-label" style="top:2px; left:4px;">${br.label}</div>| |
+                                   </div>`;
+                rDiv.innerHTML += `<div class="wire" style="left:${br.x+40}px; top:80px; width:20px;"></div>`;
+            });
+
+            // 绘制主线元件和自动连接线
+            mainElements.forEach(el => {
+                // 计算并绘制上一位置到当前元件的连接线
+                const wireWidth = el.x - currentX;
+                if(wireWidth > 0) {
+                    rDiv.innerHTML += `<div class="wire" style="left:${currentX}px; top:50px; width:${wireWidth}px;"></div>`;
+                }
+
+                // 绘制元件本体
+                let elWidth = 40; 
+                let html = '';
+                if(el.type === 'contact') {
+                    html = `<div class="symbol" id="sym-${rung.id}-${el.label}" style="left:${el.x}px; top:40px;">
+                                <div class="symbol-label">${el.label}</div>| |
+                            </div>`;
+                } else if(el.type === 'coil') {
+                    html = `<div class="symbol" id="sym-${rung.id}-${el.label}" style="left:${el.x}px; top:40px;">
+                                <div class="symbol-label">${el.label}</div>${el.action||'( )'}
+                            </div>`;
+                } else if (el.type === 'func') {
+                    elWidth = 120;
+                    html = `<div class="symbol" id="sym-${rung.id}-${el.label}" style="left:${el.x}px; top:30px; width:120px; border:1px solid #000; text-align:left; padding:2px; background:#fff;">
+                                <div class="symbol-label" style="text-align:left; padding-left:5px;">${el.label}</div>
+                                <div style="font-size:10px; padding-left:5px;">${el.args}</div>
+                            </div>`;
+                }
+                rDiv.innerHTML += html;
+                
+                // 更新当前X坐标
+                currentX = el.x + elWidth;
+            });
+
+            // 绘制最后一根线连接到右母线
+            rDiv.innerHTML += `<div class="wire" style="left:${currentX}px; top:50px; right:34px;"></div>`;
+
+            container.appendChild(rDiv);
+        });
+    }
+
+    /* ================= 核心：PLC 扫描与物理循环 ================= */
+    
+    // 状态机逻辑 (替代纯粹的梯形图解析，以保证动画流畅性)
+    function plcLogic() {
+        // 全局停止
+        if(mem.X.stop) {
+            mem.M.M0 = 0;
+            sys.state = 0;
+            mem.Y.Y0 = 0;
+            mem.T.T1 = 0; mem.T.T2 = 0; mem.T.T3 = 0;
+            sys.target_mm = sys.pos_mm; // 立即停止
+            logger.add('停止按钮按下，系统复位', 'action');
+            return;
+        }
+
+        // 启动逻辑
+        if(mem.X.X0 && !mem.M.M0) {
+            mem.M.M0 = 1;
+            sys.state = 10; // Start Move to P1
+            logger.add('系统启动，前往站点 1 (150mm)', 'action');
+        }
+
+        if(!mem.M.M0) return;
+
+        // 状态机序列 (模拟步进梯形图)
+        switch(sys.state) {
+            case 10: // 移动到 P1
+                moveTo(150, 11);
+                break;
+            case 11: // 停留 P1
+                runTimer('T1', 10, 20, '到达站点1，暂停1秒...');
+                break;
+            case 20: // 移动到 P2
+                moveTo(300, 21);
+                break;
+            case 21: // 停留 P2
+                runTimer('T2', 10, 30, '到达站点2，暂停1秒...');
+                break;
+            case 30: // 移动到 P3
+                moveTo(500, 31);
+                break;
+            case 31: // 停留 P3
+                runTimer('T3', 10, 40, '到达站点3，暂停1秒...');
+                break;
+            case 40: // 回原点
+                moveTo(0, 10); // 回到原点后，跳回 state 10 (Loop)
+                if(sys.state === 10) logger.add('返回原点完成，开始新循环', 'action');
+                break;
+        }
+    }
+
+    // 辅助动作函数
+    function moveTo(target, nextState) {
+        sys.target_mm = target;
+        // 判断是否到达
+        if(Math.abs(sys.pos_mm - target) < 1) {
+            mem.Y.Y0 = 0; // 停止脉冲
+            mem.Y.Y3 = 0;
+            sys.state = nextState;
+        } else {
+            mem.Y.Y0 = 1; // 发脉冲
+            // 方向控制 (DRVA logic)
+            if(sys.target_mm > sys.pos_mm) mem.Y.Y3 = 0; // 正向
+            else mem.Y.Y3 = 1; // 反向
+        }
+    }
+
+    function runTimer(timerName, setpoint, nextState, logMsg) {
+        if(mem.T[timerName] === 0 && logMsg) logger.add(logMsg, 'info');
+        mem.T[timerName]++;
+        if(mem.T[timerName] >= setpoint * (1000/sys.scanInterval/10)) { // 粗略转换
+            mem.T[timerName] = 0;
+            sys.state = nextState;
+            if(nextState === 10) logger.add("循环重启", 'action');
+            else logger.add(`延时结束，前往下一站`, 'action');
+        }
+    }
+
+    // 物理更新 (每帧调用)
+    function physicsUpdate() {
+        if(mem.Y.Y0) {
+            const speed = 2.0 * sys.speedMultiplier; // mm per tick
+            if(!mem.Y.Y3) {
+                sys.pos_mm += speed;
+                updateHud("正向运行 >>");
+            } else {
+                sys.pos_mm -= speed;
+                updateHud("<< 反向回零");
+            }
+            
+            // 丝杆动画控制
+            document.getElementById('screwAnim').style.animationPlayState = 'running';
+        } else {
+            document.getElementById('screwAnim').style.animationPlayState = 'paused';
+            if(mem.M.M0) updateHud("等待中...");
+        }
+
+        // 边界限制
+        if(sys.pos_mm < 0) sys.pos_mm = 0;
+        if(sys.pos_mm > 600) sys.pos_mm = 600;
+
+        // 更新传感器 X3
+        mem.X.X3 = (sys.pos_mm < 2) ? 1 : 0;
+    }
+
+    // UI 渲染 (每帧调用)
+    function render() {
+        // 1. 小车位置
+        // 50px是起点, 总长轨道映射 100% css width (assume 600mm for visualization scale)
+        const trackWidthPx = document.querySelector('.machine-stage').clientWidth - 100;
+        const pxPerMm = trackWidthPx / 600;
+        const domPos = 50 + sys.pos_mm * pxPerMm;
+        document.getElementById('platform').style.left = `${domPos}px`;
+
+        // 2. 传感器高亮
+        document.getElementById('sen-x3').classList.toggle('triggered', mem.X.X3);
+
+        // 3. LED 状态 (加入一点视觉延时让闪烁更明显)
+        document.getElementById('led-X0').classList.toggle('on', mem.X.X0);
+        document.getElementById('led-X3').classList.toggle('on', mem.X.X3);
+        document.getElementById('led-M0').classList.toggle('on', mem.M.M0);
+        
+        // Y0 闪烁特效
+        const y0Led = document.getElementById('led-Y0');
+        if(mem.Y.Y0) {
+            // 使用时间戳制造快速闪烁
+            if(Date.now() % 200 < 100) y0Led.classList.add('on'); else y0Led.classList.remove('on');
+        } else {
+            y0Led.classList.remove('on');
+        }
+        
+        document.getElementById('led-Y3').classList.toggle('on', mem.Y.Y3); // 方向灯常亮
+
+        // 4. 梯形图动态高亮
+        ladderDefs.forEach(rung => {
+            const rEl = document.getElementById(`rung-${rung.id}`);
+            const isActive = rung.logic();
+            
+            // 高亮导线 (包括主线和分支线)
+            const wires = rEl.querySelectorAll('.wire');
+            wires.forEach(w => isActive ? w.classList.add('active') : w.classList.remove('active'));
+
+            // 高亮元件
+            rung.elements.forEach(el => {
+                const sym = document.getElementById(`sym-${rung.id}-${el.label}`);
+                if(sym && el.val()) sym.classList.add('active');
+                else if(sym) sym.classList.remove('active');
+            });
+        });
+    }
+
+    function updateHud(text) {
+        document.getElementById('hudText').innerHTML = `
+            系统状态: ${mem.M.M0 ? '自动运行' : '停止'}<br>
+            当前位置: ${Math.round(sys.pos_mm)} mm<br>
+            目标位置: ${sys.target_mm} mm<br>
+            动作: ${text}
+        `;
+    }
+
+    /* ================= 主循环 ================= */
+    const plc = {
+        input: (key, val) => {
+            if(key === 'X0') mem.X.X0 = val;
+            if(key === 'stop') mem.X.stop = val;
+        }
+    };
+
+    // 初始化
+    initLadder();
+
+    // 动画循环
+    setInterval(() => {
+        // 读取UI输入
+        sys.speedMultiplier = parseFloat(document.getElementById('simSpeed').value);
+
+        // 1. 物理层计算
+        physicsUpdate();
+
+        // 2. 逻辑层计算 (PLC Scan)
+        plcLogic();
+
+        // 3. 渲染层
+        render();
+
+        sys.scanCount++;
+        // 扫描线代码已移除
+
+    }, sys.scanInterval);
+
+</script>
+</body>
+</html>

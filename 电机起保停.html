@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC 起保停电路仿真 (Start-Stop-Latch)</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #fff;
+            --plc-color: #2c3e50;
+            --wire-off: #b0bec5;
+            --wire-on: #ff5252; /* 通电红 */
+            --logic-on: #00e676; /* 逻辑绿 */
+            --highlight: #fff9c4;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            display: flex; flex-direction: column; align-items: center;
+            margin: 0; padding: 20px; user-select: none;
+        }
+
+        h2 { color: #333; margin-bottom: 5px; }
+        .sub-title { color: #666; font-size: 14px; margin-bottom: 20px; }
+
+        /* --- 主布局 --- */
+        .container {
+            display: grid;
+            grid-template-columns: 480px 1fr;
+            gap: 20px;
+            width: 1100px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 1px solid #e0e0e0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 10px 15px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+            font-weight: bold; color: #555;
+        }
+
+        /* --- 左侧：实物接线 --- */
+        #phy-view { height: 550px; }
+
+        /* SVG 连线层 */
+        .svg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;
+        }
+        path {
+            fill: none; stroke: var(--wire-off); stroke-width: 3;
+            stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.2s;
+        }
+        path.hot { stroke: var(--wire-on); z-index: 6; }
+
+        /* PLC */
+        .plc {
+            position: absolute; top: 50px; left: 140px;
+            width: 200px; height: 130px;
+            background: var(--plc-color);
+            border-radius: 4px; color: #fff; z-index: 10;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.2);
+        }
+        .plc-model { padding: 8px; font-weight: bold; border-bottom: 1px solid #455a64; font-size: 14px; }
+        
+        /* 端子 */
+        .terminals { position: absolute; top: 40px; display: flex; flex-direction: column; gap: 20px; }
+        .t-in { left: -8px; } .t-out { right: -8px; }
+        
+        .screw {
+            width: 16px; height: 16px; background: #cfd8dc; border-radius: 50%;
+            border: 1px solid #78909c; display: flex; align-items: center; justify-content: center;
+            position: relative; z-index: 12;
+        }
+        .screw::after { content: '+'; color: #455a64; font-size: 12px; }
+        .pin-txt { position: absolute; font-size: 10px; top: 1px; color: white; }
+        .t-in .pin-txt { left: 20px; } .t-out .pin-txt { right: 20px; }
+
+        /* LED */
+        .leds { position: absolute; bottom: 15px; left: 15px; display: flex; gap: 8px; }
+        .led { width: 10px; height: 10px; background: #546e7a; border-radius: 50%; border: 1px solid #37474f; }
+        .led.on { background: #00e676; box-shadow: 0 0 5px #00e676; }
+
+        /* 电机 */
+        .motor-box {
+            position: absolute; top: 250px; right: 40px;
+            width: 120px; height: 120px;
+            background: #eceff1; border: 2px solid #cfd8dc; border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: all 0.3s; z-index: 20;
+        }
+        .motor-box.running {
+            background: #e8f5e9; border-color: #00e676;
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.3);
+        }
+        .fan {
+            width: 60px; height: 60px; 
+            border: 4px dashed #90a4ae; border-radius: 50%;
+            transition: transform 0.1s linear; margin-bottom: 10px;
+        }
+        .status-txt { font-size: 12px; font-weight: bold; color: #78909c; }
+
+        /* 按钮 */
+        .btn-group {
+            position: absolute; bottom: 30px; left: 50px; display: flex; gap: 40px; z-index: 20;
+        }
+        .btn-wrap { text-align: center; }
+        .btn {
+            width: 50px; height: 50px; border-radius: 50%; border: 3px solid #78909c;
+            cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #fff; box-shadow: 0 4px 0 #455a64; transition: transform 0.1s;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+        .btn-green { background: #4caf50; }
+        .btn-red { background: #f44336; }
+        /* 按钮上方的接线柱 */
+        .node { width: 8px; height: 8px; background: #333; border-radius: 50%; margin: 0 auto 5px auto; }
+
+        /* --- 右侧：逻辑与控制 --- */
+        .right-panel { display: flex; flex-direction: column; height: 550px; gap: 15px; }
+
+        .controls {
+            background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .switch { display: flex; background: #eee; padding: 4px; border-radius: 20px; }
+        .sw-opt { padding: 5px 15px; border-radius: 16px; font-size: 13px; cursor: pointer; color: #666; transition: 0.3s; }
+        .sw-opt.active { background: #2196f3; color: #fff; font-weight: bold; }
+        
+        .step-btn {
+            background: #ff9800; color: #fff; border: none; padding: 6px 15px;
+            border-radius: 4px; cursor: pointer; font-weight: bold; display: none;
+            box-shadow: 0 2px 0 #e65100;
+        }
+        .step-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        /* 梯形图容器 */
+        .ladder-box {
+            flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 8px;
+            padding: 20px; position: relative; font-family: 'Consolas', monospace;
+        }
+        .scan-bar {
+            position: absolute; left: 0; width: 100%; height: 4px; background: rgba(255, 0, 0, 0.2);
+            display: none; transition: top 0.2s; pointer-events: none; z-index: 50;
+        }
+
+        /* 梯形图绘制 */
+        .rung { position: relative; height: 120px; display: flex; align-items: center; }
+        .rail { position: absolute; width: 4px; background: #333; height: 100%; top: 0; }
+        .rail.left { left: 0; } .rail.right { right: 0; }
+
+        /* 导线与元件 */
+        .h-line { height: 3px; background: #333; position: absolute; transition: background 0.1s; }
+        
+        /* 符号 */
+        .sym {
+            position: absolute; width: 60px; text-align: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .sym-fig { font-size: 24px; font-weight: bold; color: #333; background: #fff; padding: 0 5px; z-index: 2; }
+        .sym-lbl { font-size: 12px; color: #1976d2; margin-top: 2px; }
+        .sym-addr { font-size: 10px; color: #999; position: absolute; top: -14px; }
+        
+        /* 自锁分支线 */
+        .branch-v { width: 3px; background: #333; position: absolute; transition: background 0.1s; }
+
+        /* 状态激活 */
+        .active .sym-fig { color: var(--logic-on); text-shadow: 0 0 5px var(--logic-on); }
+        .active.h-line, .active.branch-v { background: var(--logic-on); box-shadow: 0 0 3px var(--logic-on); }
+
+        /* 日志 */
+        .logger {
+            height: 160px; background: #fafafa; border-top: 1px solid #eee; padding: 10px; overflow-y: auto;
+        }
+        .log-line { font-size: 13px; color: #555; padding: 5px; margin-bottom: 2px; border-radius: 4px; transition: 0.2s; }
+        .log-line.highlight { background: var(--highlight); color: #333; font-weight: bold; border-left: 3px solid #ff9800; }
+
+    </style>
+</head>
+<body>
+
+    <h2>PLC 起保停电路仿真 (Start-Stop-Latch)</h2>
+    <div class="sub-title">核心逻辑：按下启动(X0)，电机(Y0)运行并自锁；按下停止(X1)，自锁断开，电机停止。</div>
+
+    <div class="container">
+        <!-- 左侧 -->
+        <div class="panel" id="phy-view">
+            <div class="header">实物接线与操作</div>
+            
+            <svg class="svg-layer">
+                <!-- X0 接线 (输入) -->
+                <path id="w-x0" d="M 75 500 V 400 H 130 V 48 H 152" />
+                <!-- X1 接线 (输入) -->
+                <path id="w-x1" d="M 165 500 V 410 H 120 V 85 H 152" />
+                <!-- Y0 接线 (输出) -->
+                <path id="w-y0" d="M 328 48 H 400 V 250" />
+            </svg>
+
+            <div class="plc">
+                <div class="plc-model">FX3U-16MR</div>
+                <div class="terminals t-in">
+                    <div class="screw"><span class="pin-txt">X0</span></div>
+                    <div class="screw"><span class="pin-txt">X1</span></div>
+                </div>
+                <div class="terminals t-out">
+                    <div class="screw"><span class="pin-txt">Y0</span></div>
+                </div>
+                <div class="leds">
+                    <div class="led" id="led-x0"></div>
+                    <div class="led" id="led-x1"></div>
+                    <span style="color:#78909c">|</span>
+                    <div class="led" id="led-y0"></div>
+                </div>
+            </div>
+
+            <div class="motor-box" id="motor">
+                <div class="fan" id="fan"></div>
+                <div class="status-txt" id="motor-txt">已停止</div>
+            </div>
+
+            <div class="btn-group">
+                <div class="btn-wrap">
+                    <div class="node"></div>
+                    <div class="btn btn-green" id="btn-x0" onmousedown="io.press('x0')" onmouseup="io.release('x0')">X0</div>
+                    <div style="margin-top:5px; font-size:12px;">启动 (Start)</div>
+                </div>
+                <div class="btn-wrap">
+                    <div class="node"></div>
+                    <div class="btn btn-red" id="btn-x1" onmousedown="io.press('x1')" onmouseup="io.release('x1')">X1</div>
+                    <div style="margin-top:5px; font-size:12px;">停止 (Stop)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧 -->
+        <div class="panel right-panel">
+            <div class="controls">
+                <div class="switch">
+                    <div class="sw-opt active" id="m-auto" onclick="ctl.setMode('auto')">自动运行</div>
+                    <div class="sw-opt" id="m-step" onclick="ctl.setMode('step')">单步调试</div>
+                </div>
+                <button class="step-btn" id="btn-next" onclick="ctl.nextStep()">下一步 >></button>
+            </div>
+
+            <div class="ladder-box">
+                <div class="scan-bar" id="scan-bar"></div>
+                
+                <div class="rung">
+                    <div class="rail left"></div><div class="rail right"></div>
+
+                    <!-- 主干线路 -->
+                    <!-- Start Segment -->
+                    <div class="h-line" id="L1" style="left:4px; width:40px; top:40px;"></div>
+                    
+                    <!-- X0 Symbol -->
+                    <div class="sym" id="sym-x0" style="left:44px; top:28px;">
+                        <div class="sym-addr">X0</div><div class="sym-fig">| |</div><div class="sym-lbl">启动</div>
+                    </div>
+
+                    <!-- Middle Segment -->
+                    <div class="h-line" id="L2" style="left:104px; width:150px; top:40px;"></div>
+
+                    <!-- X1 Symbol (Stop - Normally Closed in Logic) -->
+                    <div class="sym" id="sym-x1" style="left:254px; top:28px;">
+                        <div class="sym-addr">X1</div><div class="sym-fig">|/|</div><div class="sym-lbl">停止</div>
+                    </div>
+
+                    <!-- End Segment -->
+                    <div class="h-line" id="L3" style="left:314px; width:60px; top:40px;"></div>
+
+                    <!-- Y0 Coil -->
+                    <div class="sym" id="sym-y0" style="left:374px; top:28px;">
+                        <div class="sym-addr">Y0</div><div class="sym-fig">( )</div><div class="sym-lbl">输出</div>
+                    </div>
+                    
+                    <div class="h-line" id="L4" style="left:434px; right:4px; top:40px;"></div>
+
+                    <!-- 并联分支 (自锁) -->
+                    <!-- Vertical Down -->
+                    <div class="branch-v" id="B1" style="left:30px; top:40px; height:60px;"></div>
+                    <!-- Horizontal Bottom -->
+                    <div class="h-line" id="B2" style="left:30px; width:80px; top:100px;"></div>
+                    <!-- Y0 Contact (Latch) -->
+                    <div class="sym" id="sym-latch" style="left:110px; top:88px;">
+                        <div class="sym-addr">Y0</div><div class="sym-fig">| |</div><div class="sym-lbl">自锁</div>
+                    </div>
+                    <!-- Horizontal Connect Back -->
+                    <div class="h-line" id="B3" style="left:170px; width:60px; top:100px;"></div>
+                    <!-- Vertical Up -->
+                    <div class="branch-v" id="B4" style="left:230px; top:40px; height:60px;"></div>
+
+                </div>
+            </div>
+
+            <div class="logger">
+                <div class="log-line active" id="log-idle">系统待机：按下 X0 启动，按下 X1 停止。</div>
+                <div class="log-line" id="log-in">1. 输入采样：读取 X0, X1 物理按钮状态。</div>
+                <div class="log-line" id="log-logic">2. 逻辑运算：Y0 = (X0 或 Y0自锁) 且 (非 X1)。</div>
+                <div class="log-line" id="log-out">3. 输出刷新：根据 Y0 状态驱动电机。</div>
+                <div class="log-line" id="log-latch">  * 状态提示：启动按钮松开，依靠 Y0 自锁触点维持运行。</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. 数据模型 ---
+    const plc = {
+        in: { x0: 0, x1: 0 },
+        mem: { y0: 0 },
+        out: { y0: 0 }
+    };
+
+    // --- 2. 交互模块 (Interactive) ---
+    const io = {
+        press: (id) => {
+            plc.in[id] = 1;
+            document.getElementById('btn-'+id).style.transform = "translateY(4px)";
+            document.getElementById('btn-'+id).style.boxShadow = "none";
+            document.getElementById('w-'+id).classList.add('hot');
+            
+            // 自动模式下立即更新视图以获得即时反馈感
+            if (ctl.mode === 'auto') ui.renderAll();
+        },
+        release: (id) => {
+            plc.in[id] = 0;
+            document.getElementById('btn-'+id).style.transform = "translateY(0)";
+            document.getElementById('btn-'+id).style.boxShadow = "0 4px 0 #455a64";
+            document.getElementById('w-'+id).classList.remove('hot');
+        }
+    };
+
+    // --- 3. 控制与逻辑 (Controller) ---
+    const ctl = {
+        mode: 'auto', // auto | step
+        phase: 0, // 0:Idle, 1:Input, 2:Logic, 3:Output
+        timer: null,
+
+        setMode: (m) => {
+            ctl.mode = m;
+            document.getElementById('m-auto').classList.toggle('active', m === 'auto');
+            document.getElementById('m-step').classList.toggle('active', m === 'step');
+            document.getElementById('btn-next').style.display = m === 'step' ? 'block' : 'none';
+            document.getElementById('scan-bar').style.display = 'none';
+
+            if(m === 'auto') {
+                ctl.startLoop();
+            } else {
+                clearInterval(ctl.timer);
+                ctl.phase = 0;
+                ui.log('log-idle');
+            }
+        },
+
+        startLoop: () => {
+            if(ctl.timer) clearInterval(ctl.timer);
+            ctl.timer = setInterval(() => {
+                ctl.runLogic();
+                ui.renderAll();
+                // 自动模式下的简易日志状态判断
+                if(plc.out.y0 && plc.in.x0 === 0) ui.log('log-latch');
+                else if(plc.out.y0) ui.log('log-out');
+                else ui.log('log-idle');
+            }, 50); // 50ms 极速响应
+        },
+
+        nextStep: () => {
+            ctl.phase++;
+            if(ctl.phase > 3) ctl.phase = 1;
+            const bar = document.getElementById('scan-bar');
+            bar.style.display = 'block';
+
+            if(ctl.phase === 1) { // Input
+                bar.style.top = '10px';
+                ui.log('log-in');
+                ui.updateLEDs();
+            } 
+            else if (ctl.phase === 2) { // Logic
+                bar.style.top = '60px'; // Cover the rung
+                ui.log('log-logic');
+                ctl.runLogic();
+                ui.updateLadder();
+            }
+            else if (ctl.phase === 3) { // Output
+                bar.style.top = '140px';
+                ui.log('log-out');
+                plc.out.y0 = plc.mem.y0;
+                ui.updateMotor();
+                if(plc.mem.y0 && !plc.in.x0) ui.log('log-latch');
+            }
+        },
+
+        runLogic: () => {
+            // 起保停核心公式： Y0 = (X0 + Y0) * /X1
+            // 注意：物理按钮X1通常是NO（按下通），梯形图逻辑通常用NC（|/|）。
+            // 当没按X1时(0)，NC导通；按下X1时(1)，NC断开。
+            
+            const startSignal = plc.in.x0 || plc.mem.y0; // 起 + 保
+            const stopSignal = plc.in.x1 === 0; // 停 (没按X1时为真)
+            
+            plc.mem.y0 = (startSignal && stopSignal) ? 1 : 0;
+            
+            // 自动模式直接刷新输出
+            if(ctl.mode === 'auto') plc.out.y0 = plc.mem.y0;
+        }
+    };
+
+    // --- 4. 视图渲染 (View) ---
+    const ui = {
+        log: (id) => {
+            document.querySelectorAll('.log-line').forEach(e => e.classList.remove('highlight'));
+            document.getElementById(id).classList.add('highlight');
+        },
+
+        renderAll: () => {
+            ui.updateLEDs();
+            ui.updateLadder();
+            ui.updateMotor();
+        },
+
+        updateLEDs: () => {
+            const toggle = (id, on) => document.getElementById(id).className = on ? 'led on' : 'led';
+            toggle('led-x0', plc.in.x0);
+            toggle('led-x1', plc.in.x1);
+            toggle('led-y0', plc.out.y0);
+        },
+
+        updateLadder: () => {
+            // 辅助函数：设置元素激活状态
+            const set = (id, active) => {
+                const el = document.getElementById(id);
+                if(active) el.classList.add('active'); else el.classList.remove('active');
+            };
+
+            // 1. 启动路径 (X0)
+            set('sym-x0', plc.in.x0);
+            set('L1', true); // 母线总是通
+            // L2通的条件：X0通 OR 自锁通
+            const latchActive = plc.mem.y0 === 1; // 使用上一周期的Y0状态或当前计算状态
+            const flowAfterStart = plc.in.x0 || latchActive;
+            
+            // 2. 自锁路径 (Y0 Contact)
+            set('B1', true); // 母线下来总是通
+            set('B2', true);
+            set('sym-latch', latchActive);
+            set('B3', latchActive);
+            set('B4', latchActive);
+
+            // 3. 中间汇聚点
+            set('L2', flowAfterStart);
+
+            // 4. 停止路径 (X1 NC)
+            // 只有当没按X1时，这个触点才是通的
+            const stopConducting = plc.in.x1 === 0;
+            set('sym-x1', stopConducting);
+
+            // 5. 线圈前段
+            const flowToCoil = flowAfterStart && stopConducting;
+            set('L3', flowToCoil);
+            set('sym-y0', plc.mem.y0);
+            set('L4', plc.mem.y0);
+        },
+
+        updateMotor: () => {
+            const box = document.getElementById('motor');
+            const fan = document.getElementById('fan');
+            const txt = document.getElementById('motor-txt');
+            const wire = document.getElementById('w-y0');
+
+            if(plc.out.y0) {
+                box.classList.add('running');
+                txt.innerText = "运行中 (Running)";
+                txt.style.color = "#00e676";
+                wire.classList.add('hot');
+                // 旋转动画
+                let r = fan.style.transform.replace(/[^0-9]/g,'') || 0;
+                fan.style.transform = `rotate(${parseInt(r) + 15}deg)`;
+            } else {
+                box.classList.remove('running');
+                txt.innerText = "已停止 (Stopped)";
+                txt.style.color = "#78909c";
+                wire.classList.remove('hot');
+            }
+        }
+    };
+
+    // 启动自动循环
+    ctl.startLoop();
+
+</script>
+</body>
+</html>

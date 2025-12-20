@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>新能源配电柜回路仿真 - 三路连线修正版</title>
+    <style>
+        :root {
+            --bg-color: #0d0e0f;
+            --wire-off: #222;
+            --wire-pwr: #ff8c00;  /* 强电动力：橙色 */
+            --wire-ctrl: #00d9ff; /* 弱电控制：蓝色 */
+            --led-on: #00ff00;
+        }
+
+        body { margin: 0; padding: 0; background: var(--bg-color); color: white; font-family: "Microsoft YaHei", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- 日志区 --- */
+        #log-panel { width: 300px; background: #000; border-right: 2px solid #333; display: flex; flex-direction: column; padding: 10px; z-index: 100; }
+        #log-list { flex: 1; overflow-y: auto; font-size: 11px; color: #00ff00; font-family: monospace; border: 1px solid #222; }
+        .log-line { border-bottom: 1px solid #111; padding: 3px; }
+
+        /* --- 主视图 --- */
+        #viewport { flex: 1; overflow-y: auto; position: relative; background: #111; scroll-behavior: smooth; }
+        #simulation-container { width: 900px; margin: 0 auto; padding: 20px 0; }
+
+        /* 恒显示解说 */
+        #god-view-msg {
+            position: sticky; top: 10px; left: 50%; width: 90%; background: rgba(0, 40, 80, 0.95);
+            border: 2px solid #00d9ff; padding: 15px; border-radius: 8px; z-index: 200;
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.3); margin: 0 auto 20px;
+        }
+
+        /* 柜体实体 */
+        #cabinet {
+            width: 820px; height: 950px; background: #222; margin: 0 auto;
+            border: 5px solid #444; border-radius: 10px; position: relative;
+            box-shadow: 0 0 50px #000;
+        }
+
+        /* SVG 精准线路：横平竖直走线槽模式 */
+        #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .wire { fill: none; stroke: var(--wire-off); stroke-width: 3; transition: 0.3s; stroke-linecap: square; }
+        .w-active-pwr { stroke: var(--wire-pwr); filter: drop-shadow(0 0 5px var(--wire-pwr)); stroke-dasharray: 12, 6; animation: flow 1s linear infinite; stroke-width: 4; }
+        .w-active-ctrl { stroke: var(--wire-ctrl); filter: drop-shadow(0 0 3px var(--wire-ctrl)); stroke-dasharray: 8, 4; animation: flow 1s linear infinite; stroke-width: 3; }
+        @keyframes flow { to { stroke-dashoffset: -18; } }
+
+        /* 元件样式 */
+        .comp {
+            position: absolute; width: 65px; height: 90px; background: #e0e0e0;
+            border: 1px solid #999; border-radius: 3px; z-index: 10;
+            display: flex; flex-direction: column; align-items: center; color: #000;
+            padding: 5px 0; box-shadow: 2px 2px 8px rgba(0,0,0,0.5); cursor: pointer;
+        }
+        .comp.active { background: #fff; border: 2px solid var(--led-on); box-shadow: 0 0 15px rgba(0,255,0,0.5); }
+        .comp.fault { background: #ffaaaa; border: 2px solid red; animation: blink 0.3s infinite; }
+        @keyframes blink { 50% { opacity: 0.6; } }
+
+        .led { width: 10px; height: 10px; border-radius: 50%; background: #444; border: 1px solid #000; margin-bottom: 4px; }
+        .led.on { background: var(--led-on); box-shadow: 0 0 10px var(--led-on); }
+        .comp-id { font-size: 14px; font-weight: bold; color: #0056b3; margin-top: auto; }
+        .comp-name { font-size: 9px; font-weight: bold; text-align: center; line-height: 1.1; }
+
+        /* 元件特色 */
+        .fu { width: 35px; border-radius: 15px; background: #fff; }
+        .relay { background: #e3f2fd; } 
+        .fr { background: #333; color: white; border-color: #000; }
+
+        /* 原理图 */
+        #theory-zone {
+            width: 820px; height: 300px; background: #1a1a1a; margin: 30px auto;
+            border: 2px dashed #444; border-radius: 10px; padding: 20px; box-sizing: border-box;
+        }
+        .theory-flex { display: flex; justify-content: space-around; align-items: center; }
+        .contact-box { text-align: center; color: #aaa; width: 250px; }
+        .logic-sym { font-size: 50px; height: 60px; color: #444; transition: 0.3s; }
+        .logic-sym.on { color: #00d9ff; }
+
+        /* 负载 */
+        #load-zone { width: 820px; height: 150px; margin: 20px auto; display: flex; justify-content: space-around; align-items: center; }
+        .motor-box { text-align: center; color: #777; width: 150px; }
+        .motor-icon { width: 50px; height: 50px; border: 4px solid #444; border-radius: 50%; margin: 10px auto; position: relative; }
+        .motor-icon::after { content: ''; position: absolute; top: 23px; left: 0; width: 100%; height: 4px; background: #555; }
+        .run { animation: spin 0.2s linear infinite; border-color: var(--led-on); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 右侧面板 */
+        #ctrl-panel { width: 280px; background: #1c1e20; border-left: 2px solid #333; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .btn-group { border: 1px solid #444; padding: 8px; border-radius: 5px; background: #252525; }
+        button { width: 100%; padding: 10px; margin: 4px 0; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; transition: 0.1s; }
+        button:active { transform: scale(0.96); }
+        .btn-on { background: #27ae60; }
+        .btn-off { background: #c0392b; }
+        .btn-estop { background: #f1c40f; color: #000; height: 50px; font-size: 16px; font-weight: 900; border: 3px solid #000; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="log-panel">
+    <div style="font-weight: bold; color: #888; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 10px;">电气柜运行日志</div>
+    <div id="log-list"></div>
+</div>
+
+<div id="viewport">
+    <div id="simulation-container">
+        
+        <div id="god-view-msg">
+            <h3 style="margin:0 0 8px 0; color:#00d9ff">上帝视角：为什么点击 B/C 也会有橙色线？</h3>
+            <p style="margin:0; font-size:13px; line-height:1.4">
+                当<strong>中间继电器(R)</strong>得电，触点闭合，允许 220V 电流流向<strong>接触器(K)</strong>线圈。一旦 K 吸合，橙色动力线就会贯通：<br>
+                <strong>电网 → 断路器 → 熔断器 → 接触器触点 → 热继电器 → 电机</strong>。 每一路都有独立的物理线路。
+            </p>
+        </div>
+
+        <div id="cabinet">
+            <svg id="svg-layer">
+                <!-- 进线总线 -->
+                <path id="w-main" class="wire" d="M 410 0 V 30 H 132 V 50" />
+                
+                <!-- 回路 A 完整路径 -->
+                <path id="wire-a" class="wire" d="M 132 140 V 170 M 132 260 V 290 M 132 380 V 410 M 132 500 V 530 M 132 620 V 650 M 132 740 V 770 M 132 860 V 950" />
+                
+                <!-- 回路 B 完整路径 (修正：之前缺失) -->
+                <path id="wire-b" class="wire" d="M 362 140 V 170 M 362 260 V 290 M 362 380 V 410 M 362 500 V 530 M 362 620 V 650 M 362 740 V 770 M 362 860 V 950" />
+                
+                <!-- 回路 C 完整路径 (修正：之前缺失) -->
+                <path id="wire-c" class="wire" d="M 592 140 V 170 M 592 260 V 290 M 592 380 V 410 M 592 500 V 530 M 592 620 V 650 M 592 740 V 770 M 592 860 V 950" />
+                
+                <!-- 控制母线 (24V DC) -->
+                <path id="w-ctrl" class="wire" d="M 722 140 V 200 H 790 V 455 H 180" />
+            </svg>
+
+            <!-- 第一排：电源 -->
+            <div class="comp" id="C-Q1" style="left:100px; top:50px;" onclick="opMaster()">
+                <div class="led" id="led-Q1"></div><div class="comp-name">总断路器</div><div class="comp-id">Q1</div>
+            </div>
+            <div class="comp" id="C-RCD" style="left:330px; top:50px;">
+                <div class="led" id="led-RCD"></div><div class="comp-name">漏电保护</div><div class="comp-id">RCD</div>
+            </div>
+            <div class="comp" id="C-PSU" style="left:690px; top:50px;">
+                <div class="led" id="led-PSU"></div><div class="comp-name">24V电源</div><div class="comp-id">PSU</div>
+            </div>
+
+            <!-- 第二排：支路空开 -->
+            <div class="comp" id="C-QF1" style="left:100px; top:170px;"><div class="comp-name">支路空开</div><div class="comp-id">QF1</div></div>
+            <div class="comp" id="C-QF2" style="left:330px; top:170px;"><div class="comp-name">支路空开</div><div class="comp-id">QF2</div></div>
+            <div class="comp" id="C-QF3" style="left:560px; top:170px;"><div class="comp-name">支路空开</div><div class="comp-id">QF3</div></div>
+
+            <!-- 第三排：熔断器 -->
+            <div class="comp fu" id="C-FU1" style="left:115px; top:290px;"><div class="comp-name">熔断器</div><div class="comp-id">FU1</div></div>
+            <div class="comp fu" id="C-FU2" style="left:345px; top:290px;"><div class="comp-name">熔断器</div><div class="comp-id">FU2</div></div>
+            <div class="comp fu" id="C-FU3" style="left:575px; top:290px;"><div class="comp-name">熔断器</div><div class="comp-id">FU3</div></div>
+
+            <!-- 第四排：中间继电器 -->
+            <div class="comp relay" id="C-R1" style="left:100px; top:410px;">
+                <div class="led" id="led-R1"></div><div class="comp-name">中间继电器</div><div class="comp-id">R1</div>
+            </div>
+            <div class="comp relay" id="C-R2" style="left:330px; top:410px;">
+                <div class="led" id="led-R2"></div><div class="comp-name">中间继电器</div><div class="comp-id">R2</div>
+            </div>
+            <div class="comp relay" id="C-R3" style="left:560px; top:410px;">
+                <div class="led" id="led-R3"></div><div class="comp-name">中间继电器</div><div class="comp-id">R3</div>
+            </div>
+
+            <!-- 第五排：接触器 -->
+            <div class="comp" id="C-K1" style="left:100px; top:530px;">
+                <div class="led" id="led-K1"></div><div class="comp-name">交流接触器</div><div class="comp-id">K1</div>
+            </div>
+            <div class="comp" id="C-K2" style="left:330px; top:530px;">
+                <div class="led" id="led-K2"></div><div class="comp-name">交流接触器</div><div class="comp-id">K2</div>
+            </div>
+            <div class="comp" id="C-K3" style="left:560px; top:530px;">
+                <div class="led" id="led-K3"></div><div class="comp-name">交流接触器</div><div class="comp-id">K3</div>
+            </div>
+
+            <!-- 第六排：热继电器 -->
+            <div class="comp fr" id="C-FR1" style="left:100px; top:650px;"><div class="comp-name">热继电器</div><div class="comp-id">FR1</div></div>
+            <div class="comp fr" id="C-FR2" style="left:330px; top:650px;"><div class="comp-name">热继电器</div><div class="comp-id">FR2</div></div>
+            <div class="comp fr" id="C-FR3" style="left:560px; top:650px;"><div class="comp-name">热继电器</div><div class="comp-id">FR3</div></div>
+        </div>
+
+        <!-- 教学演示区 -->
+        <div id="theory-zone">
+            <h4 style="margin:0 0 15px 0; color:#00d9ff">常开(NO) / 常闭(NC) 触点仿真 (以当前操作回路为例)</h4>
+            <div class="theory-flex">
+                <div class="contact-box">
+                    <div id="sym-no" class="logic-sym">┛</div>
+                    <div style="font-size:12px">常开(NO)触点<br><span id="txt-no">断开状态</span></div>
+                </div>
+                <div class="contact-box">
+                    <div id="sym-nc" class="logic-sym on">┓</div>
+                    <div style="font-size:12px">常闭(NC)触点<br><span id="txt-nc">闭合状态</span></div>
+                </div>
+            </div>
+            <div style="margin-top:20px; padding:10px; background:rgba(255,140,0,0.1); border-left:4px solid var(--wire-pwr); font-size:13px;">
+                提示：中间继电器的 NO 触点控制接触器的线圈。当 NO 闭合时，对应回路的橙色动力线才会激活。
+            </div>
+        </div>
+
+        <div id="load-zone">
+            <div class="motor-box"><div class="motor-icon" id="m1"></div>负载电机 A</div>
+            <div class="motor-box"><div class="motor-icon" id="m2"></div>负载电机 B</div>
+            <div class="motor-box"><div class="motor-icon" id="m3"></div>负载电机 C</div>
+        </div>
+    </div>
+</div>
+
+<div id="ctrl-panel">
+    <div style="text-align:center; font-weight:bold; color:#888; font-size:12px;">操作终端</div>
+    <div class="btn-group">
+        <div style="font-size:10px; color:#555">回路 A (循环系统)</div>
+        <button class="btn-on" onclick="ctrl('A', true)">启动</button><button class="btn-off" onclick="ctrl('A', false)">停止</button>
+    </div>
+    <div class="btn-group">
+        <div style="font-size:10px; color:#555">回路 B (排风系统)</div>
+        <button class="btn-on" onclick="ctrl('B', true)">启动</button><button class="btn-off" onclick="ctrl('B', false)">停止</button>
+    </div>
+    <div class="btn-group">
+        <div style="font-size:10px; color:#555">回路 C (压机系统)</div>
+        <button class="btn-on" onclick="ctrl('C', true)">启动</button><button class="btn-off" onclick="ctrl('C', false)">停止</button>
+    </div>
+    <button class="btn-blue" style="background:#2980b9" onclick="fault('FR')">🔥 模拟热过载动作</button>
+    <button class="btn-estop" onclick="fault('STOP')">EMERGENCY STOP</button>
+</div>
+
+<script>
+    const sys = { Q1: true, RCD: true, A: false, B: false, C: false, fr_trip: false };
+
+    function log(msg, warn = false) {
+        const list = document.getElementById('log-list');
+        const time = new Date().toTimeString().split(' ')[0];
+        list.innerHTML = `<div class="log-line" style="color:${warn?'#ff4400':'#00ff00'}">[${time}] ${msg}</div>` + list.innerHTML;
+    }
+
+    function opMaster() {
+        sys.Q1 = !sys.Q1;
+        log(`主闸 Q1 操作：${sys.Q1?'闭合':'分断'}`);
+        update();
+    }
+
+    function ctrl(id, val) {
+        if (!sys.Q1 || !sys.RCD) return log("警告：停电状态，无法启动继电器！", true);
+        if (sys.fr_trip && id === 'A') return log("故障：FR1 已脱扣，请先复位！", true);
+        sys[id] = val;
+        log(`回路 ${id}：操作按钮${val?'[启动]':'[停止]'}`);
+        update();
+    }
+
+    function update() {
+        const live = sys.Q1 && sys.RCD;
+        
+        // 元件指示灯
+        set('Q1', sys.Q1); set('RCD', live); set('PSU', live);
+        set('QF1', live); set('QF2', live); set('QF3', live);
+
+        // 各回路物理运行状态
+        const runA = live && sys.A && !sys.fr_trip;
+        const runB = live && sys.B;
+        const runC = live && sys.C;
+
+        // 对应中间继电器 (R)
+        set('R1', live && sys.A);
+        set('R2', live && sys.B);
+        set('R3', live && sys.C);
+
+        // 对应接触器 (K)
+        set('K1', runA);
+        set('K2', runB);
+        set('K3', runC);
+
+        // 线路动画 (核心修正点：三路动力线独立控制)
+        wire('w-main', sys.Q1, 'pwr');
+        wire('wire-a', runA, 'pwr');
+        wire('wire-b', runB, 'pwr');
+        wire('wire-c', runC, 'pwr');
+        wire('w-ctrl', live, 'ctrl');
+
+        // 负载反馈
+        document.getElementById('m1').className = runA ? 'motor-icon run' : 'motor-icon';
+        document.getElementById('m2').className = runB ? 'motor-icon run' : 'motor-icon';
+        document.getElementById('m3').className = runC ? 'motor-icon run' : 'motor-icon';
+
+        // 教学区触点逻辑 (以当前活动回路为例)
+        const active = sys.A || sys.B || sys.C;
+        const symNo = document.getElementById('sym-no');
+        const symNc = document.getElementById('sym-nc');
+        if (active) {
+            symNo.innerHTML = "━━"; symNo.classList.add('on');
+            symNc.innerHTML = "┛"; symNc.classList.remove('on');
+            document.getElementById('txt-no').innerText = "已吸合 (接通)";
+            document.getElementById('txt-nc').innerText = "已断开";
+        } else {
+            symNo.innerHTML = "┛"; symNo.classList.remove('on');
+            symNc.innerHTML = "┓"; symNc.classList.add('on');
+            document.getElementById('txt-no').innerText = "常态断开";
+            document.getElementById('txt-nc').innerText = "常态闭合 (通)";
+        }
+
+        // 故障显示
+        sys.fr_trip ? document.getElementById('C-FR1').classList.add('fault') : document.getElementById('C-FR1').classList.remove('fault');
+    }
+
+    function set(id, on) {
+        const c = document.getElementById('C-'+id);
+        const l = document.getElementById('led-'+id);
+        if(c) on ? c.classList.add('active') : c.classList.remove('active');
+        if(l) on ? l.classList.add('on') : l.classList.remove('on');
+    }
+
+    function wire(id, on, type) {
+        const w = document.getElementById(id);
+        const cls = type === 'pwr' ? 'w-active-pwr' : 'w-active-ctrl';
+        on ? w.classList.add(cls) : w.classList.remove(cls);
+    }
+
+    function fault(type) {
+        if (type === 'FR') { sys.fr_trip = true; sys.A = false; log("🔥 报警：FR1 热过载跳脱！", true); }
+        else if (type === 'STOP') { sys.Q1 = false; sys.A = sys.B = sys.C = false; log("🛑 急停被按下！", true); }
+        update();
+        setTimeout(() => {
+            if(confirm("安全系统：执行人工复位？")) {
+                sys.Q1 = true; sys.RCD = true; sys.fr_trip = false;
+                log("系统复位成功。"); update();
+            }
+        }, 300);
+    }
+
+    update();
+</script>
+</body>
+</html>

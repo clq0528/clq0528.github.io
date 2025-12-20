@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运料小车 PLC 往复与报警控制仿真 (视觉增强版)</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #fff;
+            --plc-color: #37474f;
+            --wire-off: #cfd8dc;
+            --wire-on: #ff5252; /* 通电红 */
+            --logic-on: #00e676; /* 逻辑绿 */
+            --highlight: #fff9c4;
+            --alarm-color: #ffb300;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-color);
+            display: flex; flex-direction: column; align-items: center;
+            margin: 0; padding: 10px; user-select: none;
+        }
+
+        /* --- 布局容器 --- */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 480px; /* 左宽右窄 */
+            gap: 15px;
+            width: 1200px;
+            height: 800px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid #e0e0e0;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            padding: 8px 15px; background: #eceff1; border-bottom: 1px solid #cfd8dc;
+            font-weight: bold; color: #455a64; font-size: 14px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* --- 左侧：任务书与场景 --- */
+        
+        /* 1. 任务说明书 (仿纸张) */
+        .task-paper {
+            padding: 15px; background: #fffbf0; border-bottom: 1px solid #eee;
+            font-size: 14px; color: #444; line-height: 1.6;
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.02);
+        }
+        .task-title { font-weight: bold; font-size: 16px; margin-bottom: 8px; color: #333; }
+        .highlight-text { color: #d32f2f; font-weight: bold; background: rgba(255,0,0,0.05); padding: 0 4px; border-radius: 2px;}
+
+        /* 2. 场景动画区 */
+        .scene {
+            flex: 1; position: relative; background: #fafafa; border-bottom: 1px solid #eee;
+            overflow: hidden;
+        }
+
+        /* 轨道 */
+        .track {
+            position: absolute; top: 100px; left: 60px; right: 60px; height: 8px; background: #90a4ae; border-radius: 4px;
+        }
+        .track-mark {
+            position: absolute; top: 115px; width: 2px; height: 10px; background: #cfd8dc;
+        }
+
+        /* 传感器 */
+        .sensor {
+            position: absolute; top: 110px; width: 12px; height: 18px; 
+            background: #b0bec5; border: 1px solid #78909c; z-index: 5;
+            transition: 0.1s;
+        }
+        .sensor::before {
+            content: attr(data-id); position: absolute; top: -20px; left: -10px; width: 32px;
+            text-align: center; font-size: 12px; font-weight: bold; color: #546e7a;
+        }
+        .sensor.active { background: #ff5252; box-shadow: 0 0 8px #ff5252; border-color: #b71c1c; }
+        
+        /* 传感器故障模拟标记 */
+        .sensor.broken { opacity: 0.5; border: 2px dashed red; background: repeating-linear-gradient(45deg, #eee, #eee 2px, #ccc 2px, #ccc 4px); }
+        .sensor.broken::after { content: '❌'; position: absolute; font-size: 10px; top: 2px; left: 0; }
+
+        /* 小车 */
+        .cart {
+            position: absolute; top: 65px; width: 70px; height: 45px;
+            background: #1976d2; border-radius: 6px; border: 2px solid #0d47a1;
+            z-index: 10; display: flex; justify-content: center; align-items: center;
+            color: white; font-size: 12px; box-shadow: 0 4px 5px rgba(0,0,0,0.2);
+            transition: left 0.05s linear; /* 这里的 transition 时间会由 JS 动态调整以匹配速度 */
+        }
+        .cart-wheel {
+            position: absolute; bottom: -6px; width: 14px; height: 14px; background: #333; border-radius: 50%;
+        }
+        .w-left { left: 8px; } .w-right { right: 8px; }
+        
+        /* 报警灯 */
+        .alarm-light {
+            position: absolute; top: 20px; width: 30px; height: 30px; border-radius: 50%;
+            background: #5d4037; border: 2px solid #3e2723;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;
+        }
+        .alarm-light.on {
+            background: #ffb300; box-shadow: 0 0 20px #ffb300, inset 0 0 10px #fff;
+            animation: flash 0.5s infinite alternate;
+            color: #3e2723; font-weight: bold; border-color: #ff6f00;
+        }
+        @keyframes flash { from { opacity: 0.6; } to { opacity: 1; } }
+
+        /* 3. 控制台 */
+        .control-deck {
+            height: 160px; padding: 10px 20px; background: #eceff1; display: flex; gap: 30px;
+            align-items: center; border-top: 1px solid #cfd8dc;
+        }
+
+        .ctrl-group {
+            display: flex; flex-direction: column; gap: 8px; align-items: center;
+            background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #d0d0d0;
+        }
+        .ctrl-label { font-size: 12px; color: #78909c; font-weight: bold; }
+
+        /* 按钮 */
+        .btn {
+            width: 50px; height: 50px; border-radius: 50%; border: 3px solid #b0bec5;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #fff; box-shadow: 0 3px 0 #78909c; transition: all 0.1s;
+        }
+        .btn:active { transform: translateY(3px); box-shadow: none; }
+        .btn-green { background: #4caf50; }
+        .btn-red { background: #f44336; }
+        
+        /* 故障复选框 */
+        .check-row { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #333; cursor: pointer; }
+        
+        /* 速度滑块 */
+        input[type=range] { width: 100px; cursor: pointer; }
+
+        /* --- 右侧：PLC 逻辑与日志 --- */
+        .plc-status {
+            padding: 8px; background: var(--plc-color); color: #cfd8dc; font-size: 12px;
+            display: flex; gap: 10px; justify-content: center;
+        }
+        .io-dot {
+            width: 10px; height: 10px; background: #546e7a; border-radius: 50%; display: inline-block; margin-right: 4px;
+            transition: background 0.05s, box-shadow 0.05s; /* 轻微过渡 */
+        }
+        .io-dot.on { background: #00e676; box-shadow: 0 0 5px #00e676; }
+
+        /* 梯形图 */
+        .ladder-box {
+            flex: 2; overflow-y: auto; background: #fff; padding: 10px;
+            font-family: 'Consolas', monospace; position: relative;
+        }
+        .rung {
+            position: relative; height: 75px; border-bottom: 1px dashed #eee; margin-bottom: 5px;
+            display: flex; align-items: center; opacity: 0.8; transition: opacity 0.2s;
+        }
+        .rung.active-logic { opacity: 1; background: rgba(0, 230, 118, 0.05); }
+
+        .rail { position: absolute; top:0; bottom:0; width: 4px; background: #333; }
+        .rail.l { left: 0; } .rail.r { right: 0; }
+
+        /* 梯形图元件 */
+        .wire { height: 2px; background: #333; position: absolute; transition: background 0.1s; }
+        .wire.on { background: var(--wire-on); height: 3px; z-index: 2; box-shadow: 0 0 4px var(--wire-on); }
+
+        .symbol {
+            position: absolute; top: 18px; width: 40px; text-align: center; font-size: 16px; font-weight: bold;
+            background: #fff; z-index: 3; cursor: help;
+        }
+        .symbol-lbl { font-size: 10px; color: #1976d2; position: absolute; top: -14px; left: 0; width: 100%; text-align: center; }
+        .symbol.on { color: var(--logic-on); text-shadow: 0 0 2px var(--logic-on); }
+
+        /* 实时日志 */
+        .log-panel {
+            flex: 1; background: #263238; color: #eceff1; font-family: 'Consolas', monospace;
+            padding: 10px; overflow-y: auto; font-size: 12px; border-top: 4px solid #37474f;
+        }
+        .log-entry { margin-bottom: 4px; padding-left: 10px; border-left: 2px solid transparent; }
+        .log-info { border-left-color: #29b6f6; color: #81d4fa; }
+        .log-warn { border-left-color: #ffca28; color: #fff59d; }
+        .log-err { border-left-color: #ff5252; color: #ff8a80; }
+        .log-cycle { color: #546e7a; font-size: 10px; margin-top: 2px; border: none; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左侧面板 -->
+    <div class="panel">
+        <div class="header">
+            <span>系统控制台 (System Console)</span>
+            <span style="font-size:12px; color:#78909c;">FX3U Series</span>
+        </div>
+
+        <!-- 任务说明 -->
+        <div class="task-paper">
+            <div class="task-title">📑 运料小车控制程序 (Task Requirements)</div>
+            <div>1. <span class="highlight-text">启动(X0)</span>：小车从中间位置向左行驶。</div>
+            <div>2. <span class="highlight-text">往复运行</span>：碰左限位(X1)→向右；碰右限位(X2)→向左。</div>
+            <div>3. <span class="highlight-text">停止(X5)</span>：按下按钮，小车运行到中间位置(X6)自动停止。</div>
+            <div>4. <span class="highlight-text">故障报警</span>：左1失灵碰左2(X3)→报警(Y2)；右1失灵碰右2(X4)→报警(Y3)。</div>
+        </div>
+
+        <!-- 场景 -->
+        <div class="scene">
+            <!-- 报警灯 -->
+            <div class="alarm-light" id="lamp-y2" style="left: 20px;">Y2<br>左警</div>
+            <div class="alarm-light" id="lamp-y3" style="right: 20px;">Y3<br>右警</div>
+
+            <!-- 轨道与传感器 -->
+            <div class="track"></div>
+            
+            <!-- 传感器位置 (0-100%) -->
+            <!-- 极限/报警传感器 -->
+            <div class="sensor" id="sen-x3" style="left: 5%; height:22px; border-color:#e65100;" data-id="X3"></div>
+            <div class="sensor" id="sen-x4" style="left: 95%; height:22px; border-color:#e65100;" data-id="X4"></div>
+
+            <!-- 正常工作传感器 -->
+            <div class="sensor" id="sen-x1" style="left: 15%;" data-id="X1"></div>
+            <div class="sensor" id="sen-x6" style="left: 50%;" data-id="X6"></div>
+            <div class="sensor" id="sen-x2" style="left: 85%;" data-id="X2"></div>
+
+            <!-- 小车 -->
+            <div class="cart" id="cart" style="left: 50%;">
+                <div class="cart-wheel w-left"></div>
+                <span>CART</span>
+                <div class="cart-wheel w-right"></div>
+            </div>
+            
+            <div style="position: absolute; bottom: 5px; width: 100%; text-align: center; color: #aaa; font-size: 11px;">
+                ◀──── 行程范围 ────▶
+            </div>
+        </div>
+
+        <!-- 操作区 -->
+        <div class="control-deck">
+            <div class="ctrl-group">
+                <div class="ctrl-label">操作按钮</div>
+                <div style="display:flex; gap:15px;">
+                    <div style="text-align:center;">
+                        <div class="btn btn-green" id="btn-x0" onmousedown="io.press('x0')" onmouseup="io.release('x0')">X0</div>
+                        <span style="font-size:10px;">启动</span>
+                    </div>
+                    <div style="text-align:center;">
+                        <div class="btn btn-red" id="btn-x5" onmousedown="io.press('x5')" onmouseup="io.release('x5')">X5</div>
+                        <span style="font-size:10px;">停止</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <div class="ctrl-label">故障模拟 (Fault Sim)</div>
+                <label class="check-row">
+                    <input type="checkbox" id="fail-x1" onchange="sim.toggleFail('x1')"> 左限 X1 失灵
+                </label>
+                <label class="check-row">
+                    <input type="checkbox" id="fail-x2" onchange="sim.toggleFail('x2')"> 右限 X2 失灵
+                </label>
+                <button onclick="sim.resetAlarm()" style="margin-top:5px; font-size:11px; cursor:pointer;">复位报警</button>
+            </div>
+
+            <div class="ctrl-group">
+                <div class="ctrl-label">电机速度 (Speed)</div>
+                <input type="range" id="spd-slider" min="0.1" max="2.0" step="0.1" value="0.8">
+                <span id="spd-val" style="font-size:10px; color:#555;">0.8x</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧面板 -->
+    <div class="panel">
+        <div class="header">PLC 梯形图监控 (Ladder Monitor)</div>
+        <div class="plc-status">
+            <span>In:</span>
+            <span class="io-dot" id="led-x0"></span>X0
+            <span class="io-dot" id="led-x5"></span>X5
+            <span class="io-dot" id="led-x1"></span>X1
+            <span class="io-dot" id="led-x2"></span>X2
+            <span class="io-dot" id="led-x6"></span>X6
+            <span class="io-dot" id="led-x3"></span>X3
+            <span>| Out:</span>
+            <span class="io-dot" id="led-y0"></span>Y0
+            <span class="io-dot" id="led-y1"></span>Y1
+            <span class="io-dot" id="led-y2"></span>Y2
+        </div>
+
+        <div class="ladder-box" id="ladder">
+            <!-- 动态生成的梯形图结构 -->
+            
+            <!-- Rung 1: Start -->
+            <div class="rung" id="rung-1">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w1-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x0" style="left:35px;"><div class="symbol-lbl">X0</div>| |</div>
+                <div class="wire" id="w1-2" style="left:75px; width:180px; top:35px;"></div>
+                <div class="symbol" id="coil-y0-set" style="left:260px;"><div class="symbol-lbl">Y0</div>(S)</div>
+                <div class="wire" id="w1-3" style="left:300px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#999;">Start -> Left</span>
+            </div>
+
+            <!-- Rung 2: Hit Left Limit X1 -->
+            <div class="rung" id="rung-2">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w2-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x1" style="left:35px;"><div class="symbol-lbl">X1</div>| |</div>
+                <div class="wire" id="w2-2" style="left:75px; width:80px; top:35px;"></div>
+                <div class="symbol" id="coil-y0-rst" style="left:160px;"><div class="symbol-lbl">Y0</div>(R)</div>
+                <div class="wire" style="left:200px; width:30px; top:35px;"></div>
+                <div class="symbol" id="coil-y1-set" style="left:240px;"><div class="symbol-lbl">Y1</div>(S)</div>
+                <div class="wire" id="w2-3" style="left:280px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#999;">Limit L -> Right</span>
+            </div>
+
+             <!-- Rung 3: Hit Right Limit X2 -->
+             <div class="rung" id="rung-3">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w3-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x2" style="left:35px;"><div class="symbol-lbl">X2</div>| |</div>
+                <div class="wire" id="w3-2" style="left:75px; width:80px; top:35px;"></div>
+                <div class="symbol" id="coil-y1-rst" style="left:160px;"><div class="symbol-lbl">Y1</div>(R)</div>
+                <div class="wire" style="left:200px; width:30px; top:35px;"></div>
+                <div class="symbol" id="coil-y0-set2" style="left:240px;"><div class="symbol-lbl">Y0</div>(S)</div>
+                <div class="wire" id="w3-3" style="left:280px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#999;">Limit R -> Left</span>
+            </div>
+
+            <!-- Rung 4: Stop Request X5 -->
+            <div class="rung" id="rung-4">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w4-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x5" style="left:35px;"><div class="symbol-lbl">X5</div>| |</div>
+                <div class="wire" id="w4-2" style="left:75px; width:180px; top:35px;"></div>
+                <div class="symbol" id="coil-m2" style="left:260px;"><div class="symbol-lbl">M2</div>(S)</div>
+                <div class="wire" id="w4-3" style="left:300px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#999;">Stop Pressed -> Flag</span>
+            </div>
+
+            <!-- Rung 5: Stop Action (M2 + X6) -->
+            <div class="rung" id="rung-5">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w5-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-m2" style="left:35px;"><div class="symbol-lbl">M2</div>| |</div>
+                <div class="wire" id="w5-2" style="left:75px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x6" style="left:110px;"><div class="symbol-lbl">X6</div>| |</div>
+                <div class="wire" id="w5-3" style="left:150px; width:30px; top:35px;"></div>
+                <div class="symbol" id="coil-zrst" style="left:190px; width:60px;"><div class="symbol-lbl">ZRST</div>Y0 Y1</div>
+                <div class="wire" style="left:255px; width:20px; top:35px;"></div>
+                <div class="symbol" id="coil-m2-rst" style="left:280px;"><div class="symbol-lbl">M2</div>(R)</div>
+                <div class="wire" id="w5-4" style="left:320px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#999;">Middle Stop</span>
+            </div>
+
+            <!-- Rung 6: Alarm Left (X3) -->
+            <div class="rung" id="rung-6">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w6-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x3" style="left:35px;"><div class="symbol-lbl">X3</div>| |</div>
+                <div class="wire" id="w6-2" style="left:75px; width:180px; top:35px;"></div>
+                <div class="symbol" id="coil-y2" style="left:260px;"><div class="symbol-lbl">Y2</div>( )</div>
+                <div class="wire" id="w6-3" style="left:300px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#d32f2f;">ALARM LEFT</span>
+            </div>
+            <!-- Rung 7: Alarm Right (X4) -->
+            <div class="rung" id="rung-7">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="wire" id="w7-1" style="left:5px; width:30px; top:35px;"></div>
+                <div class="symbol" id="sym-x4" style="left:35px;"><div class="symbol-lbl">X4</div>| |</div>
+                <div class="wire" id="w7-2" style="left:75px; width:180px; top:35px;"></div>
+                <div class="symbol" id="coil-y3" style="left:260px;"><div class="symbol-lbl">Y3</div>( )</div>
+                <div class="wire" id="w7-3" style="left:300px; right:5px; top:35px;"></div>
+                <span style="position:absolute; right:10px; bottom:2px; font-size:10px; color:#d32f2f;">ALARM RIGHT</span>
+            </div>
+
+        </div>
+
+        <div class="log-panel" id="log-console">
+            <div class="log-entry log-info">系统已初始化。等待启动指令...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. 系统核心数据 ---
+    const sys = {
+        scanCount: 0,
+        running: true,
+        failMode: { x1: false, x2: false },
+        speed: 0.8
+    };
+
+    const plc = {
+        in: { x0:0, x1:0, x2:0, x3:0, x4:0, x5:0, x6:0 }, // 物理输入
+        out: { y0:0, y1:0, y2:0, y3:0 }, // 物理输出
+        mem: { m2: 0 } // 内部辅助继电器 M2 (停止请求)
+    };
+
+    const cart = {
+        pos: 50.0, // 0 - 100%
+        state: 'stop' // stop, left, right, alarm
+    };
+
+    // 视觉状态保持（用于延长 LED 点亮时间）
+    const visualState = {
+        ledTimers: {}, // 记录每个 LED 上次变亮的时间
+        HOLD_TIME: 300 // 毫秒，LED 最少点亮时间
+    };
+
+    // --- 2. 交互控制 ---
+    const io = {
+        press: (id) => {
+            plc.in[id] = 1;
+            document.getElementById('btn-'+id).style.transform = "translateY(3px)";
+            document.getElementById('btn-'+id).style.boxShadow = "none";
+            logger.add(`[操作] 按下按钮 ${id.toUpperCase()}`, 'info');
+        },
+        release: (id) => {
+            plc.in[id] = 0;
+            document.getElementById('btn-'+id).style.transform = "translateY(0)";
+            document.getElementById('btn-'+id).style.boxShadow = "0 3px 0 #78909c";
+        }
+    };
+
+    const sim = {
+        toggleFail: (id) => {
+            sys.failMode[id] = document.getElementById('fail-'+id).checked;
+            const el = document.getElementById('sen-'+id);
+            if(sys.failMode[id]) {
+                el.classList.add('broken');
+                logger.add(`[故障模拟] 传感器 ${id.toUpperCase()} 已人为失效`, 'warn');
+            } else {
+                el.classList.remove('broken');
+                logger.add(`[故障模拟] 传感器 ${id.toUpperCase()} 已恢复`, 'info');
+            }
+        },
+        resetAlarm: () => {
+            plc.out.y2 = 0;
+            plc.out.y3 = 0;
+            plc.out.y0 = 0;
+            plc.out.y1 = 0;
+            // 简单逻辑：如果报警消除，稍微把小车移出危险区以便重启
+            if(cart.pos < 10) cart.pos = 12;
+            if(cart.pos > 90) cart.pos = 88;
+            logger.add(`[系统] 报警复位完成，小车位置重置安全区`, 'info');
+        }
+    };
+
+    document.getElementById('spd-slider').addEventListener('input', (e) => {
+        sys.speed = parseFloat(e.target.value);
+        document.getElementById('spd-val').innerText = sys.speed + "x";
+    });
+
+    // --- 3. 日志系统 ---
+    const logger = {
+        box: document.getElementById('log-console'),
+        lastMsg: "",
+        add: (msg, type='cycle') => {
+            if(msg === logger.lastMsg && type === 'cycle') return; // 防止刷屏
+            
+            const div = document.createElement('div');
+            div.className = `log-entry log-${type}`;
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            if(type === 'cycle') {
+                div.innerText = `Scan #${sys.scanCount}: ${msg}`;
+            } else {
+                div.innerText = `[${time}] ${msg}`;
+            }
+            logger.box.appendChild(div);
+            logger.box.scrollTop = logger.box.scrollHeight;
+            logger.lastMsg = msg;
+        }
+    };
+
+    // --- 4. 主循环 ---
+    setInterval(() => {
+        if(!sys.running) return;
+        
+        sys.scanCount++;
+        physicsStep();
+        plcScan();
+        render();
+
+    }, 30); // 33Hz 刷新
+
+    // --- 物理引擎 ---
+    function physicsStep() {
+        // 报警锁定
+        if(plc.out.y2 || plc.out.y3) return;
+
+        // 运动计算
+        let moveStep = 0.5 * sys.speed;
+        if(plc.out.y0) cart.pos -= moveStep;
+        if(plc.out.y1) cart.pos += moveStep;
+
+        // 物理碰撞限制
+        if(cart.pos < 0) cart.pos = 0;
+        if(cart.pos > 100) cart.pos = 100;
+
+        // 传感器逻辑 (Pos映射)
+        // X3 (Ultimate Left): < 5%
+        plc.in.x3 = (cart.pos < 5) ? 1 : 0;
+        
+        // X1 (Normal Left): 12% - 18%
+        // 如果故障模拟被勾选，X1 永远为 0
+        if (sys.failMode.x1) plc.in.x1 = 0;
+        else plc.in.x1 = (cart.pos > 12 && cart.pos < 18) ? 1 : 0;
+
+        // X6 (Middle): 48% - 52%
+        plc.in.x6 = (cart.pos > 48 && cart.pos < 52) ? 1 : 0;
+
+        // X2 (Normal Right): 82% - 88%
+        if (sys.failMode.x2) plc.in.x2 = 0;
+        else plc.in.x2 = (cart.pos > 82 && cart.pos < 88) ? 1 : 0;
+
+        // X4 (Ultimate Right): > 95%
+        plc.in.x4 = (cart.pos > 95) ? 1 : 0;
+    }
+
+    // --- PLC 逻辑 (扫描周期) ---
+    function plcScan() {
+        const prevY0 = plc.out.y0;
+        const prevY1 = plc.out.y1;
+        const prevY2 = plc.out.y2;
+        const prevM2 = plc.mem.m2;
+
+        // Rung 1: X0 (Start) -> SET Y0
+        let r1_active = false;
+        if(plc.in.x0) {
+            // 互锁: 只有不在报警且不运行右时
+            if(!plc.out.y2 && !plc.out.y3) {
+                plc.out.y0 = 1; 
+                plc.out.y1 = 0; 
+                plc.mem.m2 = 0; // 清除停止标记
+                r1_active = true;
+                if(!prevY0) logger.add("触发启动 X0 -> Y0 置位 (左行)", "info");
+            }
+        }
+
+        // Rung 2: Hit Left X1 -> RST Y0, SET Y1
+        let r2_active = false;
+        if(plc.in.x1 && plc.out.y0) {
+            plc.out.y0 = 0;
+            plc.out.y1 = 1;
+            r2_active = true;
+            logger.add("到达左限位 X1 -> 切换方向 (Y1 右行)", "info");
+        }
+
+        // Rung 3: Hit Right X2 -> RST Y1, SET Y0
+        let r3_active = false;
+        if(plc.in.x2 && plc.out.y1) {
+            plc.out.y1 = 0;
+            plc.out.y0 = 1;
+            r3_active = true;
+            logger.add("到达右限位 X2 -> 切换方向 (Y0 左行)", "info");
+        }
+
+        // Rung 4: Stop X5 -> SET M2
+        let r4_active = false;
+        if(plc.in.x5) {
+            plc.mem.m2 = 1;
+            r4_active = true;
+            if(!prevM2) logger.add("停止按钮被按下 -> M2 置位 (等待回中)", "warn");
+        }
+
+        // Rung 5: M2 AND X6 -> RST ALL
+        let r5_active = false;
+        if(plc.mem.m2 && plc.in.x6) {
+            if(plc.out.y0 || plc.out.y1) {
+                plc.out.y0 = 0;
+                plc.out.y1 = 0;
+                plc.mem.m2 = 0;
+                r5_active = true;
+                logger.add("小车已回中位 X6 -> 系统自动停止", "info");
+            }
+        }
+
+        // Rung 6: Alarm Left (X3)
+        let r6_active = false;
+        if(plc.in.x3) {
+            plc.out.y2 = 1;
+            plc.out.y0 = 0; // 硬件急停
+            plc.out.y1 = 0;
+            r6_active = true;
+            if(!prevY2) logger.add("!! 严重故障 !! 左限位失效冲撞 X3 -> Y2 报警", "err");
+        }
+
+        // Rung 7: Alarm Right (X4)
+        let r7_active = false;
+        if(plc.in.x4) {
+            plc.out.y3 = 1;
+            plc.out.y0 = 0;
+            plc.out.y1 = 0;
+            r7_active = true;
+            if(!plc.out.y3) logger.add("!! 严重故障 !! 右限位失效冲撞 X4 -> Y3 报警", "err");
+        }
+
+        // 更新梯形图高亮状态供 Render 使用
+        render.ladderState = [r1_active, r2_active, r3_active, r4_active, r5_active, r6_active, r7_active];
+    }
+
+    // --- 5. 渲染 ---
+    function render() {
+        // 更新小车位置
+        const cartEl = document.getElementById('cart');
+        cartEl.style.left = `calc(${cart.pos}% - 35px)`; // Center anchor
+
+        // 更新传感器高亮 (物理层：不做延时，真实反应)
+        const updateSen = (id, val) => document.getElementById('sen-'+id).classList.toggle('active', val===1);
+        updateSen('x1', plc.in.x1);
+        updateSen('x2', plc.in.x2);
+        updateSen('x3', plc.in.x3);
+        updateSen('x4', plc.in.x4);
+        updateSen('x6', plc.in.x6);
+
+        // 更新 LED 面板 (视觉层：加入延时，便于观察)
+        const now = Date.now();
+        const updateLedSmart = (id, val) => {
+            const el = document.getElementById('led-'+id);
+            // 如果当前是高电平，刷新计时器
+            if(val) {
+                visualState.ledTimers[id] = now;
+            }
+            
+            // 判定逻辑：当前是高电平 OR (上次高电平的时间距离现在还不到 HOLD_TIME)
+            const shouldBeOn = val || (visualState.ledTimers[id] && (now - visualState.ledTimers[id] < visualState.HOLD_TIME));
+            
+            if(shouldBeOn) el.classList.add('on'); 
+            else el.classList.remove('on');
+        };
+
+        updateLedSmart('x0', plc.in.x0); updateLedSmart('x5', plc.in.x5);
+        updateLedSmart('x1', plc.in.x1); updateLedSmart('x2', plc.in.x2);
+        updateLedSmart('x3', plc.in.x3); updateLedSmart('x4', plc.in.x4);
+        updateLedSmart('x6', plc.in.x6);
+        updateLedSmart('y0', plc.out.y0); updateLedSmart('y1', plc.out.y1);
+        updateLedSmart('y2', plc.out.y2); 
+
+        // 报警灯
+        document.getElementById('lamp-y2').classList.toggle('on', plc.out.y2===1);
+        document.getElementById('lamp-y3').classList.toggle('on', plc.out.y3===1);
+
+        // 梯形图动画 (电流流向)
+        // Helper: highlight elements inside a rung
+        const highlightRung = (index, active, inputIds=[], coilIds=[]) => {
+            const rung = document.getElementById(`rung-${index}`);
+            if(active) {
+                rung.classList.add('active-logic');
+                rung.querySelectorAll('.wire').forEach(w => w.classList.add('on'));
+                inputIds.forEach(id => document.getElementById(id).classList.add('on'));
+                coilIds.forEach(id => document.getElementById(id).classList.add('on'));
+            } else {
+                rung.classList.remove('active-logic');
+                rung.querySelectorAll('.wire').forEach(w => w.classList.remove('on'));
+                inputIds.forEach(id => document.getElementById(id).classList.remove('on'));
+                coilIds.forEach(id => document.getElementById(id).classList.remove('on'));
+            }
+        };
+
+        // Rung 1: X0 -> Y0
+        highlightRung(1, render.ladderState[0], ['sym-x0'], ['coil-y0-set']);
+        
+        // Rung 2: X1 -> Y0 RST / Y1 SET
+        highlightRung(2, render.ladderState[1], ['sym-x1'], ['coil-y0-rst', 'coil-y1-set']);
+
+        // Rung 3: X2 -> Y1 RST / Y0 SET
+        highlightRung(3, render.ladderState[2], ['sym-x2'], ['coil-y1-rst', 'coil-y0-set2']);
+
+        // Rung 4: X5 -> M2
+        highlightRung(4, render.ladderState[3], ['sym-x5'], ['coil-m2']);
+
+        // Rung 5: M2 + X6 -> RST
+        highlightRung(5, render.ladderState[4], ['sym-m2', 'sym-x6'], ['coil-zrst', 'coil-m2-rst']);
+
+        // Rung 6: X3 -> Y2
+        highlightRung(6, plc.in.x3, ['sym-x3'], ['coil-y2']); // 直接用input状态因为是硬件级
+        
+        // Rung 7: X4 -> Y3
+        highlightRung(7, plc.in.x4, ['sym-x4'], ['coil-y3']);
+    }
+
+</script>
+</body>
+</html>

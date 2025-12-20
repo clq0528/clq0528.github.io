@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海康机器人机器视觉标定演示 | Hikvision Machine Vision Demo</title>
+    <style>
+        /* --- 1. 全局环境 --- */
+        :root {
+            --hik-red: #d71920;
+            --hik-dark: #2c2c2c;
+            --vis-green: #00ff00; /* 视觉软件常用的亮绿色 */
+            --bg-color: #f0f2f5;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: "Segoe UI", "PingFang SC", sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* --- 2. 3D 舞台 --- */
+        #stage {
+            width: 1000px;
+            height: 600px;
+            background: radial-gradient(circle at center, #ffffff 0%, #e0e0e0 100%);
+            border-radius: 12px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+            position: relative;
+            perspective: 1200px; /* 增强透视感 */
+            overflow: hidden;
+        }
+
+        /* 装饰背景网格 */
+        .grid-floor {
+            position: absolute;
+            width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: rotateX(60deg) translateZ(-200px);
+            z-index: 0;
+        }
+
+        /* --- 3. 标题与Logo --- */
+        .header {
+            position: absolute;
+            top: 30px; left: 40px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+        }
+        .brand-box {
+            width: 40px; height: 40px;
+            background: var(--hik-red);
+            color: #fff;
+            font-weight: bold;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 10px;
+            margin-right: 12px;
+            border-radius: 4px;
+        }
+        .header h1 {
+            font-size: 18px; color: #333; margin: 0; letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .header p {
+            font-size: 12px; color: #666; margin: 2px 0 0 0;
+        }
+
+        /* --- 4. 工业相机模型 (海康风格) --- */
+        .camera-group {
+            position: absolute;
+            top: 150px; left: 100px;
+            transform-style: preserve-3d;
+            transform: rotateY(20deg);
+            z-index: 50;
+            transition: all 1s ease;
+        }
+        .cam-body {
+            width: 120px; height: 120px;
+            background: var(--hik-red); /* 标志性红色 */
+            border-radius: 10px;
+            position: relative;
+            box-shadow: 10px 10px 20px rgba(0,0,0,0.2);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .cam-body::before { /* 侧面黑条装饰 */
+            content: ''; position: absolute; left: 0; top: 20px; bottom: 20px; width: 100%;
+            background: var(--hik-dark); z-index: -1;
+            transform: translateZ(-30px);
+            border-radius: 8px;
+        }
+        .cam-body::after { /* 顶部Logo区 */
+            content: 'HIKROBOT';
+            position: absolute; top: 5px; left: 10px;
+            color: rgba(255,255,255,0.8); font-size: 10px; font-weight: bold;
+        }
+        .lens-tube {
+            width: 70px; height: 70px;
+            background: #1a1a1a;
+            border-radius: 50%;
+            transform: translateZ(10px);
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+            border: 2px solid #444;
+        }
+        .lens-glass {
+            width: 50px; height: 50px;
+            background: radial-gradient(circle at 30% 30%, #8ec5fc, #1e3c72);
+            border-radius: 50%;
+            position: relative;
+        }
+        /* 镜头光泽 */
+        .lens-glass::after {
+            content: ''; position: absolute; top: 8px; left: 8px;
+            width: 10px; height: 10px; background: rgba(255,255,255,0.7);
+            border-radius: 50%;
+        }
+
+        /* --- 5. 标定板 (马赛克/棋盘格) --- */
+        .calib-board {
+            position: absolute;
+            top: 180px; right: 150px;
+            width: 240px; height: 240px;
+            background: #fff;
+            border: 8px solid #333;
+            transform-style: preserve-3d;
+            transform: rotateY(-30deg) rotateX(10deg);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            opacity: 0; /* 初始隐藏 */
+        }
+        /* 机械坐标系轴 (物理世界) */
+        .mech-axis {
+            position: absolute; bottom: -20px; left: -20px;
+            width: 100px; height: 100px;
+            transform: translateZ(20px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+        .axis-arrow { position: absolute; background: currentColor; border-radius: 2px; }
+        .m-axis-x { bottom: 0; left: 0; width: 80px; height: 4px; color: #f00; } /* X red */
+        .m-axis-y { bottom: 0; left: 0; width: 4px; height: 80px; color: #00f; } /* Y blue */
+        .axis-label {
+            position: absolute; color: #333; font-weight: bold; font-size: 14px;
+        }
+        
+        /* 棋盘格子 */
+        .tile { width: 100%; height: 100%; }
+        .tile.dark { background: #000; }
+        .tile.light { background: #fff; }
+
+        /* 特征点 (绿色十字) */
+        .feature-point {
+            position: absolute;
+            width: 6px; height: 6px;
+            background: var(--vis-green);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow: 0 0 5px var(--vis-green);
+            opacity: 0;
+        }
+
+        /* --- 6. 软件监视器 (UI界面) --- */
+        .monitor {
+            position: absolute;
+            bottom: 40px; left: 40px;
+            width: 320px; height: 220px;
+            background: #1e1e1e; /* 深色软件界面 */
+            border: 1px solid #444;
+            border-top: 20px solid #333; /* 标题栏 */
+            border-radius: 4px;
+            z-index: 60;
+            display: flex; flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(20px);
+            font-family: "Consolas", monospace;
+        }
+        .monitor-header {
+            position: absolute; top: -18px; left: 5px;
+            color: #aaa; font-size: 10px;
+        }
+        .monitor-screen {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+            display: flex; justify-content: center; align-items: center;
+        }
+        
+        /* 屏幕内的网格 (模拟图像) */
+        .screen-img {
+            width: 80%; height: 80%;
+            border: 1px dashed #555;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            background-size: 100% 100%;
+            transition: transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        /* 畸变状态 */
+        .distorted {
+            transform: scale(0.85) perspective(500px) rotateX(10deg);
+            border-radius: 50% 50% 50% 50% / 10% 10% 10% 10%; /* 桶形畸变模拟 */
+        }
+        /* 矫正状态 */
+        .rectified {
+            transform: scale(1) perspective(0) rotate(0);
+            border-radius: 0;
+            border: 2px solid var(--vis-green);
+        }
+
+        /* 坐标数据浮层 */
+        .data-overlay {
+            position: absolute; top: 10px; right: 10px;
+            text-align: right;
+            color: var(--vis-green);
+            font-size: 10px;
+            line-height: 1.4;
+            opacity: 0;
+        }
+
+        /* --- 7. 连线与光路 (SVG) --- */
+        #connection-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 40;
+        }
+        .projection-line {
+            stroke: rgba(0, 255, 0, 0.4);
+            stroke-width: 2;
+            stroke-dasharray: 10;
+            opacity: 0;
+        }
+
+        /* --- 8. 字幕条 --- */
+        .subtitle {
+            position: absolute; bottom: 80px; left: 0; width: 100%;
+            text-align: center;
+            z-index: 90;
+            pointer-events: none;
+        }
+        .sub-text {
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 16px;
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.5s, transform 0.5s;
+        }
+
+        /* --- 9. 控制按钮 --- */
+        #replay-btn {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 30px;
+            background: var(--hik-red);
+            color: #fff; border: none; border-radius: 6px;
+            font-size: 18px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(215, 25, 32, 0.4);
+            z-index: 200;
+            display: none; /* 初始隐藏 */
+        }
+        #replay-btn:hover { background: #b9151b; }
+
+    </style>
+</head>
+<body>
+
+<div id="stage">
+    <div class="grid-floor"></div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="brand-box">HIK</div>
+        <div>
+            <h1>Camera Calibration</h1>
+            <p>Image Coordinates (px) to World Coordinates (mm)</p>
+        </div>
+    </div>
+
+    <!-- Camera -->
+    <div class="camera-group" id="camera">
+        <div class="cam-body">
+            <div class="lens-tube">
+                <div class="lens-glass"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calibration Board -->
+    <div class="calib-board" id="board">
+        <!-- JS will fill tiles -->
+        <div class="mech-axis" id="mech-axis">
+            <div class="axis-arrow m-axis-x"></div>
+            <div class="axis-label" style="bottom: -5px; left: 90px;">X (mm)</div>
+            <div class="axis-arrow m-axis-y"></div>
+            <div class="axis-label" style="top: -20px; left: -5px;">Y (mm)</div>
+        </div>
+    </div>
+
+    <!-- SVG Layer for rays -->
+    <svg id="connection-layer">
+        <line id="proj-line" class="projection-line" x1="0" y1="0" x2="0" y2="0" />
+    </svg>
+
+    <!-- Monitor Software -->
+    <div class="monitor" id="monitor">
+        <div class="monitor-header">VisionMaster / Halcon HDevelop</div>
+        <div class="monitor-screen">
+            <div class="screen-img distorted" id="screen-img">
+                <!-- Grid simulated via CSS gradient or JS blocks -->
+            </div>
+            <!-- Crosshair -->
+            <div style="position:absolute; width:100%; height:1px; background:rgba(0,255,0,0.3);"></div>
+            <div style="position:absolute; width:1px; height:100%; background:rgba(0,255,0,0.3);"></div>
+        </div>
+        <div class="data-overlay" id="data-panel">
+            PX: <span id="val-u">0</span>, <span id="val-v">0</span><br>
+            <span style="color:#aaa; font-size:9px;">TRANSFORMING...</span><br>
+            MM: <span id="val-x">0.00</span>, <span id="val-y">0.00</span>
+        </div>
+    </div>
+
+    <!-- Subtitle -->
+    <div class="subtitle">
+        <div class="sub-text" id="subtitle">Demo Initialization...</div>
+    </div>
+
+    <button id="replay-btn">Replay Demo</button>
+</div>
+
+<script>
+    // --- 1. 配置与初始化 ---
+    const board = document.getElementById('board');
+    const screenImg = document.getElementById('screen-img');
+    const camera = document.getElementById('camera');
+    const monitor = document.getElementById('monitor');
+    const subtitle = document.getElementById('subtitle');
+    const projLine = document.getElementById('proj-line');
+    const mechAxis = document.getElementById('mech-axis');
+    const dataPanel = document.getElementById('data-panel');
+    const replayBtn = document.getElementById('replay-btn');
+
+    // 动态生成黑白棋盘格
+    function createGrid(container, isDarkFirst = true) {
+        container.innerHTML = '';
+        // 加上机械坐标轴
+        if(container.id === 'board') container.appendChild(mechAxis);
+        
+        for (let i = 0; i < 36; i++) {
+            const div = document.createElement('div');
+            const row = Math.floor(i / 6);
+            const col = i % 6;
+            const isDark = (row + col) % 2 === (isDarkFirst ? 0 : 1);
+            div.className = 'tile ' + (isDark ? 'dark' : 'light');
+            container.appendChild(div);
+        }
+    }
+    
+    // 初始化网格
+    createGrid(board);
+    // 屏幕里的网格使用背景图模拟，这里为了简单直接用DOM结构，加上颜色
+    createGrid(screenImg);
+
+    // --- 2. 动画工具函数 ---
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    function showSub(text, duration = 2000) {
+        subtitle.innerText = text;
+        subtitle.style.opacity = 1;
+        subtitle.style.transform = 'translateY(0)';
+        return sleep(duration).then(() => {
+            subtitle.style.opacity = 0;
+            subtitle.style.transform = 'translateY(10px)';
+            return sleep(500); // 间隔
+        });
+    }
+
+    // 获取元素相对于svg层的坐标
+    function getCenter(element) {
+        const rect = element.getBoundingClientRect();
+        const stageRect = document.getElementById('stage').getBoundingClientRect();
+        return {
+            x: rect.left + rect.width/2 - stageRect.left,
+            y: rect.top + rect.height/2 - stageRect.top
+        };
+    }
+
+    // 更新投影线
+    function updateLine() {
+        const camPos = getCenter(camera.querySelector('.lens-glass'));
+        const boardPos = getCenter(board);
+        
+        projLine.setAttribute('x1', camPos.x);
+        projLine.setAttribute('y1', camPos.y);
+        projLine.setAttribute('x2', boardPos.x);
+        projLine.setAttribute('y2', boardPos.y);
+    }
+    // 简单循环更新线的位置（因为CSS transform在动）
+    let animFrame;
+    function startLineTracking() {
+        const step = () => {
+            updateLine();
+            animFrame = requestAnimationFrame(step);
+        }
+        step();
+    }
+    function stopLineTracking() {
+        cancelAnimationFrame(animFrame);
+        projLine.style.opacity = 0;
+    }
+
+    // 数据滚动动画
+    function animateNumbers() {
+        let count = 0;
+        const interval = setInterval(() => {
+            document.getElementById('val-u').innerText = Math.floor(Math.random() * 2000);
+            document.getElementById('val-v').innerText = Math.floor(Math.random() * 1000);
+            document.getElementById('val-x').innerText = (Math.random() * 200).toFixed(2);
+            document.getElementById('val-y').innerText = (Math.random() * 200).toFixed(2);
+            count++;
+            if(count > 20) clearInterval(interval);
+        }, 100);
+    }
+
+    // --- 3. 剧本流程 ---
+    async function play() {
+        replayBtn.style.display = 'none';
+        
+        // Reset States
+        camera.style.transform = 'rotateY(20deg)';
+        board.style.opacity = 0;
+        board.style.transform = 'rotateY(-30deg) rotateX(10deg)';
+        monitor.style.opacity = 0;
+        monitor.style.transform = 'translateY(20px)';
+        screenImg.classList.remove('rectified');
+        screenImg.classList.add('distorted');
+        dataPanel.style.opacity = 0;
+        mechAxis.style.opacity = 0;
+
+        await sleep(500);
+
+        // Scene 1: 入场
+        await showSub("Step 1: 图像采集 (Image Acquisition)");
+        board.style.opacity = 1;
+        monitor.style.opacity = 1;
+        monitor.style.transform = 'translateY(0)';
+        await sleep(1000);
+
+        // Scene 2: 多角度拍摄 (模拟)
+        await showSub("相机从不同角度拍摄标定板...", 1000);
+        
+        // Pose 1
+        board.style.transform = 'rotateY(-45deg) rotateX(20deg) translateZ(50px)';
+        screenImg.style.opacity = 0.5; // 闪烁模拟拍照
+        setTimeout(()=>screenImg.style.opacity=1, 200);
+        await sleep(1200);
+
+        // Pose 2
+        board.style.transform = 'rotateY(-15deg) rotateX(-10deg) translateZ(-30px)';
+        screenImg.style.opacity = 0.5;
+        setTimeout(()=>screenImg.style.opacity=1, 200);
+        await sleep(1200);
+
+        // Return to base
+        board.style.transform = 'rotateY(-30deg) rotateX(10deg)';
+        await sleep(800);
+
+        // Scene 3: 畸变矫正
+        await showSub("Step 2: 畸变矫正 (Undistortion)");
+        
+        // 视觉效果：投影线出现，表示算法在计算
+        projLine.style.opacity = 1;
+        startLineTracking();
+        
+        await sleep(1000);
+        screenImg.classList.remove('distorted');
+        screenImg.classList.add('rectified'); // 变正
+        screenImg.style.borderColor = "#00ff00";
+        await sleep(2000);
+        stopLineTracking();
+
+        // Scene 4: 坐标系转换 (Hand-Eye / Image to World)
+        await showSub("Step 3: 坐标映射 (Coordinate Transformation)");
+        
+        // 显示机械坐标轴
+        mechAxis.style.opacity = 1;
+        await sleep(1000);
+
+        // 数据面板出现
+        dataPanel.style.opacity = 1;
+        animateNumbers(); // 数字跳动
+
+        // 最终定格：显示具体的转换结果
+        await sleep(2000);
+        document.getElementById('val-u').innerText = "1280";
+        document.getElementById('val-v').innerText = "960";
+        document.getElementById('val-x').innerText = "150.00";
+        document.getElementById('val-y').innerText = "200.00";
+        
+        await showSub("标定完成：已建立 像素 -> 机械坐标 关系");
+        
+        await sleep(1000);
+        replayBtn.style.display = 'block';
+    }
+
+    // 绑定事件
+    replayBtn.addEventListener('click', play);
+
+    // 自动开始
+    setTimeout(play, 500);
+
+</script>
+</body>
+</html>

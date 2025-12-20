@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC 伺服电机控制系统仿真 (Servo Motion Control)</title>
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --panel-bg: #2d2d2d;
+            --text-main: #e0e0e0;
+            --text-dim: #9e9e9e;
+            
+            /* 信号颜色定义 */
+            --color-pulse: #00BFFF; /* 蓝 - 脉冲 */
+            --color-dir: #00E676;   /* 绿 - 方向 */
+            --color-ena: #ffffff;   /* 白 - 使能 */
+            --color-rst: #FF5252;   /* 红 - 复位 */
+            
+            --wire-off: #4a4a4a;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+
+        /* --- 主布局 --- */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #3d3d3d;
+            position: relative;
+        }
+
+        .panel-title {
+            font-size: 16px; font-weight: bold; border-bottom: 1px solid #444; 
+            padding-bottom: 8px; margin-bottom: 15px; color: #fff;
+            display: flex; justify-content: space-between;
+        }
+
+        /* --- 左侧：物理连接与仿真 --- */
+        #sim-area {
+            position: relative;
+            height: 500px;
+            background: #252525;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        /* SVG 线路层 */
+        .svg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;
+        }
+        path.wire {
+            fill: none; stroke: var(--wire-off); stroke-width: 4;
+            stroke-linecap: round; transition: stroke 0.3s;
+        }
+        
+        /* 信号线特效 */
+        path.wire.pulse-active {
+            stroke: var(--color-pulse);
+            stroke-dasharray: 10, 10;
+            animation: dashFlow 0.5s linear infinite;
+            filter: drop-shadow(0 0 5px var(--color-pulse));
+        }
+        path.wire.dir-active {
+            stroke: var(--color-dir);
+            filter: drop-shadow(0 0 5px var(--color-dir));
+        }
+        path.wire.ena-active {
+            stroke: var(--color-ena);
+            filter: drop-shadow(0 0 5px var(--color-ena));
+        }
+        path.wire.rst-active {
+            stroke: var(--color-rst);
+            animation: flashRed 0.2s infinite alternate;
+            filter: drop-shadow(0 0 8px var(--color-rst));
+        }
+
+        @keyframes dashFlow { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+        @keyframes flashRed { from { opacity: 0.5; } to { opacity: 1; } }
+
+        /* PLC 本体 */
+        .plc-unit {
+            position: absolute; top: 20px; left: 20px; width: 140px; height: 260px;
+            background: #37474f; border: 2px solid #546e7a; border-radius: 4px; z-index: 5;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .plc-label { color: #fff; font-weight: bold; margin-top: 10px; font-size: 14px; }
+        .port-group { display: flex; flex-direction: column; width: 100%; margin-top: 20px; }
+        .port {
+            display: flex; justify-content: space-between; align-items: center; padding: 5px 10px;
+            font-family: monospace; font-size: 12px; color: #b0bec5; position: relative;
+        }
+        .led {
+            width: 8px; height: 8px; background: #263238; border-radius: 50%;
+            border: 1px solid #455a64; transition: 0.2s;
+        }
+        .led.on { background: #00E676; box-shadow: 0 0 5px #00E676; }
+
+        /* 伺服驱动器 */
+        .drive-unit {
+            position: absolute; top: 20px; right: 40px; width: 140px; height: 200px;
+            background: #424242; border: 2px solid #616161; border-radius: 4px; z-index: 5;
+            display: flex; flex-direction: column; padding: 10px;
+        }
+        .drive-screen {
+            background: #000; color: #00E676; font-family: 'Courier New', monospace;
+            padding: 5px; margin-bottom: 10px; border: 1px solid #555; text-align: right;
+        }
+
+        /* 电机 */
+        .motor-assembly {
+            position: absolute; bottom: 40px; right: 50px;
+            width: 120px; height: 120px; z-index: 5;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .motor-body {
+            width: 80px; height: 80px; background: #607d8b; border-radius: 10px;
+            border: 3px solid #455a64; position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .shaft-plate {
+            width: 60px; height: 60px; background: #cfd8dc; border-radius: 50%;
+            border: 2px dashed #546e7a; position: relative; transition: transform 0.1s linear;
+        }
+        .shaft-arrow {
+            position: absolute; top: 0; left: 28px; width: 4px; height: 30px; background: #ff5722;
+        }
+        /* 使能光环 */
+        .enable-ring {
+            position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border-radius: 12px; border: 3px solid transparent; transition: 0.3s;
+            pointer-events: none;
+        }
+        .enable-ring.active { border-color: var(--color-ena); box-shadow: 0 0 15px var(--color-ena); }
+
+        /* 标签 */
+        .comp-label {
+            background: rgba(0,0,0,0.7); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px;
+            position: absolute;
+        }
+
+        /* 控制按钮区 */
+        .controls {
+            position: absolute; bottom: 20px; left: 20px; z-index: 10;
+            display: flex; gap: 15px;
+        }
+        .btn-wrap { text-align: center; }
+        .ctrl-btn {
+            width: 60px; height: 60px; border: none; border-radius: 50%;
+            font-weight: bold; color: white; cursor: pointer;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.5); transition: 0.1s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 12px; outline: none; position: relative;
+        }
+        .ctrl-btn:active { transform: translateY(4px); box-shadow: none; }
+        
+        .btn-start { background: #4caf50; } /* 绿色 */
+        .btn-dir { background: #ff9800; }   /* 橙色 */
+        .btn-rst { background: #f44336; }   /* 红色 */
+
+        .btn-toggle.active { border: 3px solid #fff; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); transform: translateY(2px); }
+        .indicator { width: 8px; height: 8px; background: #333; border-radius: 50%; margin-top: 4px; }
+        .indicator.on { background: #00e676; box-shadow: 0 0 5px #fff; }
+
+
+        /* --- 右侧：逻辑与日志 --- */
+        .ladder-container {
+            background: #fff; border-radius: 4px; padding: 15px; height: 300px;
+            font-family: monospace; position: relative; color: #333; overflow-y: auto;
+        }
+        
+        /* 布局修复重点：让 Rung 的高度稍微增加，并调整内部布局 */
+        .rung {
+            display: flex; align-items: center; height: 60px; /* 增加高度 */
+            border-bottom: 1px dashed #eee;
+            position: relative; padding-left: 10px; opacity: 0.6; transition: opacity 0.2s;
+        }
+        .rung.active { opacity: 1; font-weight: bold; background: #f0f8ff; }
+        
+        /* 线条位置稍微下移，避开网络标题 */
+        .rung-lines {
+            position: absolute; left: 0; width: 100%; height: 2px; top: 32px; background: #333; z-index: 0;
+        }
+        
+        .element {
+            z-index: 1; background: #fff; padding: 0 5px; margin: 0 20px; border: 1px solid #ccc;
+            min-width: 60px; text-align: center; border-radius: 3px; cursor: default;
+        }
+        .element.coil { border-radius: 10px; background: #eee; }
+        
+        /* 新增：网络标题定位（左上角，不压线） */
+        .net-label {
+            position: absolute; top: 4px; left: 5px; font-size: 10px; color: #999; z-index: 2;
+        }
+
+        /* 新增：注释标签（白色背景，压线） */
+        .comment-label {
+            margin-left: 10px; font-size: 10px; color: #aaa;
+            background: #fff; /* 关键：白色背景遮挡线条 */
+            padding: 0 5px; position: relative; z-index: 2;
+            border-radius: 3px;
+        }
+        
+        /* 内部容器 */
+        .rung-inner {
+            position: relative; z-index: 2; display: flex; align-items: center; 
+            width: 100%; padding-top: 8px; /* 给上面的网络标题留出空间 */
+        }
+        
+        .active-logic { color: #d32f2f; border-color: #d32f2f; background: #ffebee; }
+        .active-logic-coil { color: #fff; background: #d32f2f; border-color: #b71c1c; }
+
+        /* 日志窗口 */
+        .log-panel {
+            margin-top: 15px; height: 180px; background: #000; color: #00ff00;
+            font-family: 'Consolas', monospace; font-size: 12px; overflow-y: auto;
+            padding: 10px; border: 1px solid #444; border-radius: 4px;
+        }
+        .log-entry { margin-bottom: 4px; border-left: 3px solid transparent; padding-left: 5px; }
+        .log-pulse { color: var(--color-pulse); }
+        .log-dir { color: var(--color-dir); }
+        .log-ena { color: var(--color-ena); }
+        .log-rst { color: var(--color-rst); }
+
+        /* --- 底部说明 --- */
+        .description-area {
+            grid-column: 1 / -1;
+            background: var(--panel-bg); padding: 20px; border-radius: 8px;
+            border: 1px solid #3d3d3d;
+        }
+        .desc-text { line-height: 1.6; font-size: 14px; color: #ccc; }
+        .highlight { color: #fff; font-weight: bold; background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; }
+        
+        /* 响应式调整 */
+        @media (max-width: 900px) {
+            .main-container { grid-template-columns: 1fr; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>PLC 伺服电机控制系统仿真</h1>
+    <div class="subtitle">上帝视角：观察 PLC 梯形图逻辑、信号线光效与机械运动的实时联动</div>
+
+    <div class="main-container">
+        <!-- 左侧：视觉仿真区 -->
+        <div class="panel">
+            <div class="panel-title">
+                <span>硬件连接与运动 (Hardware & Motion)</span>
+                <span id="sys-status" style="font-size:12px; color:#aaa;">SYSTEM READY</span>
+            </div>
+            
+            <div id="sim-area">
+                <svg class="svg-layer">
+                    <!-- Q0.0 Enable Wire -->
+                    <path id="wire-ena" class="wire" d="M 160 100 C 250 100, 350 100, 420 60" />
+                    <!-- Q0.1 Direction Wire -->
+                    <path id="wire-dir" class="wire" d="M 160 130 C 250 130, 350 130, 420 90" />
+                    <!-- Q0.2 Pulse Wire -->
+                    <path id="wire-pul" class="wire" d="M 160 160 C 250 160, 350 160, 420 120" />
+                    <!-- Q0.3 Reset Wire -->
+                    <path id="wire-rst" class="wire" d="M 160 190 C 250 190, 350 190, 420 150" />
+                </svg>
+
+                <!-- PLC UNIT -->
+                <div class="plc-unit">
+                    <div class="plc-label">S7-1200 CPU</div>
+                    <div class="port-group">
+                        <div class="port"><span>I0.0</span><div class="led" id="led-i00"></div></div>
+                        <div class="port"><span>I0.1</span><div class="led" id="led-i01"></div></div>
+                        <div class="port"><span>I0.2</span><div class="led" id="led-i02"></div></div>
+                        <div style="height:10px;"></div>
+                        <div class="port"><span>Q0.0 (EN)</span><div class="led" id="led-q00"></div></div>
+                        <div class="port"><span>Q0.1 (DIR)</span><div class="led" id="led-q01"></div></div>
+                        <div class="port"><span>Q0.2 (PUL)</span><div class="led" id="led-q02"></div></div>
+                        <div class="port"><span>Q0.3 (RST)</span><div class="led" id="led-q03"></div></div>
+                    </div>
+                </div>
+
+                <!-- SERVO DRIVE -->
+                <div class="drive-unit">
+                    <div class="comp-label" style="top:-25px; right:0;">Servo Drive</div>
+                    <div class="drive-screen" id="drive-pos">POS: 0</div>
+                    <div style="font-size:10px; color:#aaa; margin-top:5px;">
+                        <div>EN: <span id="txt-en">OFF</span></div>
+                        <div>DIR: <span id="txt-dir">CW</span></div>
+                    </div>
+                </div>
+
+                <!-- MOTOR -->
+                <div class="motor-assembly">
+                    <div class="enable-ring" id="motor-ring"></div>
+                    <div class="motor-body">
+                        <div class="shaft-plate" id="motor-shaft">
+                            <div class="shaft-arrow"></div>
+                        </div>
+                    </div>
+                    <div style="color:#fff; font-size:12px; margin-top:5px;">SERVO MOTOR</div>
+                </div>
+
+                <!-- CONTROLS -->
+                <div class="controls">
+                    <div class="btn-wrap">
+                        <button class="ctrl-btn btn-start btn-toggle" id="btn-start" onclick="toggleInput('i00')">
+                            启动<br>(I0.0)
+                        </button>
+                        <div class="indicator" id="ind-start"></div>
+                    </div>
+                    <div class="btn-wrap">
+                        <button class="ctrl-btn btn-dir btn-toggle" id="btn-dir" onclick="toggleInput('i01')">
+                            方向<br>(I0.1)
+                        </button>
+                        <div class="indicator" id="ind-dir"></div>
+                    </div>
+                    <div class="btn-wrap">
+                        <button class="ctrl-btn btn-rst" id="btn-rst" onmousedown="pressInput('i02')" onmouseup="releaseInput('i02')" onmouseleave="releaseInput('i02')">
+                            复位<br>(I0.2)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：逻辑与日志 -->
+        <div class="panel">
+            <div class="panel-title">PLC 逻辑 (Ladder Logic) & Logs</div>
+            
+            <div class="ladder-container">
+                <!-- Rung 1: Enable -->
+                <div class="rung" id="rung-1">
+                    <div class="rung-lines"></div>
+                    <!-- 使用 net-label 类名将文字移到左上角 -->
+                    <span class="net-label">Network 1</span>
+                    <div class="rung-inner">
+                        <div class="element" id="lad-i00">|| I0.0</div>
+                        <div style="flex-grow:1;"></div>
+                        <div class="element coil" id="lad-q00">( ) Q0.0</div>
+                        <!-- 使用 comment-label 类名增加白色背景遮挡线条 -->
+                        <div class="comment-label">使能</div>
+                    </div>
+                </div>
+
+                <!-- Rung 2: Direction -->
+                <div class="rung" id="rung-2">
+                    <div class="rung-lines"></div>
+                    <span class="net-label">Network 2</span>
+                    <div class="rung-inner">
+                        <div class="element" id="lad-i01">|| I0.1</div>
+                        <div style="flex-grow:1;"></div>
+                        <div class="element coil" id="lad-q01">( ) Q0.1</div>
+                        <div class="comment-label">方向</div>
+                    </div>
+                </div>
+
+                <!-- Rung 3: Pulse (Timer sim) -->
+                <div class="rung" id="rung-3">
+                    <div class="rung-lines"></div>
+                    <span class="net-label">Network 3</span>
+                    <div class="rung-inner">
+                        <div class="element" id="lad-q00-c">|| Q0.0</div>
+                        <div class="element" style="border-style:dashed;">[ PTO ]</div>
+                        <div style="flex-grow:1;"></div>
+                        <div class="element coil" id="lad-q02">( ) Q0.2</div>
+                        <div class="comment-label">脉冲</div>
+                    </div>
+                </div>
+
+                <!-- Rung 4: Reset -->
+                <div class="rung" id="rung-4">
+                    <div class="rung-lines"></div>
+                    <span class="net-label">Network 4</span>
+                    <div class="rung-inner">
+                        <div class="element" id="lad-i02">|| I0.2</div>
+                        <div style="flex-grow:1;"></div>
+                        <div class="element coil" id="lad-q03">( ) Q0.3</div>
+                        <div class="comment-label">复位</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-panel" id="log-window">
+                <div class="log-entry">--- 系统已就绪 ---</div>
+            </div>
+        </div>
+
+        <!-- 底部：详细说明 -->
+        <div class="description-area">
+            <h3>逻辑解说与剧情脚本</h3>
+            <div class="desc-text">
+                <p><span class="highlight" style="color:var(--color-ena)">使能 (Enable)</span>：按下启动按钮 (I0.0)，PLC 输出 Q0.0。白光环点亮，电机进入“励磁”状态（锁定/准备运行）。梯形图 Network 1 导通。</p>
+                <p><span class="highlight" style="color:var(--color-dir)">方向 (Direction)</span>：切换方向开关 (I0.1)，控制 Q0.1 的高低电平。绿色箭头切换指向，决定电机是顺时针(CW)还是逆时针(CCW)旋转。梯形图 Network 2 联动。</p>
+                <p><span class="highlight" style="color:var(--color-pulse)">脉冲 (Pulse)</span>：只有在使能 (Q0.0) 为真时，PLC 内部脉冲发生器 (PTO) 才会工作，向 Q0.2 发送周期性方波。蓝光点沿线跳动，电机随之步进旋转。</p>
+                <p><span class="highlight" style="color:var(--color-rst)">复位 (Reset)</span>：按下复位按钮 (I0.2)，触发 Q0.3。红色信号闪烁，驱动器内部计数器清零，电机快速回零（动画中表现为位置重置）。</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. 系统状态模型 ---
+    const plc = {
+        inputs: { i00: false, i01: false, i02: false },
+        outputs: { q00: false, q01: false, q02: false, q03: false },
+        motor: {
+            pos: 0,
+            angle: 0,
+            speed: 5, // degrees per tick
+            running: false
+        }
+    };
+
+    // 音效模拟 (Audio Context)
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    
+    function beep(freq, duration, type='sine') {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // --- 2. 交互控制 ---
+    function toggleInput(id) {
+        plc.inputs[id] = !plc.inputs[id];
+        updateUI();
+        if(id === 'i00' && plc.inputs[id]) addLog("I0.0 闭合 -> 启动使能", "log-ena");
+        if(id === 'i00' && !plc.inputs[id]) addLog("I0.0 断开 -> 停止使能", "log-ena");
+        if(id === 'i01') addLog(`I0.1 切换 -> 方向 ${plc.inputs.i01 ? '逆时针' : '顺时针'}`, "log-dir");
+    }
+
+    function pressInput(id) {
+        plc.inputs[id] = true;
+        updateUI();
+        if(id === 'i02') {
+            addLog("I0.2 按下 -> 强制复位", "log-rst");
+            beep(800, 0.1, 'square');
+        }
+    }
+
+    function releaseInput(id) {
+        plc.inputs[id] = false;
+        updateUI();
+    }
+
+    // --- 3. PLC 扫描周期 (Logic Loop) ---
+    // 模拟 PLC 的循环扫描： 输入采样 -> 逻辑执行 -> 输出刷新
+    setInterval(() => {
+        runPLCLogic();
+        renderSystem();
+    }, 50); // 20Hz 刷新率
+
+    function runPLCLogic() {
+        // Network 1: Enable
+        plc.outputs.q00 = plc.inputs.i00;
+
+        // Network 2: Direction
+        plc.outputs.q01 = plc.inputs.i01;
+
+        // Network 3: Pulse Gen (Simplified PTO)
+        // 只有在使能且未复位时产生脉冲
+        if (plc.outputs.q00 && !plc.outputs.q03) {
+            // 模拟脉冲翻转 (50ms 周期的一半)
+            // 在真实动画中，我们通过 class 控制视觉，这里只需标记状态
+            plc.outputs.q02 = true; 
+            plc.motor.running = true;
+        } else {
+            plc.outputs.q02 = false;
+            plc.motor.running = false;
+        }
+
+        // Network 4: Reset
+        plc.outputs.q03 = plc.inputs.i02;
+
+        // 伺服电机内部逻辑
+        if (plc.outputs.q03) {
+            // 复位逻辑
+            plc.motor.pos = 0;
+            plc.motor.angle = 0;
+        } else if (plc.motor.running) {
+            // 运动逻辑
+            const direction = plc.outputs.q01 ? -1 : 1; // 0=CW(加), 1=CCW(减)
+            const step = plc.motor.speed * direction;
+            plc.motor.angle += step;
+            plc.motor.pos += direction; // 模拟脉冲计数
+        }
+    }
+
+    // --- 4. 渲染系统 (View) ---
+    function updateUI() {
+        // 更新按钮状态样式
+        document.getElementById('btn-start').classList.toggle('active', plc.inputs.i00);
+        document.getElementById('ind-start').classList.toggle('on', plc.inputs.i00);
+        
+        document.getElementById('btn-dir').classList.toggle('active', plc.inputs.i01);
+        document.getElementById('ind-dir').classList.toggle('on', plc.inputs.i01);
+
+        document.getElementById('btn-rst').style.transform = plc.inputs.i02 ? "translateY(4px)" : "";
+        
+        // 立即触发一次渲染防止延迟
+        renderSystem();
+    }
+
+    function renderSystem() {
+        // 1. PLC LEDs
+        toggleLED('led-i00', plc.inputs.i00);
+        toggleLED('led-i01', plc.inputs.i01);
+        toggleLED('led-i02', plc.inputs.i02);
+        toggleLED('led-q00', plc.outputs.q00);
+        toggleLED('led-q01', plc.outputs.q01);
+        // Q0.2 脉冲灯效：运行时闪烁
+        const pulseLed = document.getElementById('led-q02');
+        if(plc.outputs.q02) {
+            // 使用时间戳模拟快速闪烁
+            pulseLed.className = (Date.now() % 200 < 100) ? 'led on' : 'led';
+        } else {
+            pulseLed.className = 'led';
+        }
+        toggleLED('led-q03', plc.outputs.q03);
+
+        // 2. 信号线特效 (SVG Wires)
+        setWireState('wire-ena', plc.outputs.q00, 'ena-active');
+        setWireState('wire-dir', plc.outputs.q01, 'dir-active'); // 方向有电即亮绿
+        setWireState('wire-pul', plc.outputs.q02, 'pulse-active');
+        setWireState('wire-rst', plc.outputs.q03, 'rst-active');
+
+        // 3. 伺服驱动器与电机
+        const motorRing = document.getElementById('motor-ring');
+        if (plc.outputs.q00) motorRing.classList.add('active');
+        else motorRing.classList.remove('active');
+
+        document.getElementById('txt-en').innerText = plc.outputs.q00 ? "ON" : "OFF";
+        document.getElementById('txt-en').style.color = plc.outputs.q00 ? "#fff" : "#555";
+        
+        document.getElementById('txt-dir').innerText = plc.outputs.q01 ? "CCW" : "CW";
+        document.getElementById('txt-dir').style.color = plc.outputs.q01 ? varCSS('--color-dir') : "#aaa";
+
+        document.getElementById('drive-pos').innerText = "POS: " + plc.motor.pos;
+
+        // 电机旋转
+        document.getElementById('motor-shaft').style.transform = `rotate(${plc.motor.angle}deg)`;
+
+        // 4. 梯形图状态联动
+        updateLadderView();
+    }
+
+    function updateLadderView() {
+        // Rung 1
+        highlightRung('rung-1', plc.outputs.q00);
+        highlightElement('lad-i00', plc.inputs.i00);
+        highlightCoil('lad-q00', plc.outputs.q00);
+
+        // Rung 2
+        highlightRung('rung-2', true); // 方向这一行总是通电检测，只是输出不同
+        highlightElement('lad-i01', plc.inputs.i01);
+        highlightCoil('lad-q01', plc.outputs.q01);
+
+        // Rung 3
+        highlightRung('rung-3', plc.outputs.q02);
+        highlightElement('lad-q00-c', plc.outputs.q00); // 前置条件
+        highlightCoil('lad-q02', plc.outputs.q02);
+
+        // Rung 4
+        highlightRung('rung-4', plc.outputs.q03);
+        highlightElement('lad-i02', plc.inputs.i02);
+        highlightCoil('lad-q03', plc.outputs.q03);
+    }
+
+    // --- 辅助函数 ---
+    function toggleLED(id, state) {
+        document.getElementById(id).className = state ? 'led on' : 'led';
+    }
+
+    function setWireState(id, active, activeClass) {
+        const el = document.getElementById(id);
+        if(active) el.classList.add(activeClass);
+        else el.classList.remove(activeClass);
+    }
+
+    function highlightRung(id, active) {
+        const el = document.getElementById(id);
+        if(active) el.classList.add('active'); else el.classList.remove('active');
+    }
+
+    function highlightElement(id, active) {
+        const el = document.getElementById(id);
+        if(active) el.classList.add('active-logic'); else el.classList.remove('active-logic');
+    }
+    
+    function highlightCoil(id, active) {
+        const el = document.getElementById(id);
+        if(active) el.classList.add('active-logic-coil'); else el.classList.remove('active-logic-coil');
+    }
+
+    function varCSS(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function addLog(msg, typeClass) {
+        const win = document.getElementById('log-window');
+        const div = document.createElement('div');
+        div.className = 'log-entry ' + (typeClass || '');
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        div.innerText = `[${time}] ${msg}`;
+        win.appendChild(div);
+        win.scrollTop = win.scrollHeight;
+    }
+
+</script>
+</body>
+</html>
