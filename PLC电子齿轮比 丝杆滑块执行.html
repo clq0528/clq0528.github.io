@@ -1,0 +1,681 @@
+<!--
+电子齿轮比是伺服系统的“虚拟变速器”，通过脉冲比例调节平衡精度、速度与扭矩。其核心价值在于​​以软件柔性替代硬件刚性​​，为精密控制提供高适应性解决方案。设置时需严格匹配机械参数，并遵循 1:1 优先原则，避免系统性能折损。
+我是一名动画设计师，也是一名PLC工程师，麻烦生成一段车间运用电子齿轮比的动画，要求动画中要有伺服驱动器，PLC数据的传输，要能看到数据流或称信号的变化，还要有执行机构，点击鼠标能控制数据的流程，以HTML的格式输出
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电子齿轮比工作原理交互演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #2c3e50);
+            color: #ecf0f1;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            width: 100%;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #bdc3c7;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .control-panel {
+            flex: 1;
+            background: rgba(30, 40, 70, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            min-width: 320px;
+        }
+        
+        .animation-area {
+            flex: 2;
+            background: rgba(20, 30, 60, 0.8);
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            min-height: 600px;
+        }
+        
+        .panel-title {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: #3498db;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .parameter-control {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #34495e;
+        }
+        
+        .parameter-title {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #1abc9c;
+            display: flex;
+            align-items: center;
+        }
+        
+        .parameter-title i {
+            margin-right: 10px;
+            font-size: 1.5rem;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .slider-label {
+            width: 200px;
+            font-size: 1.1rem;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 8px;
+            background: #2c3e50;
+            border-radius: 10px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(52, 152, 219, 0.8);
+        }
+        
+        .value-display {
+            width: 80px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #f1c40f;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        
+        .formula-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.3rem;
+            text-align: center;
+            border: 1px solid #3498db;
+        }
+        
+        .formula {
+            color: #e74c3c;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .btn {
+            background: linear-gradient(to right, #3498db, #2c3e50);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 8px 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(to right, #2980b9, #1a2a40);
+        }
+        
+        .btn i {
+            margin-right: 10px;
+            font-size: 1.3rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(to right, #2ecc71, #27ae60);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(to right, #27ae60, #219653);
+        }
+        
+        .btn-reset {
+            background: linear-gradient(to right, #e74c3c, #c0392b);
+        }
+        
+        .btn-reset:hover {
+            background: linear-gradient(to right, #c0392b, #a93226);
+        }
+        
+        .pulse {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #f1c40f;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #f1c40f;
+        }
+        
+        .data-stream {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            font-size: 1.1rem;
+            color: #f1c40f;
+        }
+        
+        .plc, .driver, .motor, .mechanism {
+            position: absolute;
+            background: rgba(52, 152, 219, 0.2);
+            border: 2px solid #3498db;
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(52, 152, 219, 0.4);
+        }
+        
+        .plc {
+            width: 180px;
+            height: 120px;
+            top: 50px;
+            left: 50px;
+        }
+        
+        .driver {
+            width: 200px;
+            height: 140px;
+            top: 50px;
+            right: 50px;
+        }
+        
+        .motor {
+            width: 160px;
+            height: 160px;
+            bottom: 200px;
+            left: 100px;
+            border-radius: 50%;
+        }
+        
+        .mechanism {
+            width: 300px;
+            height: 100px;
+            bottom: 50px;
+            right: 100px;
+        }
+        
+        .gear-ratio-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5rem;
+            color: #2ecc71;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #2ecc71;
+        }
+        
+        .shaft {
+            position: absolute;
+            background: linear-gradient(to right, #7f8c8d, #95a5a6, #7f8c8d);
+            height: 10px;
+            border-radius: 5px;
+        }
+        
+        .ball {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #e74c3c;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #e74c3c;
+        }
+        
+        .feedback-line {
+            position: absolute;
+            height: 2px;
+            background: rgba(46, 204, 113, 0.6);
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.8);
+        }
+        
+        .explanation {
+            margin-top: 30px;
+            max-width: 1000px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        .explanation h2 {
+            color: #3498db;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .explanation p {
+            line-height: 1.8;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .highlight {
+            color: #f1c40f;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 1100px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .control-panel, .animation-area {
+                width: 100%;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="header">
+        <h1>电子齿轮比工作原理交互演示</h1>
+        <p class="subtitle">本动画展示了伺服系统中电子齿轮比的工作原理，包含PLC控制器、伺服驱动器、电机和执行机构的完整信号流</p>
+    </div>
+    
+    <div class="container">
+        <div class="control-panel">
+            <h2 class="panel-title"><i class="fas fa-sliders-h"></i> 控制面板</h2>
+            
+            <div class="parameter-control">
+                <h3 class="parameter-title"><i class="fas fa-cogs"></i> 电子齿轮比参数</h3>
+                
+                <div class="slider-container">
+                    <div class="slider-label">分子 (N)：</div>
+                    <input type="range" id="numerator" min="1" max="100" value="50">
+                    <div class="value-display" id="numerator-value">50</div>
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">分母 (M)：</div>
+                    <input type="range" id="denominator" min="1" max="100" value="50">
+                    <div class="value-display" id="denominator-value">50</div>
+                </div>
+                
+                <div class="formula-box">
+                    <div>电子齿轮比 = N / M</div>
+                    <div class="formula" id="ratio-display">1 : 1</div>
+                    <div>输入脉冲 × (N/M) = 输出脉冲</div>
+                </div>
+            </div>
+            
+            <div class="parameter-control">
+                <h3 class="parameter-title"><i class="fas fa-tachometer-alt"></i> PLC脉冲设置</h3>
+                
+                <div class="slider-container">
+                    <div class="slider-label">脉冲频率 (Hz)：</div>
+                    <input type="range" id="pulse-frequency" min="1" max="100" value="50">
+                    <div class="value-display" id="frequency-value">50</div>
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">脉冲数量：</div>
+                    <input type="range" id="pulse-count" min="10" max="500" value="100">
+                    <div class="value-display" id="count-value">100</div>
+                </div>
+            </div>
+            
+            <div class="parameter-control">
+                <h3 class="parameter-title"><i class="fas fa-industry"></i> 机械参数</h3>
+                
+                <div class="slider-container">
+                    <div class="slider-label">丝杠螺距 (mm)：</div>
+                    <input type="range" id="screw-pitch" min="1" max="20" value="5">
+                    <div class="value-display" id="pitch-value">5</div>
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">减速比：</div>
+                    <input type="range" id="reduction-ratio" min="1" max="10" value="1">
+                    <div class="value-display" id="ratio-value">1</div>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" id="start-btn">
+                <i class="fas fa-play"></i> 启动系统
+            </button>
+            
+            <button class="btn" id="step-btn">
+                <i class="fas fa-football-ball"></i> 单步执行
+            </button>
+            
+            <button class="btn btn-reset" id="reset-btn">
+                <i class="fas fa-redo"></i> 重置系统
+            </button>
+        </div>
+        
+        <div class="animation-area" id="animation-area">
+            <div class="plc">
+                <i class="fas fa-microchip fa-3x"></i>
+                <h3>PLC控制器</h3>
+                <p>脉冲输出</p>
+            </div>
+            
+            <div class="driver">
+                <i class="fas fa-server fa-3x"></i>
+                <h3>伺服驱动器</h3>
+                <p>电子齿轮比处理</p>
+            </div>
+            
+            <div class="motor">
+                <i class="fas fa-cogs fa-3x"></i>
+                <h3>伺服电机</h3>
+                <p>执行动作</p>
+            </div>
+            
+            <div class="mechanism">
+                <i class="fas fa-cogs fa-3x"></i>
+                <h3>执行机构</h3>
+                <p>丝杠滑块系统</p>
+            </div>
+            
+            <div class="gear-ratio-display">
+                电子齿轮比: <span id="ratio-display-main">1:1</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="explanation">
+        <h2>电子齿轮比工作原理</h2>
+        <p><span class="highlight">电子齿轮比</span>是伺服系统中的虚拟传动参数，通过软件设定调节电机编码器反馈脉冲与上位机指令脉冲之间的比例关系（N/M）。</p>
+        
+        <p>➤ <span class="highlight">核心作用</span>：匹配电机旋转与机械运动的最小单位量（脉冲当量），无需改变机械结构即可实现精确控制。</p>
+        
+        <p>➤ <span class="highlight">放大功能</span>：当 N > M 时，电机旋转角度或位移量被放大（例如指令1个脉冲使机械移动2mm）。</p>
+        
+        <p>➤ <span class="highlight">缩小功能</span>：当 N < M 时，旋转或位移量被缩小（例如指令100个脉冲使电机转1/10圈）。</p>
+        
+        <p>➤ <span class="highlight">计算公式</span>：电子齿轮比 = 编码器分辨率 / (脉冲当量 × 丝杠螺距 × 减速比)</p>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const numeratorSlider = document.getElementById('numerator');
+        const denominatorSlider = document.getElementById('denominator');
+        const numeratorValue = document.getElementById('numerator-value');
+        const denominatorValue = document.getElementById('denominator-value');
+        const ratioDisplay = document.getElementById('ratio-display');
+        const ratioDisplayMain = document.getElementById('ratio-display-main');
+        const startBtn = document.getElementById('start-btn');
+        const stepBtn = document.getElementById('step-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const animationArea = document.getElementById('animation-area');
+        
+        // 当前动画状态
+        let animationRunning = false;
+        let animationId = null;
+        let currentStep = 0;
+        
+        // 初始化值显示
+        updateRatioDisplay();
+        
+        // 事件监听器
+        numeratorSlider.addEventListener('input', updateRatioDisplay);
+        denominatorSlider.addEventListener('input', updateRatioDisplay);
+        startBtn.addEventListener('click', toggleAnimation);
+        stepBtn.addEventListener('click', stepAnimation);
+        resetBtn.addEventListener('click', resetAnimation);
+        
+        // 更新齿轮比显示
+        function updateRatioDisplay() {
+            const n = parseInt(numeratorSlider.value);
+            const m = parseInt(denominatorSlider.value);
+            const ratio = n / m;
+            
+            numeratorValue.textContent = n;
+            denominatorValue.textContent = m;
+            
+            // 简化比例显示
+            const gcd = greatestCommonDivisor(n, m);
+            const simpleN = n / gcd;
+            const simpleM = m / gcd;
+            
+            ratioDisplay.innerHTML = `${simpleN} : ${simpleM}`;
+            ratioDisplayMain.innerHTML = `${simpleN}:${simpleM}`;
+        }
+        
+        // 计算最大公约数
+        function greatestCommonDivisor(a, b) {
+            return b ? greatestCommonDivisor(b, a % b) : a;
+        }
+        
+        // 切换动画状态
+        function toggleAnimation() {
+            if (animationRunning) {
+                stopAnimation();
+                startBtn.innerHTML = '<i class="fas fa-play"></i> 启动系统';
+            } else {
+                startAnimation();
+                startBtn.innerHTML = '<i class="fas fa-pause"></i> 暂停系统';
+            }
+            animationRunning = !animationRunning;
+        }
+        
+        // 开始动画
+        function startAnimation() {
+            if (animationId) return;
+            
+            resetAnimation();
+            
+            animationId = setInterval(() => {
+                currentStep++;
+                runAnimationStep();
+                
+                // 当完成一个周期后重新开始
+                if (currentStep >= 100) {
+                    currentStep = 0;
+                }
+            }, 50);
+        }
+        
+        // 停止动画
+        function stopAnimation() {
+            if (animationId) {
+                clearInterval(animationId);
+                animationId = null;
+            }
+        }
+        
+        // 单步执行
+        function stepAnimation() {
+            if (animationRunning) return;
+            
+            currentStep = (currentStep + 1) % 100;
+            runAnimationStep();
+        }
+        
+        // 重置动画
+        function resetAnimation() {
+            stopAnimation();
+            currentStep = 0;
+            clearAnimationArea();
+            animationRunning = false;
+            startBtn.innerHTML = '<i class="fas fa-play"></i> 启动系统';
+        }
+        
+        // 执行动画步骤
+        function runAnimationStep() {
+            clearAnimationArea();
+            
+            const n = parseInt(numeratorSlider.value);
+            const m = parseInt(denominatorSlider.value);
+            const ratio = n / m;
+            
+            // 创建PLC到驱动器的脉冲
+            createPulseFlow(50, 100, 250, 100, '#3498db', currentStep);
+            
+            // 创建驱动器到电机的脉冲（应用齿轮比）
+            const scaledStep = Math.floor(currentStep * ratio);
+            createPulseFlow(250, 100, 200, 300, '#2ecc71', scaledStep);
+            
+            // 创建电机反馈信号
+            createFeedbackFlow(200, 300, 100, 100, '#e74c3c', scaledStep);
+            
+            // 创建执行机构
+            createMechanismMovement(scaledStep);
+        }
+        
+        // 创建脉冲流
+        function createPulseFlow(startX, startY, endX, endY, color, step) {
+            const pulseCount = 10;
+            const segmentLength = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2)) / pulseCount;
+            const angle = Math.atan2(endY - startY, endX - startX);
+            
+            for (let i = 0; i < pulseCount; i++) {
+                const pulse = document.createElement('div');
+                pulse.className = 'pulse';
+                
+                // 计算脉冲位置（带偏移量）
+                const offset = (step % 10) * segmentLength / 10;
+                const pos = i * segmentLength + offset;
+                
+                const x = startX + Math.cos(angle) * pos;
+                const y = startY + Math.sin(angle) * pos;
+                
+                pulse.style.left = `${x}px`;
+                pulse.style.top = `${y}px`;
+                pulse.style.background = color;
+                pulse.style.boxShadow = `0 0 15px ${color}`;
+                
+                animationArea.appendChild(pulse);
+            }
+            
+            // 添加数据流标签
+            const dataStream = document.createElement('div');
+            dataStream.className = 'data-stream';
+            dataStream.textContent = `PLC脉冲: ${step}`;
+            dataStream.style.left = `${(startX + endX) / 2}px`;
+            dataStream.style.top = `${(startY + endY) / 2 - 20}px`;
+            animationArea.appendChild(dataStream);
+        }
+        
+        // 创建反馈流
+        function createFeedbackFlow(startX, startY, endX, endY, color, step) {
+            const line = document.createElement('div');
+            line.className = 'feedback-line';
+            
+            // 计算线的位置和角度
+            const length = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+            const angle = Math.atan2(endY - startY, endX - startX);
+            
+            line.style.width = `${length}px`;
+            line.style.left = `${startX}px`;
+            line.style.top = `${startY}px`;
+            line.style.transform = `rotate(${angle}rad)`;
+            line.style.transformOrigin = '0 0';
+            
+            animationArea.appendChild(line);
+            
+            // 添加数据流标签
+            const dataStream = document.createElement('div');
+            dataStream.className = 'data-stream';
+            dataStream.textContent = `编码器反馈: ${step}`;
+            dataStream.style.left = `${(startX + endX) / 2}px`;
+            dataStream.style.top = `${(startY + endY) / 2 + 20}px`;
+            animationArea.appendChild(dataStream);
+        }
+        
+        // 创建执行机构运动
+        function createMechanismMovement(step) {
+            // 创建丝杠轴
+            const shaft = document.createElement('div');
+            shaft.className = 'shaft';
+            shaft.style.width = '300px';
+            shaft.style.bottom = '80px';
+            shaft.style.right = '50px';
+            animationArea.appendChild(shaft);
+            
+            // 创建滑块
+            const ball = document.createElement('div');
+            ball.className = 'ball';
+            ball.style.bottom = '65px';
+            ball.style.right = `${50 + step}px`;
+            animationArea.appendChild(ball);
+        }
+        
+        // 清除动画区域
+        function clearAnimationArea() {
+            const elements = animationArea.querySelectorAll('.pulse, .data-stream, .feedback-line, .shaft, .ball');
+            elements.forEach(el => el.remove());
+        }
+    </script>
+</body>
+</html>
