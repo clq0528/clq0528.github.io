@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>星三角自动切换控制演示</title>
+    <style>
+        :root {
+            --km-on: #fffde7;
+            --km-off: #eee;
+            --border-active: #ff9800;
+            --l1: #ff4d4d; --l2: #2ecc71; --l3: #3498db;
+            --copper: linear-gradient(to bottom, #f39c12, #d35400);
+        }
+        body { font-family: "Microsoft YaHei", sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        
+        /* 接触器面板 */
+        .contactor-group { display: flex; gap: 20px; margin-bottom: 30px; background: #333; padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+        .contactor { width: 120px; height: 160px; background: var(--km-off); border: 4px solid #7f8c8d; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-around; transition: 0.3s; position: relative; }
+        .contactor.active { background: var(--km-on); border-color: var(--border-active); box-shadow: 0 0 20px var(--border-active); }
+        .km-name { font-weight: bold; font-size: 22px; color: #c0392b; }
+        .km-label { font-size: 13px; color: #555; text-align: center; font-weight: bold; }
+
+        /* 电机接线盒 */
+        .motor-box { 
+            width: 380px; height: 280px; background: #2c3e50; border: 10px solid #1a252f; border-radius: 20px; 
+            position: relative; margin-top: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+        .terminal { 
+            width: 48px; height: 48px; background: radial-gradient(circle, #f1c40f, #f39c12); 
+            border-radius: 50%; position: absolute; z-index: 10;
+            display: flex; justify-content: center; align-items: center; font-weight: bold; color: white; 
+            border: 3px solid #34495e; box-shadow: 0 4px 0 #8b4513; text-shadow: 1px 1px 2px black;
+        }
+        /* 接线柱坐标 */
+        .t-w2 { top: 45px; left: 55px; }  .t-u2 { top: 45px; left: 166px; } .t-v2 { top: 45px; left: 277px; }
+        .t-u1 { top: 170px; left: 55px; } .t-v1 { top: 170px; left: 166px; } .t-w1 { top: 170px; left: 277px; }
+
+        /* 连接片效果 */
+        .bridge { position: absolute; background: var(--copper); z-index: 5; opacity: 0; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        
+        /* 横星线 */
+        .star-line { height: 16px; width: 270px; top: 61px; left: 55px; }
+        
+        /* 竖角线 */
+        .delta-line { width: 16px; height: 175px; top: 45px; }
+        .d1 { left: 71px; } .d2 { left: 182px; } .d3 { left: 293px; }
+
+        /* 三根火线 */
+        .power-wire { position: absolute; width: 8px; height: 80px; bottom: -80px; transition: 0.3s; opacity: 0.5; }
+        .l1 { left: 75px; background: var(--l1); }
+        .l2 { left: 186px; background: var(--l2); }
+        .l3 { left: 297px; background: var(--l3); }
+        .active-wire { opacity: 1; box-shadow: 0 0 15px currentColor; }
+        .wire-label { position: absolute; bottom: -105px; font-weight: bold; font-size: 14px; }
+
+        /* 动画触发 */
+        .mode-star .star-line { opacity: 1; transform: scaleX(1); }
+        .mode-delta .delta-line { opacity: 1; transform: scaleY(1); }
+
+        .controls { margin-top: 110px; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; border: none; border-radius: 8px; margin: 0 10px; font-weight: bold; transition: 0.2s; box-shadow: 0 4px 0 #95a5a6; }
+        .btn-start { background: #e67e22; color: white; box-shadow: 0 4px 0 #d35400; }
+        .btn-start:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #d35400; }
+        .btn-start:active { transform: translateY(2px); box-shadow: 0 0 0 #d35400; }
+        
+        .status-box { margin-top: 20px; font-size: 20px; font-weight: bold; color: #2c3e50; min-height: 30px; }
+
+        /* 逻辑说明文字区域 */
+        .logic-desc {
+            margin-top: 40px; width: 600px; background: white; padding: 25px; border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-left: 8px solid #e67e22;
+        }
+        .logic-desc h3 { margin-top: 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .logic-desc p { line-height: 1.8; color: #444; margin: 10px 0; }
+        .step-num { font-weight: bold; color: #e67e22; font-size: 18px; margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2 style="color:#333">星三角降压启动：自动控制实物逻辑</h2>
+
+    <!-- 接触器面板 -->
+    <div class="contactor-group">
+        <div class="contactor" id="kmMain">
+            <span class="km-name">KM1</span>
+            <span class="km-label">主接触器<br>(进电源)</span>
+        </div>
+        <div class="contactor" id="kmStar">
+            <span class="km-name">KMy</span>
+            <span class="km-label">星形接触器<br>(实现横星)</span>
+        </div>
+        <div class="contactor" id="kmDelta">
+            <span class="km-name">KMΔ</span>
+            <span class="km-label">角形接触器<br>(实现竖角)</span>
+        </div>
+    </div>
+
+    <!-- 电机接线盒 -->
+    <div class="motor-box" id="motorBox">
+        <!-- 上排接线柱 -->
+        <div class="terminal t-w2">W2</div>
+        <div class="terminal t-u2">U2</div>
+        <div class="terminal t-v2">V2</div>
+        <!-- 下排接线柱 -->
+        <div class="terminal t-u1">U1</div>
+        <div class="terminal t-v1">V1</div>
+        <div class="terminal t-w1">W1</div>
+
+        <!-- 铜片/线路 -->
+        <div class="bridge star-line"></div>
+        <div class="bridge delta-line d1"></div>
+        <div class="bridge delta-line d2"></div>
+        <div class="bridge delta-line d3"></div>
+
+        <!-- 三根火线 -->
+        <div class="power-wire l1" id="wireL1"></div><span class="wire-label" style="left:70px; color:var(--l1)">L1</span>
+        <div class="power-wire l2" id="wireL2"></div><span class="wire-label" style="left:180px; color:var(--l2)">L2</span>
+        <div class="power-wire l3" id="wireL3"></div><span class="wire-label" style="left:290px; color:var(--l3)">L3</span>
+    </div>
+
+    <div class="status-box" id="statusText">等待指令...</div>
+
+    <div class="controls">
+        <button class="btn-start" id="startBtn" onclick="startLogic()">按下启动按钮</button>
+        <button onclick="location.reload()">系统复位</button>
+    </div>
+
+    <!-- 自动控制逻辑文字说明 -->
+    <div class="logic-desc">
+        <h3>自动控制逻辑：</h3>
+        <p><span class="step-num">1.</span> <strong>按下启动：</strong>主接触器(KM1)和星形接触器(KMy)同时吸合。电机内部形成“横星”连接，电压降至220V。</p>
+        <p><span class="step-num">2.</span> <strong>延时中：</strong>时间继电器开始计时（模拟3-5秒）。</p>
+        <p><span class="step-num">3.</span> <strong>自动切换：</strong>时间到，KMy断开，经过极短时间，KMΔ吸合。电机内部变为“竖角”连接，电压升至380V。</p>
+    </div>
+
+    <script>
+        function startLogic() {
+            const btn = document.getElementById('startBtn');
+            const status = document.getElementById('statusText');
+            const motorBox = document.getElementById('motorBox');
+            const km1 = document.getElementById('kmMain');
+            const kmy = document.getElementById('kmStar');
+            const kmd = document.getElementById('kmDelta');
+            const wires = [document.getElementById('wireL1'), document.getElementById('wireL2'), document.getElementById('wireL3')];
+
+            btn.disabled = true;
+
+            // --- 步骤 1: 星形启动 ---
+            status.innerHTML = "⚡ 正在启动：KM1 + KMy 吸合 (星形降压)";
+            status.style.color = "#e67e22";
+            km1.classList.add('active');
+            kmy.classList.add('active');
+            motorBox.classList.add('mode-star');
+            wires.forEach(w => w.classList.add('active-wire'));
+
+            // --- 步骤 2: 模拟延时 ---
+            setTimeout(() => {
+                status.innerHTML = "⏳ 时间继电器到时，正在断开 KMy...";
+                kmy.classList.remove('active');
+                motorBox.classList.remove('mode-star');
+
+                // --- 步骤 3: 自动切换到角形 ---
+                setTimeout(() => {
+                    status.innerHTML = "✅ 切换完成：KM1 + KMΔ 吸合 (角形全压运行)";
+                    status.style.color = "#27ae60";
+                    kmd.classList.add('active');
+                    motorBox.classList.add('mode-delta');
+                }, 600); // 这里的0.6秒模拟电气互锁的死区时间
+
+            }, 3000); // 3秒模拟启动时间
+        }
+    </script>
+</body>
+</html>
