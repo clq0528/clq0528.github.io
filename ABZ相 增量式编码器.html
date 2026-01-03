@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>ABZ增量式编码器原理演示</title>
+    <style>
+        body { background: #1a1a1a; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; overflow-x: hidden; }
+        canvas { background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); border-radius: 8px; margin: 10px; }
+        .controls { background: #333; padding: 15px; border-radius: 8px; display: flex; gap: 20px; align-items: center; margin-bottom: 10px; }
+        .info { max-width: 800px; line-height: 1.6; padding: 10px; background: #2a2a2a; border-left: 4px solid #4CAF50; }
+        .status { font-family: monospace; font-size: 1.2em; color: #00ff00; }
+        button { padding: 8px 16px; cursor: pointer; background: #4CAF50; border: none; color: white; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #45a049; }
+        .val-box { display: inline-block; width: 120px; }
+        label { font-size: 0.9em; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <h2>ABZ相 增量式编码器 互动演示</h2>
+
+    <div class="controls">
+        <div>
+            <button onclick="toggleDirection()">切换方向</button>
+            <button onclick="startHoming()">执行：寻找原点(Z相)</button>
+        </div>
+        <div class="status">
+            <span class="val-box">角度: <span id="angleVal">0</span>°</span>
+            <span class="val-box">脉冲(AB): <span id="countVal">0</span></span>
+            <span class="val-box">原点状态: <span id="homeStatus">未知</span></span>
+        </div>
+    </div>
+
+    <!-- 顶部：编码器物理结构可视化 -->
+    <canvas id="diskCanvas" width="800" height="300"></canvas>
+    
+    <!-- 底部：示波器信号可视化 -->
+    <canvas id="waveCanvas" width="800" height="200"></canvas>
+
+    <div class="info">
+        <strong>为什么叫“高级版”？</strong><br>
+        1. <b>AB相：</b> 负责数步子。注意看波形，A先变高还是B先变高决定了方向。<br>
+        2. <b>Z相：</b> 负责找家。点击“寻找原点”，模拟器会持续旋转直到撞见黄色的Z脉冲，此时将计数器归零。这样即使掉电，只要转一圈就能找回精确的0位。
+    </div>
+
+<script>
+    const diskCanvas = document.getElementById('diskCanvas');
+    const dctx = diskCanvas.getContext('2d');
+    const waveCanvas = document.getElementById('waveCanvas');
+    const wctx = waveCanvas.getContext('2d');
+
+    let angle = 0;
+    let speed = 0.5; // 旋转速度
+    let direction = 1; // 1: CW, -1: CCW
+    let count = 0;
+    let isHoming = false;
+    let isHomeSet = false;
+
+    // 模拟信号历史记录
+    let history = [];
+    const maxHistory = 200;
+
+    function toggleDirection() {
+        direction *= -1;
+    }
+
+    function startHoming() {
+        isHoming = true;
+        isHomeSet = false;
+        speed = 0.3; // 慢速找原点
+        document.getElementById('homeStatus').innerText = "寻找中...";
+        document.getElementById('homeStatus').style.color = "#ffaa00";
+    }
+
+    function drawDisk() {
+        const cx = 200, cy = 150, r = 100;
+        dctx.clearRect(0, 0, diskCanvas.width, diskCanvas.height);
+
+        // 1. 绘制编码器码盘
+        dctx.save();
+        dctx.translate(cx, cy);
+        dctx.rotate(angle * Math.PI / 180);
+
+        // 码盘背景
+        dctx.beginPath();
+        dctx.arc(0, 0, r, 0, Math.PI * 2);
+        dctx.fillStyle = "#444";
+        dctx.fill();
+        dctx.strokeStyle = "#666";
+        dctx.stroke();
+
+        // 绘制AB相刻度（外圈）
+        for (let i = 0; i < 360; i += 15) {
+            dctx.beginPath();
+            dctx.arc(0, 0, r - 10, i * Math.PI / 180, (i + 7.5) * Math.PI / 180);
+            dctx.lineWidth = 15;
+            dctx.strokeStyle = "#bbb";
+            dctx.stroke();
+        }
+
+        // 绘制Z相刻度（内圈只有一个点）
+        dctx.beginPath();
+        dctx.arc(0, 0, r - 35, 0, 5 * Math.PI / 180);
+        dctx.lineWidth = 10;
+        dctx.strokeStyle = "#ffcc00"; // Z相黄色
+        dctx.stroke();
+
+        dctx.restore();
+
+        // 2. 绘制传感器（固定位置）
+        const sensorX = cx + r - 10;
+        // A相传感器
+        dctx.fillStyle = getSignalA() ? "#00ff00" : "#330000";
+        dctx.fillRect(sensorX, cy - 20, 20, 10);
+        dctx.fillStyle = "#fff"; dctx.fillText("A", sensorX + 25, cy - 12);
+
+        // B相传感器 (偏移一点实现正交)
+        dctx.fillStyle = getSignalB() ? "#00ffff" : "#003333";
+        dctx.fillRect(sensorX, cy, 20, 10);
+        dctx.fillStyle = "#fff"; dctx.fillText("B", sensorX + 25, cy + 8);
+
+        // Z相传感器 (靠内圈)
+        dctx.fillStyle = getSignalZ() ? "#ffcc00" : "#332200";
+        dctx.fillRect(cx + r - 35, cy + 40, 10, 20);
+        dctx.fillStyle = "#fff"; dctx.fillText("Z (Index)", cx + r - 20, cy + 55);
+
+        // 3. 示例场景：机械臂/滑块
+        drawMachine(cx + 350, cy);
+    }
+
+    function drawMachine(x, y) {
+        // 绘制一个直线导轨，展示增量位置
+        dctx.fillStyle = "#333";
+        dctx.fillRect(x, y + 50, 200, 10);
+        
+        // 滑块位置由计数器决定
+        let sliderPos = (count % 1000) / 5;
+        dctx.fillStyle = isHomeSet ? "#4CAF50" : "#ff4444";
+        dctx.fillRect(x + 100 + sliderPos, y + 30, 30, 20);
+        dctx.fillStyle = "#fff";
+        dctx.fillText(isHomeSet ? "已校准位置" : "位置不准(需找原点)", x + 80, y + 20);
+    }
+
+    function getSignalA() {
+        return Math.sin(angle * Math.PI / 7.5) > 0;
+    }
+
+    function getSignalB() {
+        // 相位偏移 90度 (PI/2)
+        return Math.sin(angle * Math.PI / 7.5 + (Math.PI / 2)) > 0;
+    }
+
+    function getSignalZ() {
+        // 只有在 0-5 度之间触发
+        let normAngle = (angle % 360 + 360) % 360;
+        return normAngle > 0 && normAngle < 5;
+    }
+
+    function update() {
+        let oldA = getSignalA();
+        let oldB = getSignalB();
+
+        angle += speed * direction;
+        
+        let newA = getSignalA();
+        let newB = getSignalB();
+        let sigZ = getSignalZ();
+
+        // 简单的增量计数逻辑 (四倍频简化版)
+        if (oldA !== newA || oldB !== newB) {
+            count += direction;
+        }
+
+        // Z相逻辑：检测到Z脉冲
+        if (sigZ) {
+            if (isHoming) {
+                isHoming = false;
+                isHomeSet = true;
+                count = 0; // 核心：发现Z相，立即将计数器归零！
+                document.getElementById('homeStatus').innerText = "已复位";
+                document.getElementById('homeStatus').style.color = "#00ff00";
+            }
+        }
+
+        // 更新历史数据用于波形
+        history.push({ a: newA, b: newB, z: sigZ });
+        if (history.length > maxHistory) history.shift();
+
+        document.getElementById('angleVal').innerText = Math.floor(angle % 360);
+        document.getElementById('countVal').innerText = count;
+    }
+
+    function drawWave() {
+        wctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+        const step = waveCanvas.width / maxHistory;
+
+        function drawPath(label, color, offset, key) {
+            wctx.strokeStyle = color;
+            wctx.lineWidth = 2;
+            wctx.beginPath();
+            for (let i = 0; i < history.length; i++) {
+                let val = history[i][key] ? 30 : 0;
+                let x = i * step;
+                let y = offset - val;
+                if (i === 0) wctx.moveTo(x, y);
+                else wctx.lineTo(x, y);
+            }
+            wctx.stroke();
+            wctx.fillStyle = color;
+            wctx.fillText(label, 10, offset - 35);
+        }
+
+        drawPath("A相 (Phase A)", "#00ff00", 50, "a");
+        drawPath("B相 (Phase B)", "#00ffff", 100, "b");
+        drawPath("Z相 (Index/Zero)", "#ffcc00", 150, "z");
+    }
+
+    function loop() {
+        update();
+        drawDisk();
+        drawWave();
+        requestAnimationFrame(loop);
+    }
+
+    loop();
+</script>
+</body>
+</html>
