@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>上帝视角：动态路径规划与决策流系统</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0c;
+            --panel-bg: rgba(20, 20, 25, 0.9);
+            --accent-blue: #00e5ff;
+            --accent-green: #39ff14;
+            --accent-red: #ff3131;
+            --accent-yellow: #ffdf00;
+            --text-gray: #a0a0a0;
+            --terminal-green: #00ff41;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: #fff;
+            font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧主展示区 */
+        #viewport {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border-right: 1px solid #333;
+        }
+
+        /* 右侧上帝视角瀑布流面板 */
+        #god-panel {
+            width: 400px;
+            background: var(--panel-bg);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        .panel-header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-blue);
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--accent-blue);
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #log-container {
+            flex: 1;
+            overflow-y: hidden;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--terminal-green);
+            position: relative;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            opacity: 0;
+            transform: translateX(20px);
+            animation: slideIn 0.3s forwards;
+            border-left: 2px solid #222;
+            padding-left: 8px;
+        }
+
+        @keyframes slideIn {
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-entry.process { color: var(--text-gray); }
+        .log-entry.success { color: var(--accent-green); font-weight: bold; }
+        .log-entry.evaluate { color: var(--accent-yellow); }
+
+        /* 画布样式 */
+        canvas {
+            background: #111;
+            box-shadow: 0 0 50px rgba(0, 229, 255, 0.1);
+            border: 1px solid #333;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .btn:hover {
+            background: var(--accent-blue);
+            color: #000;
+            box-shadow: 0 0 15px var(--accent-blue);
+        }
+
+        /* 状态指示器 */
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .hud div { margin: 5px 0; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div id="viewport">
+        <div class="hud">
+            <div style="color:var(--accent-blue)">系统状态: <span id="status-text">待命</span></div>
+            <div style="color:var(--accent-green)">起点 [0, 0]</div>
+            <div style="color:var(--accent-red)">终点 [24, 39]</div>
+            <div style="color:var(--accent-yellow)">算法: A-Star (启发式搜索)</div>
+        </div>
+
+        <canvas id="mainCanvas"></canvas>
+
+        <div class="controls">
+            <button class="btn" onclick="world.reset()">重构环境</button>
+            <button class="btn" onclick="world.startPathfinding()">启动规划</button>
+        </div>
+    </div>
+
+    <div id="god-panel">
+        <div class="panel-header">
+            <span>决策流数据 (GOD_VIEW)</span>
+            <span id="fps-counter" style="font-size: 10px; color: #666;">FPS: 60</span>
+        </div>
+        <div id="log-container">
+            <!-- 瀑布流内容由JS填充 -->
+        </div>
+    </div>
+
+<script>
+/**
+ * 路径规划算法 - 上帝视角思路解析：
+ * 
+ * 1. 启发式函数 (Heuristic): 
+ *    我们使用曼哈顿距离。上帝视角的核心在于提前预判每个节点到终点的“可能性”。
+ * 
+ * 2. 代价计算 (F = G + H):
+ *    G = 从起点到当前节点的实际代价。
+ *    H = 从当前节点到终点的预计代价。
+ *    F = 综合评估。算法总是优先展开 F 值最小的节点。
+ * 
+ * 3. 瀑布流逻辑:
+ *    每当算法访问一个节点，都会将该节点的坐标、FGH权重、比较逻辑实时推送到侧边栏。
+ */
+
+const CONFIG = {
+    ROWS: 25,
+    COLS: 40,
+    CELL_SIZE: 20,
+    ANIMATION_SPEED: 10, // 毫秒
+    WALL_PROBABILITY: 0.3
+};
+
+class Node {
+    constructor(r, c) {
+        this.r = r;
+        this.c = c;
+        this.g = Infinity; // 实际代价
+        this.h = 0;        // 启发代价
+        this.f = Infinity; // 总代价
+        this.isWall = Math.random() < CONFIG.WALL_PROBABILITY;
+        this.neighbors = [];
+        this.previous = null;
+    }
+
+    // 绘制节点
+    draw(ctx, color, isPath = false) {
+        const x = this.c * CONFIG.CELL_SIZE;
+        const y = this.r * CONFIG.CELL_SIZE;
+
+        ctx.fillStyle = color;
+        if (isPath) {
+            // 路径绘制稍微小一点，形成线条感
+            ctx.beginPath();
+            ctx.arc(x + CONFIG.CELL_SIZE/2, y + CONFIG.CELL_SIZE/2, 4, 0, Math.PI*2);
+            ctx.fill();
+        } else {
+            ctx.fillRect(x + 1, y + 1, CONFIG.CELL_SIZE - 2, CONFIG.CELL_SIZE - 2);
+        }
+    }
+}
+
+class PathfindingWorld {
+    constructor() {
+        this.canvas = document.getElementById('mainCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.logContainer = document.getElementById('log-container');
+        this.statusText = document.getElementById('status-text');
+        
+        this.canvas.width = CONFIG.COLS * CONFIG.CELL_SIZE;
+        this.canvas.height = CONFIG.ROWS * CONFIG.CELL_SIZE;
+        
+        this.reset();
+    }
+
+    reset() {
+        this.grid = [];
+        this.openSet = [];
+        this.closedSet = [];
+        this.path = [];
+        this.isRunning = false;
+        this.statusText.innerText = "环境就绪";
+        this.logContainer.innerHTML = "";
+
+        // 初始化网格
+        for (let r = 0; r < CONFIG.ROWS; r++) {
+            this.grid[r] = [];
+            for (let c = 0; c < CONFIG.COLS; c++) {
+                this.grid[r][c] = new Node(r, c);
+            }
+        }
+
+        this.start = this.grid[0][0];
+        this.end = this.grid[CONFIG.ROWS - 1][CONFIG.COLS - 1];
+        this.start.isWall = false;
+        this.end.isWall = false;
+
+        // 绑定邻居关系
+        for (let r = 0; r < CONFIG.ROWS; r++) {
+            for (let c = 0; c < CONFIG.COLS; c++) {
+                const node = this.grid[r][c];
+                if (r > 0) node.neighbors.push(this.grid[r-1][c]);
+                if (r < CONFIG.ROWS - 1) node.neighbors.push(this.grid[r+1][c]);
+                if (c > 0) node.neighbors.push(this.grid[r][c-1]);
+                if (c < CONFIG.COLS - 1) node.neighbors.push(this.grid[r][c+1]);
+            }
+        }
+
+        this.addLog(">>> 环境重构完成...", "process");
+        this.render();
+    }
+
+    addLog(msg, type) {
+        const div = document.createElement('div');
+        div.className = `log-entry ${type}`;
+        div.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
+        this.logContainer.prepend(div);
+        
+        // 限制日志条数防止卡顿
+        if (this.logContainer.childNodes.length > 50) {
+            this.logContainer.removeChild(this.logContainer.lastChild);
+        }
+    }
+
+    render() {
+        this.ctx.fillStyle = "#0a0a0c";
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // 绘制基础网格
+        for (let r = 0; r < CONFIG.ROWS; r++) {
+            for (let c = 0; c < CONFIG.COLS; c++) {
+                const node = this.grid[r][c];
+                if (node.isWall) node.draw(this.ctx, "#333");
+                else node.draw(this.ctx, "#111");
+            }
+        }
+
+        // 绘制探索过的集合
+        this.closedSet.forEach(n => n.draw(this.ctx, "rgba(255, 49, 49, 0.1)"));
+        this.openSet.forEach(n => n.draw(this.ctx, "rgba(255, 223, 0, 0.2)"));
+
+        // 绘制路径 (动态蚂蚁线效果)
+        if (this.path.length > 0) {
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeStyle = "#00e5ff";
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(this.path[0].c * CONFIG.CELL_SIZE + 10, this.path[0].r * CONFIG.CELL_SIZE + 10);
+            for(let i=1; i<this.path.length; i++) {
+                this.ctx.lineTo(this.path[i].c * CONFIG.CELL_SIZE + 10, this.path[i].r * CONFIG.CELL_SIZE + 10);
+                this.path[i].draw(this.ctx, "#00e5ff", true);
+            }
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+
+        // 绘制起终点
+        this.start.draw(this.ctx, "#39ff14");
+        this.end.draw(this.ctx, "#ff3131");
+    }
+
+    // A* 核心算法逻辑
+    async startPathfinding() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.statusText.innerText = "正在计算路径...";
+        this.addLog(">>> 启动 A* 决策引擎...", "success");
+
+        this.start.g = 0;
+        this.start.f = this.heuristic(this.start, this.end);
+        this.openSet = [this.start];
+
+        while (this.openSet.length > 0) {
+            // 找到F值最小的节点
+            let currentIdx = 0;
+            for (let i = 0; i < this.openSet.length; i++) {
+                if (this.openSet[i].f < this.openSet[currentIdx].f) {
+                    currentIdx = i;
+                }
+            }
+            let current = this.openSet[currentIdx];
+
+            // 成功抵达
+            if (current === this.end) {
+                this.addLog(">>> 目标锁定！正在回溯最优路径...", "success");
+                this.statusText.innerText = "路径已找到";
+                await this.reconstructPath(current);
+                this.isRunning = false;
+                return;
+            }
+
+            this.openSet.splice(currentIdx, 1);
+            this.closedSet.push(current);
+
+            this.addLog(`评估节点 [${current.r}, ${current.c}] F:${current.f.toFixed(1)}`, "evaluate");
+
+            for (let neighbor of current.neighbors) {
+                if (this.closedSet.includes(neighbor) || neighbor.isWall) continue;
+
+                let tentativeG = current.g + 1;
+
+                if (tentativeG < neighbor.g) {
+                    neighbor.previous = current;
+                    neighbor.g = tentativeG;
+                    neighbor.h = this.heuristic(neighbor, this.end);
+                    neighbor.f = neighbor.g + neighbor.h;
+
+                    if (!this.openSet.includes(neighbor)) {
+                        this.openSet.push(neighbor);
+                        this.addLog(`  -> 发现新节点 [${neighbor.r}, ${neighbor.c}] H:${neighbor.h}`, "process");
+                    }
+                }
+            }
+
+            this.render();
+            await new Promise(r => setTimeout(r, CONFIG.ANIMATION_SPEED));
+        }
+
+        this.addLog(">>> 错误: 目标不可达，路径被阻断", "evaluate");
+        this.statusText.innerText = "无可行路径";
+        this.isRunning = false;
+    }
+
+    heuristic(a, b) {
+        // 曼哈顿距离
+        return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+    }
+
+    async reconstructPath(current) {
+        this.path = [];
+        let temp = current;
+        while(temp) {
+            this.path.unshift(temp);
+            temp = temp.previous;
+            this.render();
+            await new Promise(r => setTimeout(r, 30)); // 路径回溯动画
+        }
+    }
+}
+
+// 启动系统
+const world = new PathfindingWorld();
+
+// 简单的FPS计数器
+let lastTime = performance.now();
+function updateFPS() {
+    const now = performance.now();
+    const fps = Math.round(1000 / (now - lastTime));
+    lastTime = now;
+    document.getElementById('fps-counter').innerText = `FPS: ${fps}`;
+    requestAnimationFrame(updateFPS);
+}
+updateFPS();
+</script>
+</body>
+</html>
