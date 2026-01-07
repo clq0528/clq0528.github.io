@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>工业视觉点胶自动化流水线仿真</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #ui-panel {
+            position: absolute; top: 20px; right: 20px;
+            width: 280px; background: rgba(0, 20, 40, 0.85);
+            color: #00f2ff; border: 1px solid #005a9e;
+            padding: 15px; border-radius: 8px; pointer-events: none;
+            box-shadow: 0 0 20px rgba(0, 120, 212, 0.5);
+        }
+        .status-item { margin-bottom: 10px; font-size: 13px; }
+        .status-value { color: #fff; font-weight: bold; float: right; }
+        .title { font-size: 18px; margin-bottom: 15px; text-align: center; border-bottom: 1px solid #005a9e; padding-bottom: 10px; }
+        #log-container {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 400px; height: 120px; background: rgba(0,0,0,0.6);
+            color: #aaa; font-size: 11px; padding: 10px; overflow: hidden;
+            border-left: 3px solid #0078d4;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui-panel">
+    <div class="title">控制系统监控面板</div>
+    <div class="status-item">相机滑台位置: <span id="stat-cam-pos" class="status-value">0.00 mm</span></div>
+    <div class="status-item">传送带速度: <span id="stat-belt-speed" class="status-value">0.45 m/s</span></div>
+    <div class="status-item">视觉识别结果: <span id="stat-vision-res" class="status-value">等待中...</span></div>
+    <div class="status-item">点胶头坐标: <span id="stat-disp-pos" class="status-value">X:0 Y:0 Z:0</span></div>
+    <div class="status-item">已处理总数: <span id="stat-total" class="status-value">0</span></div>
+</div>
+
+<div id="log-container">
+    [系统初始化中...]<br>
+    [视觉模型加载完成...]<br>
+    [通讯链路已建立...]<br>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://esm.sh/three@0.152.0",
+            "three/addons/": "https://esm.sh/three@0.152.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    /**
+     * 全局配置与状态
+     */
+    const CONFIG = {
+        BELT_WIDTH: 60,
+        BELT_LENGTH: 600,
+        SPAWN_INTERVAL: 2500, // 每2.5秒生成一个物体
+        VISION_X: -100,       // 相机检测位 X 坐标
+        DISPENSE_X: 150,      // 点胶执行位 X 坐标
+        BELT_SPEED: 0.8       // 传送带移动速度
+    };
+
+    let scene, camera, renderer, controls;
+    let clock = new THREE.Clock();
+
+    // 机械组件
+    let rail, camSlider, camHead, fovCone;
+    let dispenserHead, dispenserAxisZ, dispenserAxisY;
+    let conveyorBelt;
+
+    // 数据管理
+    let workpieces = []; // 传送带上的工件
+    let dispenseQueue = []; // 待处理数据队列
+    let totalProcessed = 0;
+
+    /**
+     * 1. 场景初始化
+     */
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        scene.fog = new THREE.Fog(0x0a0a0a, 500, 1000);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.set(300, 250, 400);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        const ambLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(100, 200, 100);
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x00f2ff, 1, 300);
+        pointLight.position.set(-100, 100, 50);
+        scene.add(pointLight);
+
+        createEnvironment();
+        createConveyor();
+        createCameraSliderSystem();
+        createDispensingRobot();
+
+        window.addEventListener('resize', onWindowResize);
+        
+        // 启动工件生成器
+        setInterval(spawnWorkpiece, CONFIG.SPAWN_INTERVAL);
+
+        animate();
+    }
+
+    /**
+     * 2. 建模：环境、地面、导轨
+     */
+    function createEnvironment() {
+        // 地面
+        const grid = new THREE.GridHelper(1000, 50, 0x222222, 0x111111);
+        scene.add(grid);
+
+        // 车间地板
+        const floorGeo = new THREE.PlaneGeometry(1000, 1000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -2;
+        scene.add(floor);
+    }
+
+    /**
+     * 3. 建模：传送带系统
+     */
+    function createConveyor() {
+        const beltGeo = new THREE.BoxGeometry(CONFIG.BELT_LENGTH, 4, CONFIG.BELT_WIDTH);
+        const beltMat = new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.5 });
+        conveyorBelt = new THREE.Mesh(beltGeo, beltMat);
+        conveyorBelt.position.y = 10;
+        scene.add(conveyorBelt);
+
+        // 传送带支架
+        for(let i = -2; i <= 2; i++) {
+            const legGeo = new THREE.BoxGeometry(10, 10, CONFIG.BELT_WIDTH + 10);
+            const leg = new THREE.Mesh(legGeo, beltMat);
+            leg.position.set(i * 120, 5, 0);
+            scene.add(leg);
+        }
+    }
+
+    /**
+     * 4. 建模：相机滑台系统 (视觉侧)
+     */
+    function createCameraSliderSystem() {
+        const systemGroup = new THREE.Group();
+        systemGroup.position.set(CONFIG.VISION_X, 80, 0);
+
+        // 横梁导轨
+        const railGeo = new THREE.BoxGeometry(10, 6, 150);
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 1 });
+        rail = new THREE.Mesh(railGeo, railMat);
+        systemGroup.add(rail);
+
+        // 相机滑块
+        camSlider = new THREE.Group();
+        const sliderBase = new THREE.Mesh(new THREE.BoxGeometry(15, 12, 25), new THREE.MeshStandardMaterial({color: 0x333333}));
+        camSlider.add(sliderBase);
+
+        // 相机主体
+        camHead = new THREE.Group();
+        camHead.position.y = -15;
+        const camBody = new THREE.Mesh(new THREE.BoxGeometry(16, 16, 12), new THREE.MeshStandardMaterial({color: 0x005a9e}));
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 10), new THREE.MeshStandardMaterial({color: 0x000}));
+        lens.rotation.x = Math.PI/2;
+        lens.position.y = -10;
+        camHead.add(camBody);
+        camHead.add(lens);
+
+        // FOV 视野锥
+        const coneGeo = new THREE.ConeGeometry(30, 65, 4, 1, true);
+        const coneMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.1, wireframe: true });
+        fovCone = new THREE.Mesh(coneGeo, coneMat);
+        fovCone.position.y = -45;
+        fovCone.rotation.y = Math.PI / 4;
+        camHead.add(fovCone);
+
+        camSlider.add(camHead);
+        systemGroup.add(camSlider);
+        scene.add(systemGroup);
+    }
+
+    /**
+     * 5. 建模：三轴点胶机器人 (执行侧)
+     */
+    function createDispensingRobot() {
+        const robotGroup = new THREE.Group();
+        robotGroup.position.set(CONFIG.DISPENSE_X, 50, 0);
+
+        // 门架结构
+        const frameGeo = new THREE.BoxGeometry(10, 150, 10);
+        const frameL = new THREE.Mesh(frameGeo, new THREE.MeshStandardMaterial({color: 0x444444}));
+        frameL.position.z = -70;
+        const frameR = frameL.clone();
+        frameR.position.z = 70;
+        robotGroup.add(frameL);
+        robotGroup.add(frameR);
+
+        // Y轴横梁
+        const beamY = new THREE.Mesh(new THREE.BoxGeometry(15, 10, 150), new THREE.MeshStandardMaterial({color: 0x555555}));
+        beamY.position.y = 70;
+        robotGroup.add(beamY);
+
+        // Y轴滑台
+        dispenserAxisY = new THREE.Group();
+        dispenserAxisY.position.y = 70;
+        
+        // Z轴机构
+        dispenserAxisZ = new THREE.Group();
+        const zRail = new THREE.Mesh(new THREE.BoxGeometry(10, 60, 10), new THREE.MeshStandardMaterial({color: 0x222222}));
+        zRail.position.y = -20;
+        dispenserAxisZ.add(zRail);
+
+        // 点胶头
+        const headGeo = new THREE.CylinderGeometry(1, 1, 25);
+        dispenserHead = new THREE.Mesh(headGeo, new THREE.MeshStandardMaterial({color: 0xfff000}));
+        dispenserHead.position.y = -50;
+        dispenserAxisZ.add(dispenserHead);
+
+        // 点胶针头
+        const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 10), new THREE.MeshStandardMaterial({color: 0xffffff}));
+        needle.position.y = -15;
+        dispenserHead.add(needle);
+
+        dispenserAxisY.add(dispenserAxisZ);
+        robotGroup.add(dispenserAxisY);
+        scene.add(robotGroup);
+    }
+
+    /**
+     * 6. 逻辑：生成工件 (模拟PCB板)
+     */
+    function spawnWorkpiece() {
+        const group = new THREE.Group();
+        
+        // PCB 基板
+        const pcb = new THREE.Mesh(
+            new THREE.BoxGeometry(40, 3, 40),
+            new THREE.MeshStandardMaterial({ color: 0x104010, roughness: 0.5 })
+        );
+        group.add(pcb);
+
+        // 模拟电子元器件
+        for(let i = 0; i < 3; i++) {
+            const chip = new THREE.Mesh(
+                new THREE.BoxGeometry(8, 4, 8),
+                new THREE.MeshStandardMaterial({ color: 0x222222 })
+            );
+            chip.position.set(Math.random()*20-10, 3, Math.random()*20-10);
+            group.add(chip);
+        }
+
+        group.position.set(-CONFIG.BELT_LENGTH/2, 15, 0);
+        
+        const workpieceData = {
+            mesh: group,
+            status: 'NEW', // NEW -> DETECTED -> PROCESSING -> DONE
+            detectedZ: 0,
+            hasDispensed: false
+        };
+
+        scene.add(group);
+        workpieces.push(workpieceData);
+    }
+
+    /**
+     * 7. 核心动画与逻辑循环
+     */
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+        const time = clock.getElapsedTime();
+
+        // (1) 模拟相机滑台的小幅往复运动 (寻找工件)
+        if (camSlider) {
+            const targetZ = Math.sin(time * 0.5) * 40;
+            camSlider.position.z += (targetZ - camSlider.position.z) * 0.1;
+            document.getElementById('stat-cam-pos').innerText = camSlider.position.z.toFixed(2) + " mm";
+        }
+
+        // (2) 处理工件移动与视觉逻辑
+        for (let i = workpieces.length - 1; i >= 0; i--) {
+            let wp = workpieces[i];
+            wp.mesh.position.x += CONFIG.BELT_SPEED;
+
+            // 视觉检测逻辑
+            if (wp.status === 'NEW' && wp.mesh.position.x >= CONFIG.VISION_X - 5 && wp.mesh.position.x <= CONFIG.VISION_X + 5) {
+                // 计算工件中心相对于相机滑台的偏差
+                const offsetZ = wp.mesh.position.z - camSlider.position.z;
+                if (Math.abs(offsetZ) < 25) {
+                    triggerVision(wp);
+                }
+            }
+
+            // 点胶执行触发逻辑
+            if (wp.status === 'DETECTED' && wp.mesh.position.x >= CONFIG.DISPENSE_X) {
+                wp.status = 'PROCESSING';
+                executeDispense(wp);
+            }
+
+            // 销毁移出屏幕的工件
+            if (wp.mesh.position.x > CONFIG.BELT_LENGTH/2 + 50) {
+                scene.remove(wp.mesh);
+                workpieces.splice(i, 1);
+            }
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /**
+     * 8. 模拟视觉识别处理
+     */
+    function triggerVision(wp) {
+        wp.status = 'DETECTED';
+        wp.detectedZ = wp.mesh.position.z; // 记录视觉捕获时的坐标
+        
+        // UI反馈
+        fovCone.material.color.setHex(0x00ffff);
+        document.getElementById('stat-vision-res').innerText = "OK (Z:" + wp.detectedZ.toFixed(1) + ")";
+        addLog(`[视觉] 捕获工件 ID: ${wp.mesh.uuid.slice(0,4)}, 坐标偏移已计算`);
+
+        setTimeout(() => {
+            fovCone.material.color.setHex(0x00ff00);
+        }, 300);
+    }
+
+    /**
+     * 9. 模拟点胶机动作 (XYZ联动)
+     */
+    function executeDispense(wp) {
+        const startY = dispenserAxisY.position.z;
+        const targetZ = wp.detectedZ;
+        
+        // A. 移动 Y 轴到指定坐标
+        let step = 0;
+        const dispenseAnim = () => {
+            step += 0.05;
+            
+            // Y 轴平滑横移
+            dispenserAxisY.position.z += (targetZ - dispenserAxisY.position.z) * 0.15;
+            
+            // Z 轴下探
+            if (Math.abs(dispenserAxisY.position.z - targetZ) < 1) {
+                const zAmp = Math.sin(step * 2); 
+                dispenserAxisZ.position.y = -Math.max(0, zAmp) * 15; // 下探动作
+                
+                if (zAmp > 0.9 && !wp.hasDispensed) {
+                    createGlueDot(wp);
+                    wp.hasDispensed = true;
+                }
+            }
+
+            document.getElementById('stat-disp-pos').innerText = 
+                `X:${CONFIG.DISPENSE_X} Y:${dispenserAxisY.position.z.toFixed(1)} Z:${dispenserAxisZ.position.y.toFixed(1)}`;
+
+            if (step < Math.PI) {
+                requestAnimationFrame(dispenseAnim);
+            } else {
+                // 复位动作
+                dispenserAxisZ.position.y = 0;
+                wp.status = 'DONE';
+                totalProcessed++;
+                document.getElementById('stat-total').innerText = totalProcessed;
+                addLog(`[点胶] 工件处理完成，点胶压力 0.4MPa`);
+            }
+        };
+        dispenseAnim();
+    }
+
+    /**
+     * 辅助：在工件上生成点胶视觉效果
+     */
+    function createGlueDot(wp) {
+        const dotGeo = new THREE.SphereGeometry(2, 8, 8);
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xfff000 });
+        const dot = new THREE.Mesh(dotGeo, dotMat);
+        dot.position.set(0, 3, 0);
+        wp.mesh.add(dot);
+    }
+
+    /**
+     * 辅助：添加日志
+     */
+    function addLog(msg) {
+        const container = document.getElementById('log-container');
+        const now = new Date().toLocaleTimeString();
+        container.innerHTML += `[${now}] ${msg}<br>`;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // 启动系统
+    init();
+</script>
+</body>
+</html>
