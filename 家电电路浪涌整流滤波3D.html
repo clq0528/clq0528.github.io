@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家电电源板全流程 3D 交互模拟系统</title>
+    <style>
+        :root {
+            --primary-blue: #228be6;
+            --surge-orange: #e67e22;
+            --bg-dark: #121212;
+            --panel-bg: rgba(20, 20, 20, 0.9);
+        }
+
+        body { margin: 0; background: var(--bg-dark); color: white; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; overflow: hidden; }
+        #container { width: 100vw; height: 100vh; }
+
+        /* 顶部导航栏 */
+        #nav-tabs {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            display: flex;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            border-bottom: 2px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 18px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: #777;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .tab-btn.active {
+            color: var(--primary-blue);
+            border-bottom: 4px solid var(--primary-blue);
+            background: rgba(34, 139, 230, 0.15);
+        }
+
+        /* 左侧交互面板 */
+        #ui-panel {
+            position: absolute;
+            top: 85px;
+            left: 25px;
+            width: 360px;
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 6px solid var(--primary-blue);
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .status-card {
+            background: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+
+        .indicator-dot {
+            display: inline-block;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: #00ff00;
+            margin-right: 10px;
+            box-shadow: 0 0 12px #00ff00;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--surge-orange);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 15px;
+            margin-bottom: 12px;
+            transition: transform 0.2s, background 0.3s;
+        }
+        .action-btn:hover { background: #d35400; transform: translateY(-2px); }
+        .action-btn:active { transform: translateY(0); }
+        .action-btn:disabled { background: #444; cursor: not-allowed; }
+
+        #reset-btn { background: #5c5c5c; display: none; }
+
+        /* 示波器样式 */
+        #wave-container {
+            margin-top: 15px;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+            height: 100px;
+            position: relative;
+        }
+        #wave-canvas { width: 100%; height: 100%; }
+        .wave-label {
+            position: absolute;
+            top: 5px; left: 10px;
+            font-size: 10px; color: #00ff00;
+            text-transform: uppercase;
+        }
+
+        /* 3D 标签系统 */
+        .label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 5px 12px;
+            border: 1px solid var(--primary-blue);
+            border-radius: 20px;
+            font-size: 13px;
+            pointer-events: none;
+            color: #fff;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+            z-index: 50;
+        }
+
+        .desc-text { font-size: 14px; line-height: 1.6; color: #bbb; }
+        .desc-text b { color: #fff; display: block; margin-bottom: 4px; border-bottom: 1px solid #444; }
+
+        /* 滚动条美化 */
+        #ui-panel::-webkit-scrollbar { width: 6px; }
+        #ui-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<nav id="nav-tabs">
+    <button id="btn-emc" class="tab-btn active" onclick="switchTab('emc')">模块 1: EMC 浪涌保护电路</button>
+    <button id="btn-rect" class="tab-btn" onclick="switchTab('rectify')">模块 2: 桥式整流滤波电路</button>
+</nav>
+
+<div id="ui-panel">
+    <!-- 模块 1 UI -->
+    <div id="ui-emc">
+        <h2 style="margin-top:0;">AC 输入保护区</h2>
+        <div class="status-card">
+            <span id="emc-indicator" class="indicator-dot"></span>
+            状态: <span id="emc-status">正常运行 (220V AC)</span>
+        </div>
+        <button class="action-btn" id="surge-btn" onclick="runSurgeLogic()">模拟电网浪涌冲击</button>
+        <button class="action-btn" id="reset-btn" onclick="repairCircuit()">维修并更换保险丝</button>
+        <div class="desc-text">
+            <b>协同工作原理：</b>
+            1. <b>保险丝(Fuse)</b>: 串联在火线。当电流剧增时，内部合金丝熔断，物理切断电源。
+            2. <b>热敏电阻(NTC)</b>: 抑制开机瞬间对大电容充电产生的冲击电流。
+            3. <b>压敏电阻(MOV)</b>: 平时高阻，电压异常升高时变为低阻，将浪涌引导至回路中消耗。
+        </div>
+    </div>
+
+    <!-- 模块 2 UI -->
+    <div id="ui-rectify" style="display:none;">
+        <h2 style="margin-top:0;">交流转直流区</h2>
+        <div class="status-card">
+            输出直流电压: <span id="dc-volt" style="color:#00ff00; font-weight:bold; font-family:monospace;">0.00 V</span>
+        </div>
+        <button class="action-btn" id="pwr-btn" onclick="toggleRectifierPower()" style="background:#2ecc71;">开启整流电源</button>
+        
+        <div id="wave-container">
+            <div class="wave-label">实时输出波形 (V-Out)</div>
+            <canvas id="wave-canvas"></canvas>
+        </div>
+
+        <div class="desc-text" style="margin-top:20px;">
+            <b>核心元件说明：</b>
+            1. <b>变压器</b>: 基于硅钢片和铜线圈，将高压 AC 降压。
+            2. <b>整流桥(RBV-606)</b>: 由四颗二极管组成，实现全波整流。
+            3. <b>大电解电容</b>: 具有极性，负责平滑整流后的脉动直流电，减少纹波。
+        </div>
+    </div>
+</div>
+
+<div id="container"></div>
+
+<script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+
+    // ==========================================
+    // 1. 全局变量与初始化
+    // ==========================================
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a0a);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    camera.position.set(18, 15, 20);
+    controls.enableDamping = true;
+
+    // 灯光系统
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambLight);
+    const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+    spotLight.position.set(20, 30, 10);
+    scene.add(spotLight);
+
+    // ==========================================
+    // 2. 3D 模型构建
+    // ==========================================
+    const pcbBase = new THREE.Group();
+    scene.add(pcbBase);
+
+    // PCB 板材
+    const pcbGeo = new THREE.BoxGeometry(24, 0.5, 14);
+    const pcbMat = new THREE.MeshPhongMaterial({ color: 0x143a14, shininess: 30 });
+    const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
+    pcbBase.add(pcbMesh);
+
+    // 分组容器
+    const emcGroup = new THREE.Group();
+    const rectGroup = new THREE.Group();
+    pcbBase.add(emcGroup, rectGroup);
+
+    // --- 元件工厂函数 ---
+    const createCylinder = (r, h, color, shininess = 30) => {
+        const geo = new THREE.CylinderGeometry(r, r, h, 32);
+        const mat = new THREE.MeshPhongMaterial({ color, shininess });
+        return new THREE.Mesh(geo, mat);
+    };
+
+    const createPath = (pts, color = 0x888888) => {
+        const points = pts.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+        const curve = new THREE.CatmullRomCurve3(points);
+        const geo = new THREE.TubeGeometry(curve, 64, 0.08, 8, false);
+        const mat = new THREE.MeshPhongMaterial({ color });
+        const mesh = new THREE.Mesh(geo, mat);
+        return mesh;
+    };
+
+    // --- 模块 1: EMC 元件 (参考实物图颜色) ---
+    // 保险丝
+    const fuseBody = createCylinder(0.4, 1.0, 0x7d4022); // 棕色立式
+    fuseBody.position.set(-9, 0.8, 4);
+    const fuseWire = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0), new THREE.MeshBasicMaterial({color:0xffff00}));
+    fuseWire.position.copy(fuseBody.position);
+    emcGroup.add(fuseBody, fuseWire);
+
+    // 热敏电阻
+    const ntc = createCylinder(0.6, 0.25, 0x1e8449); // 绿色圆盘
+    ntc.rotation.x = Math.PI / 2;
+    ntc.position.set(-6, 0.9, 4);
+    emcGroup.add(ntc);
+
+    // 压敏电阻
+    const mov = createCylinder(0.7, 0.3, 0x2471a3); // 蓝色大圆盘
+    mov.rotation.x = Math.PI / 2;
+    mov.position.set(-2, 1.0, 2);
+    emcGroup.add(mov);
+
+    // --- 模块 2: 整流滤波元件 ---
+    // 变压器
+    const trans = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 3), new THREE.MeshPhongMaterial({color: 0x333333}));
+    const coil = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 3.5), new THREE.MeshPhongMaterial({color: 0xb87333}));
+    trans.add(core, coil);
+    trans.position.set(-5, 1.8, -3);
+    rectGroup.add(trans);
+
+    // 整流桥 RBV-606
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 0.6), new THREE.MeshPhongMaterial({color: 0x111111}));
+    bridge.position.set(2, 1.5, -3);
+    rectGroup.add(bridge);
+    const bridgeLabel = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshBasicMaterial({color:0xdddddd, transparent:true, opacity:0.7}));
+    bridgeLabel.position.set(2, 1.8, -2.69);
+    rectGroup.add(bridgeLabel);
+
+    // 滤波大电容
+    const filterCap = createCylinder(1.2, 3.2, 0x3e2723); // 深咖啡色
+    filterCap.position.set(8, 1.8, -3);
+    const negStripe = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 3.2), new THREE.MeshBasicMaterial({color:0xbdc3c7}));
+    negStripe.position.set(9.19, 1.8, -3); negStripe.rotation.y = Math.PI/2;
+    rectGroup.add(filterCap, negStripe);
+
+    // 装饰元件 (增加真实感)
+    for(let i=0; i<3; i++) {
+        const smallCap = createCylinder(0.3, 0.6, 0x228be6);
+        smallCap.position.set(5 + i*1.5, 0.5, 4);
+        rectGroup.add(smallCap);
+    }
+
+    // --- 走线 ---
+    const traces = [
+        createPath([[-11, 0.3, 4], [-9, 0.3, 4]]), // 入口到保险丝
+        createPath([[-9, 0.3, 4], [-6, 0.3, 4]]),  // 保险丝到NTC
+        createPath([[-6, 0.3, 4], [-2, 0.3, 4], [-2, 0.3, 2]]), // NTC到MOV
+        createPath([[2, 0.3, -3], [6.5, 0.3, -3], [8, 0.3, -3]]), // 整流到电容
+    ];
+    traces.forEach(t => pcbBase.add(t));
+
+    // ==========================================
+    // 3. 标签系统
+    // ==========================================
+    const labelConfig = [
+        { group: emcGroup, mesh: fuseBody, text: "保险丝 (Fuse)" },
+        { group: emcGroup, mesh: ntc, text: "热敏电阻 (NTC)" },
+        { group: emcGroup, mesh: mov, text: "压敏电阻 (MOV)" },
+        { group: rectGroup, mesh: trans, text: "降压变压器" },
+        { group: rectGroup, mesh: bridge, text: "整流桥 RBV-606" },
+        { group: rectGroup, mesh: filterCap, text: "大容量滤波电容" }
+    ];
+
+    const labelElements = [];
+    const labelContainer = document.createElement('div');
+    document.body.appendChild(labelContainer);
+
+    function initLabels() {
+        labelConfig.forEach(cfg => {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.innerText = cfg.text;
+            labelContainer.appendChild(div);
+            labelElements.push({ el: div, ...cfg });
+        });
+    }
+    initLabels();
+
+    function updateLabels() {
+        labelElements.forEach(item => {
+            if (!item.group.visible) {
+                item.el.style.display = 'none';
+                return;
+            }
+            const vector = new THREE.Vector3();
+            item.mesh.getWorldPosition(vector);
+            vector.y += 1.8;
+            vector.project(camera);
+
+            const x = (vector.x * .5 + .5) * window.innerWidth;
+            const y = (vector.y * -.5 + .5) * window.innerHeight;
+            
+            item.el.style.display = (vector.z < 1) ? 'block' : 'none';
+            item.el.style.left = `${x}px`;
+            item.el.style.top = `${y}px`;
+        });
+    }
+
+    // ==========================================
+    // 4. 交互逻辑
+    // ==========================================
+    let isBlown = false;
+    let particles = [];
+    let rectPower = false;
+    let waveOffset = 0;
+
+    // --- Tab 切换 ---
+    window.switchTab = (tab) => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if (tab === 'emc') {
+            document.getElementById('btn-emc').classList.add('active');
+            emcGroup.visible = true;
+            rectGroup.visible = false;
+            document.getElementById('ui-emc').style.display = 'block';
+            document.getElementById('ui-rectify').style.display = 'none';
+        } else {
+            document.getElementById('btn-rect').classList.add('active');
+            emcGroup.visible = false;
+            rectGroup.visible = true;
+            document.getElementById('ui-emc').style.display = 'none';
+            document.getElementById('ui-rectify').style.display = 'block';
+        }
+    };
+
+    // --- 浪涌模拟逻辑 ---
+    window.runSurgeLogic = () => {
+        const btn = document.getElementById('surge-btn');
+        const status = document.getElementById('emc-status');
+        const ind = document.getElementById('emc-indicator');
+        
+        btn.disabled = true;
+        status.innerText = "警告: 检测到高压浪涌脉冲!";
+        ind.style.background = "#ffcc00";
+        ind.style.boxShadow = "0 0 15px #ffcc00";
+
+        // 创建脉冲粒子
+        for(let i=0; i<15; i++) {
+            setTimeout(() => {
+                const p = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color:0xffaa00}));
+                p.position.set(-12, 0.4, 4);
+                scene.add(p);
+                particles.push({ mesh: p, t: 0, speed: 0.1 + Math.random()*0.05 });
+            }, i * 60);
+        }
+
+        // MOV 激活特效
+        setTimeout(() => {
+            mov.material.emissive = new THREE.Color(0x0088ff);
+            mov.material.emissiveIntensity = 3;
+            status.innerText = "MOV 正在吸收高压能量...";
+        }, 500);
+
+        // 最终熔断
+        setTimeout(() => {
+            isBlown = true;
+            fuseWire.visible = false;
+            ind.style.background = "#ff0000";
+            ind.style.boxShadow = "0 0 15px #ff0000";
+            status.innerText = "故障: 电流过载, 保险丝已熔断!";
+            document.getElementById('reset-btn').style.display = 'block';
+        }, 1500);
+    };
+
+    window.repairCircuit = () => {
+        isBlown = false;
+        fuseWire.visible = true;
+        mov.material.emissiveIntensity = 0;
+        document.getElementById('emc-indicator').style.background = "#00ff00";
+        document.getElementById('emc-status').innerText = "正常运行 (220V AC)";
+        document.getElementById('surge-btn').disabled = false;
+        document.getElementById('reset-btn').style.display = 'none';
+    };
+
+    // --- 整流电源逻辑 ---
+    window.toggleRectifierPower = () => {
+        rectPower = !rectPower;
+        const btn = document.getElementById('pwr-btn');
+        btn.innerText = rectPower ? "关闭整流电源" : "开启整流电源";
+        btn.style.background = rectPower ? "#e74c3c" : "#2ecc71";
+    };
+
+    // --- 示波器绘制 ---
+    const waveCanvas = document.getElementById('wave-canvas');
+    const waveCtx = waveCanvas.getContext('2d');
+    function drawOscilloscope() {
+        const w = waveCanvas.width = waveCanvas.offsetWidth;
+        const h = waveCanvas.height = waveCanvas.offsetHeight;
+        waveCtx.clearRect(0, 0, w, h);
+        
+        // 背景网格
+        waveCtx.strokeStyle = "#111";
+        waveCtx.lineWidth = 1;
+        for(let i=0; i<w; i+=20) { waveCtx.beginPath(); waveCtx.moveTo(i,0); waveCtx.lineTo(i,h); waveCtx.stroke(); }
+        for(let j=0; j<h; j+=20) { waveCtx.beginPath(); waveCtx.moveTo(0,j); waveCtx.lineTo(w,j); waveCtx.stroke(); }
+
+        waveCtx.beginPath();
+        waveCtx.strokeStyle = "#00ff00";
+        waveCtx.lineWidth = 2;
+        waveCtx.shadowBlur = 8;
+        waveCtx.shadowColor = "#00ff00";
+
+        if (rectPower) {
+            for(let x=0; x<w; x++) {
+                // 模拟电容充放电后的直流纹波
+                const rawSine = Math.abs(Math.sin((x + waveOffset) * 0.04));
+                const filtered = 0.85 + (rawSine * 0.1); 
+                const y = (h * 0.5) - (filtered * 30);
+                if(x===0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
+            }
+            document.getElementById('dc-volt').innerText = (12.1 + Math.random()*0.15).toFixed(2) + " V";
+        } else {
+            waveCtx.moveTo(0, h/2);
+            waveCtx.lineTo(w, h/2);
+            document.getElementById('dc-volt').innerText = "0.00 V";
+        }
+        waveCtx.stroke();
+        waveOffset += 3;
+    }
+
+    // ==========================================
+    // 5. 渲染循环
+    // ==========================================
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // 更新浪涌粒子
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.t += p.speed;
+            
+            if (p.t < 2.5) {
+                p.mesh.position.x = -12 + p.t * 4;
+            } else if (p.t < 4.5) {
+                // 转向 MOV
+                p.mesh.position.x = -2;
+                p.mesh.position.z = 4 - (p.t - 2.5) * 1.5;
+            } else {
+                scene.remove(p.mesh);
+                particles.splice(i, 1);
+            }
+        }
+
+        updateLabels();
+        drawOscilloscope();
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // 初始状态
+    switchTab('emc');
+    animate();
+
+    // 窗口自适应
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+
+</body>
+</html>
