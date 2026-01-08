@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>PLC 互锁逻辑综合仿真工作台</title>
+    <style>
+        /* 全局 Tab 导航样式 */
+        .tab-nav {
+            display: flex;
+            justify-content: center;
+            background: #2c3e50;
+            padding: 10px 0;
+            gap: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .tab-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            background: #34495e;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .tab-btn.active {
+            background: #3498db;
+            box-shadow: 0 0 10px #3498db;
+        }
+        .tab-content {
+            display: none;
+            width: 100%;
+            min-height: calc(100vh - 60px);
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* --- 第一个页面的样式 (拟物化 - 还原原版) --- */
+        #tab1 {
+            --bg: #e0e5ec;
+            --green: #2ecc71;
+            --blue: #3498db;
+            --red: #e74c3c;
+            --wire-off: #a0a0a0;
+            --wire-on: #f1c40f;
+            --shadow-light: #ffffff;
+            --shadow-dark: #bebebe;
+            background-color: var(--bg);
+            color: #444;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            padding-bottom: 50px;
+        }
+
+        #tab1 .container {
+            display: flex; gap: 40px; padding: 40px; flex-wrap: wrap; justify-content: center;
+        }
+
+        #tab1 .board {
+            display: grid; grid-template-columns: 100px 140px 140px 140px; gap: 20px;
+            padding: 40px; background: var(--bg); border-radius: 30px;
+            box-shadow: 20px 20px 60px var(--shadow-dark), -20px -20px 60px var(--shadow-light);
+        }
+
+        #tab1 .row-label { font-weight: bold; align-self: center; color: #7f8c8d; text-align: right; padding-right: 10px;}
+
+        #tab1 .module {
+            width: 120px; height: 120px; border-radius: 20px; background: var(--bg);
+            box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
+        }
+
+        #tab1 .desc { font-size: 11px; margin-top: 10px; color: #999; text-align: center; line-height: 1.2;}
+
+        #tab1 .contact-arm {
+            width: 40px; height: 5px; background: var(--wire-off); border-radius: 3px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        #tab1 .is-open .contact-arm {
+            transform: rotate(-45deg) translateY(-12px); background: var(--red) !important;
+        }
+
+        #tab1 .coil {
+            width: 45px; height: 45px; border-radius: 50%; border: 5px solid var(--wire-off);
+            display: flex; align-items: center; justify-content: center; transition: all 0.3s;
+            font-size: 10px; font-weight: bold;
+        }
+        #tab1.active-y0 .coil-y0, #tab1.active-y1 .coil-y1 {
+            background: var(--wire-on); border-color: #fff; box-shadow: 0 0 20px var(--wire-on); transform: scale(1.1);
+        }
+
+        #tab1 .info-panel {
+            width: 400px; padding: 30px; background: var(--bg); border-radius: 30px;
+            box-shadow: inset 10px 10px 20px var(--shadow-dark), inset -10px -10px 20px var(--shadow-light); line-height: 1.8;
+        }
+
+        #tab1 .info-panel h3 { margin-top: 0; color: #333; border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+        #tab1 .logic-text { font-size: 14px; color: #666; transition: all 0.3s; }
+        #tab1 .highlight { 
+            background: #f1c40f44; color: #000; font-weight: bold; 
+            padding: 2px 5px; border-radius: 4px; border-left: 4px solid var(--wire-on);
+        }
+
+        #tab1 .controls { display: flex; gap: 40px; margin-top: 20px; justify-content: center;}
+        #tab1 .btn {
+            width: 90px; height: 90px; border-radius: 50%; border: none; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-weight: bold; transition: all 0.2s;
+            box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
+        }
+        #tab1 .btn:active {
+            box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light); transform: scale(0.95);
+        }
+        #tab1 .btn-green { color: var(--green); }
+        #tab1 .btn-blue { color: var(--blue); }
+        #tab1 .btn-red { color: var(--red); }
+        #tab1 .active-path { background: var(--wire-on) !important; }
+
+        /* --- 第二个页面的样式 (3D - 保持现在版) --- */
+        #tab2 { background-color: #1a1a1a; position: relative; overflow: hidden; }
+        #tab2 #ui-overlay { position: absolute; top: 20px; left: 20px; width: 350px; background: rgba(0, 0, 0, 0.8); color: #fff; border: 1px solid #444; padding: 15px; border-radius: 8px; pointer-events: none; z-index: 10; }
+        #tab2 #ladder-panel { position: absolute; bottom: 20px; right: 20px; width: 450px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 10; }
+        #tab2 .rung { display: flex; align-items: center; height: 50px; border-bottom: 1px solid #ddd; position: relative; }
+        #tab2 .symbol { width: 60px; text-align: center; font-family: monospace; font-weight: bold; font-size: 14px; color: #333; }
+        #tab2 .active-logic { color: #2ecc71 !important; text-shadow: 0 0 5px #2ecc71; }
+        #tab2 #btn-group { position: absolute; bottom: 40px; left: 20px; display: flex; gap: 15px; pointer-events: auto; z-index: 10; }
+        #tab2 .ctrl-btn { padding: 12px 24px; border: none; border-radius: 5px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        #tab2 .btn-fwd { background: #27ae60; }
+        #tab2 .btn-rev { background: #2980b9; }
+        #tab2 .btn-stop { background: #c0392b; }
+        #tab2 #scan-indicator { position: absolute; left: 0; width: 100%; height: 2px; background: rgba(255, 165, 0, 0.7); display: none; }
+    </style>
+</head>
+<body>
+
+    <nav class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab(1)">拟物化工作台</button>
+        <button class="tab-btn" onclick="switchTab(2)">3D 深度仿真</button>
+    </nav>
+
+    <!-- Tab 1: 拟物化工作台 (还原原版代码) -->
+    <div id="tab1" class="tab-content active">
+        <h1 style="text-align: center; margin-top:40px; color:#555;">PLC 互锁逻辑拟物化演示</h1>
+        <div class="container">
+            <div class="board">
+                <div class="row-label">正转电路</div>
+                <div class="module" id="mod-x0">
+                    <div class="contact-arm" id="path-x0"></div>
+                    <div class="desc">X0 绿色按钮<br>(常开触点)</div>
+                </div>
+                <div class="module" id="mod-y1-nc">
+                    <div class="contact-arm" id="path-y1-nc"></div>
+                    <div class="desc">Y1 常闭触点<br>(来自反转线圈)</div>
+                </div>
+                <div class="module" id="mod-y0-coil">
+                    <div class="coil coil-y0">Y0</div>
+                    <div class="desc">正转输出线圈</div>
+                </div>
+
+                <div class="row-label">反转电路</div>
+                <div class="module" id="mod-x1">
+                    <div class="contact-arm" id="path-x1"></div>
+                    <div class="desc">X1 蓝色按钮<br>(常开触点)</div>
+                </div>
+                <div class="module" id="mod-y0-nc">
+                    <div class="contact-arm" id="path-y0-nc"></div>
+                    <div class="desc">Y0 常闭触点<br>(来自正转线圈)</div>
+                </div>
+                <div class="module" id="mod-y1-coil">
+                    <div class="coil coil-y1">Y1</div>
+                    <div class="desc">反转输出线圈</div>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h3>逻辑原理说明</h3>
+                <div class="logic-text">
+                    <p id="txt-base">“Y0/Y1线圈互相串联对方的常闭触点”</p>
+                    <p>这句话描述的是<b>互锁原理</b>。它指的是：</p>
+                    <ul>
+                        <li id="txt-y0-logic">Y0 的电路中串联了 Y1 的常闭触点。</li>
+                        <li id="txt-y1-logic">Y1 的电路中串联了 Y0 的常闭触点。</li>
+                    </ul>
+                    <p><b>工作原理：</b></p>
+                    <p id="txt-y0-work">● <strong>正转启动（Y0得电）</strong>时，Y0 的常闭触点会断开，切断 Y1 的电路，使反转无法启动。</p>
+                    <p id="txt-y1-work">● <strong>反转启动（Y1得电）</strong>时，Y1 的常闭触点会断开，切断 Y0 的电路，使正转无法启动。</p>
+                    <p style="font-size: 12px; color: #888; border-top: 1px dashed #ccc; padding-top: 10px;">
+                        这种设计确保了电机正转和反转不能同时启动，防止因误操作导致的设备损坏或安全事故。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-green" onclick="pressX0()">
+                <span style="font-size:20px">X0</span>
+                <span style="font-size:10px">正转启动</span>
+            </button>
+            <button class="btn btn-red" onclick="pressX2()">
+                <span style="font-size:20px">X2</span>
+                <span style="font-size:10px">紧急停止</span>
+            </button>
+            <button class="btn btn-blue" onclick="pressX1()">
+                <span style="font-size:20px">X1</span>
+                <span style="font-size:10px">反转启动</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tab 2: 3D 深度仿真 (保持现在版性能优化后的代码) -->
+    <div id="tab2" class="tab-content">
+        <div id="ui-overlay">
+            <div style="font-size: 18px; color: #f1c40f; margin-bottom: 10px;">三菱 FX3U 互锁仿真控制台</div>
+            <div id="status-log" style="font-size: 12px; line-height: 1.6; color: #ccc;">
+                系统就绪。等待输入...<br>
+                [互锁原理] Y0/Y1 线圈互相串联对方的常闭触点。
+            </div>
+        </div>
+
+        <div id="btn-group">
+            <button class="ctrl-btn btn-fwd" onmousedown="interact('x0')" onmouseup="release('x0')">正转 X0</button>
+            <button class="ctrl-btn btn-rev" onmousedown="interact('x1')" onmouseup="release('x1')">反转 X1</button>
+            <button class="ctrl-btn btn-stop" onmousedown="interact('x2')" onmouseup="release('x2')">停止 X2</button>
+        </div>
+
+        <div id="ladder-panel">
+            <div style="font-weight:bold; margin-bottom:10px; color:#555;">PLC 内部梯形图 (Ladder Logic)</div>
+            <div id="scan-indicator"></div>
+            <div class="rung">
+                <div class="symbol" id="l-x0">| |<br>X0</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w1"></div>
+                <div class="symbol" id="l-x2a">|/|<br>X2</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w2"></div>
+                <div class="symbol" id="l-y1nc" style="color:red; border:1px dashed red;">|/|<br>Y1互锁</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w3"></div>
+                <div class="symbol" id="l-y0">( )<br>Y0</div>
+            </div>
+            <div class="rung">
+                <div class="symbol" id="l-x1">| |<br>X1</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w4"></div>
+                <div class="symbol" id="l-x2b">|/|<br>X2</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w5"></div>
+                <div class="symbol" id="l-y0nc" style="color:red; border:1px dashed red;">|/|<br>Y0互锁</div>
+                <div style="flex:1; height:2px; background:#333;" id="l-w6"></div>
+                <div class="symbol" id="l-y1">( )<br>Y1</div>
+            </div>
+        </div>
+        <div id="three-container"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Tab 切换逻辑
+        function switchTab(idx) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelectorAll('.tab-btn')[idx-1].classList.add('active');
+            document.getElementById('tab' + idx).classList.add('active');
+            
+            if(idx === 2 && window.resizeThree) {
+                window.resizeThree();
+            }
+        }
+
+        // --- Tab 1 逻辑 (还原原版) ---
+        let y0_active = false;
+        let y1_active = false;
+
+        function updateTab1() {
+            const container = document.getElementById('tab1');
+            container.querySelectorAll('.logic-text p, .logic-text li').forEach(el => el.classList.remove('highlight'));
+            
+            if (y0_active) {
+                container.classList.add('active-y0');
+                document.getElementById('path-x0').classList.add('active-path');
+                document.getElementById('path-y1-nc').classList.add('active-path');
+                document.getElementById('mod-y0-nc').classList.add('is-open');
+                document.getElementById('txt-y0-logic').classList.add('highlight');
+                document.getElementById('txt-y0-work').classList.add('highlight');
+            } else {
+                container.classList.remove('active-y0');
+                document.getElementById('path-x0').classList.remove('active-path');
+                document.getElementById('path-y1-nc').classList.remove('active-path');
+                document.getElementById('mod-y0-nc').classList.remove('is-open');
+            }
+
+            if (y1_active) {
+                container.classList.add('active-y1');
+                document.getElementById('path-x1').classList.add('active-path');
+                document.getElementById('path-y0-nc').classList.add('active-path');
+                document.getElementById('mod-y1-nc').classList.add('is-open');
+                document.getElementById('txt-y1-logic').classList.add('highlight');
+                document.getElementById('txt-y1-work').classList.add('highlight');
+            } else {
+                container.classList.remove('active-y1');
+                document.getElementById('path-x1').classList.remove('active-path');
+                document.getElementById('path-y0-nc').classList.remove('active-path');
+                document.getElementById('mod-y1-nc').classList.remove('is-open');
+            }
+        }
+
+        function pressX0() {
+            if (y1_active) { alert("无法启动！反转 Y1 正在运行，其常闭触点已断开正转电路。"); return; }
+            y0_active = true; updateTab1();
+        }
+        function pressX1() {
+            if (y0_active) { alert("无法启动！正转 Y0 正在运行，其常闭触点已断开反转电路。"); return; }
+            y1_active = true; updateTab1();
+        }
+        function pressX2() { y0_active = false; y1_active = false; updateTab1(); }
+        updateTab1();
+    </script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://esm.sh/three@0.152.0",
+                "three/addons/": "https://esm.sh/three@0.152.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 核心修复：PLC 实时扫描逻辑 (Tab 2 保持现在的高性能版本)
+        const plc = { in: { x0: 0, x1: 0, x2: 0 }, out: { y0: 0, y1: 0 } };
+        let scene, camera, renderer, controls, motorShaft;
+        let wires = [], contactors = {};
+
+        init3D();
+
+        function init3D() {
+            const container = document.getElementById('three-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight - 60), 0.1, 1000);
+            camera.position.set(150, 150, 200);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight - 60);
+            container.appendChild(renderer.domElement);
+            controls = new OrbitControls(camera, renderer.domElement);
+            
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(50, 100, 50);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            
+            createModels();
+            createWires();
+            
+            window.resizeThree = () => {
+                camera.aspect = window.innerWidth / (window.innerHeight - 60);
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight - 60);
+            };
+
+            // 保持 20ms 的实时高频扫描
+            setInterval(scanCycle, 20); 
+            animate();
+        }
+
+        function createModels() {
+            const plcMesh = new THREE.Mesh(new THREE.BoxGeometry(60, 40, 20), new THREE.MeshStandardMaterial({ color: 0x2c3e50 }));
+            plcMesh.position.set(-80, 20, 0); scene.add(plcMesh);
+            contactors.km1 = createContactor("KM1", 20, 20, 40);
+            contactors.km2 = createContactor("KM2", 20, 20, -40);
+            const motor = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 40, 32), new THREE.MeshStandardMaterial({ color: 0x34495e }));
+            motor.position.set(80, 15, 0); motor.rotation.z = Math.PI/2; scene.add(motor);
+            motorShaft = new THREE.Mesh(new THREE.BoxGeometry(5, 30, 5), new THREE.MeshStandardMaterial({color: 0xbdc3c7}));
+            motorShaft.position.set(20, 0, 0); motor.add(motorShaft);
+        }
+
+        function createContactor(name, x, y, z) {
+            const group = new THREE.Group(); group.position.set(x, y, z);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(30, 40, 30), new THREE.MeshStandardMaterial({color: 0x95a5a6}));
+            group.add(body);
+            const plunger = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshStandardMaterial({color: 0xe67e22}));
+            plunger.position.y = 15; group.add(plunger);
+            const ncBox = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 20), new THREE.MeshStandardMaterial({color: 0x222222}));
+            ncBox.position.set(0, 10, 15); group.add(ncBox);
+            scene.add(group);
+            return { group, plunger, ncBox };
+        }
+
+        function createWires() {
+            const paths = [
+                { id: 'w_x0', color: 0x27ae60, points: [[-100,0,80], [-100,5,80], [-100,5,10], [-110,20,10]] },
+                { id: 'w_x1', color: 0x2980b9, points: [[-70,0,80], [-70,5,80], [-70,5,10], [-90,20,10]] },
+                { id: 'w_y0', color: 0xe74c3c, points: [[-60,20,0], [0,20,0], [0,20,40], [10,20,40]] },
+                { id: 'w_y1', color: 0xe74c3c, points: [[-60,10,0], [0,10,0], [0,10,-40], [10,10,-40]] }
+            ];
+            paths.forEach(p => {
+                const curve = new THREE.CatmullRomCurve3(p.points.map(pt => new THREE.Vector3(...pt)));
+                const geometry = new THREE.TubeGeometry(curve, 64, 0.8, 8, false);
+                const material = new THREE.MeshStandardMaterial({ color: 0x444444, emissive: 0x000000 });
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+                wires.push({ id: p.id, mesh, material, color: p.color });
+            });
+        }
+
+        window.interact = (id) => { plc.in[id] = 1; updateWireVisual(id, true); addLog(`输入信号 ${id.toUpperCase()} 激活`); };
+        window.release = (id) => { plc.in[id] = 0; updateWireVisual(id, false); };
+
+        function updateWireVisual(id, active) {
+            const wire = wires.find(w => w.id === 'w_' + id);
+            if (wire) {
+                wire.material.color.setHex(active ? wire.color : 0x444444);
+                wire.material.emissive.setHex(active ? wire.color : 0x000000);
+            }
+        }
+
+        function scanCycle() {
+            const stop = plc.in.x2 === 1;
+            const nextY0 = (plc.in.x0 || plc.out.y0) && !stop && !plc.out.y1;
+            const nextY1 = (plc.in.x1 || plc.out.y1) && !stop && !plc.out.y0;
+
+            plc.out.y0 = nextY0 ? 1 : 0;
+            plc.out.y1 = nextY1 ? 1 : 0;
+
+            updateLadderUI();
+            update3DComponents();
+        }
+
+        function updateLadderUI() {
+            const root = document.getElementById('tab2');
+            const set = (id, act) => { const el = root.querySelector('#'+id); if(el) act?el.classList.add('active-logic'):el.classList.remove('active-logic'); };
+            set('l-x0', plc.in.x0);
+            set('l-x2a', plc.in.x2);
+            set('l-y1nc', !plc.out.y1);
+            set('l-y0', plc.out.y0);
+            set('l-x1', plc.in.x1);
+            set('l-x2b', plc.in.x2);
+            set('l-y0nc', !plc.out.y0);
+            set('l-y1', plc.out.y1);
+        }
+
+        function update3DComponents() {
+            updateWireVisual('y0', plc.out.y0);
+            updateWireVisual('y1', plc.out.y1);
+            contactors.km1.plunger.position.y = plc.out.y0 ? 5 : 15;
+            contactors.km2.plunger.position.y = plc.out.y1 ? 5 : 15;
+            contactors.km1.ncBox.material.color.setHex(plc.out.y0 ? 0xff0000 : 0x222222);
+            contactors.km2.ncBox.material.color.setHex(plc.out.y1 ? 0xff0000 : 0x222222);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (plc.out.y0) motorShaft.rotation.y += 0.2;
+            else if (plc.out.y1) motorShaft.rotation.y -= 0.2;
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function addLog(msg) {
+            const log = document.getElementById('status-log');
+            if(log) log.innerHTML = msg + "<br>" + log.innerHTML.split('<br>').slice(0,5).join('<br>');
+        }
+    </script>
+</body>
+</html>
