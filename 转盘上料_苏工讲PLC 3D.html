@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC 步进控制：2D/3D 数字孪生仿真系统</title>
+    <style>
+        :root {
+            --bg-color: #eef2f5;
+            --panel-bg: #ffffff;
+            --plc-dark: #2c3e50;
+            --wire-off: #bdc3c7;
+            --wire-on: #e74c3c;
+            --wire-shadow: rgba(231, 76, 60, 0.6);
+            --text-main: #34495e;
+            --led-off: #95a5a6;
+            --led-on: #ff9f43;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-color); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+
+        /* 标签切换 */
+        .tabs-header { display: flex; gap: 5px; margin-bottom: 10px; width: 1300px; }
+        .tab-btn { padding: 12px 30px; border: none; background: #dcdde1; cursor: pointer; border-radius: 8px 8px 0 0; font-weight: bold; color: #7f8c8d; transition: 0.3s; }
+        .tab-btn.active { background: var(--panel-bg); color: #3498db; border-bottom: 3px solid #3498db; }
+        .tab-content { display: none; width: 1300px; flex-direction: column; }
+        .tab-content.active { display: flex; }
+
+        .main-container { display: grid; grid-template-columns: 500px 1fr; gap: 20px; margin-bottom: 20px; }
+        .panel { background: var(--panel-bg); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 15px; border: 1px solid #dcdcdc; position: relative; }
+        .panel-title { font-weight: bold; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; }
+
+        /* --- 2D 仿真区 --- */
+        .machine-stage { height: 480px; background: #f1f2f6; border: 1px solid #e9ecef; position: relative; overflow: hidden; border-radius: 4px; perspective: 1000px; }
+        
+        /* 进料和出料传送带 */
+        .conveyor-in { position: absolute; left: 0; top: 120px; width: 210px; height: 10px; background: #34495e; border-bottom: 4px solid #2c3e50; z-index: 2; }
+        .conveyor-out { position: absolute; right: -50px; bottom: 80px; width: 200px; height: 10px; background: #34495e; transform: rotate(-30deg); z-index: 2; }
+
+        .turntable { position: absolute; bottom: -120px; left: 50%; width: 400px; height: 400px; background: conic-gradient(from 0deg, #bdc3c7 0%, #ecf0f1 25%, #bdc3c7 50%, #ecf0f1 75%, #bdc3c7 100%); border-radius: 50%; border: 10px solid #95a5a6; transform: translateX(-50%) rotateX(60deg) rotateZ(0deg); transition: transform 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95); box-shadow: 0 20px 30px rgba(0,0,0,0.2); z-index: 1; }
+        .station-mark { position: absolute; width: 60px; height: 60px; border: 2px dashed #7f8c8d; border-radius: 50%; left: 50%; top: 20px; transform: translateX(-50%); }
+        
+        .robot-assy { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); width: 100px; height: 260px; z-index: 10; pointer-events: none; }
+        .cyl-body { width: 60px; height: 110px; background: linear-gradient(90deg, #7f8c8d, #95a5a6, #7f8c8d); margin: 0 auto; border-radius: 4px; border: 1px solid #555; transition: 0.3s; }
+        .cyl-body.air-in { box-shadow: 0 0 15px rgba(52, 152, 219, 0.8); border-color: #3498db; }
+        .cyl-rod { width: 18px; height: 140px; background: linear-gradient(90deg, #ecf0f1, #fff, #ecf0f1); margin: 0 auto; position: relative; top: -10px; z-index: -1; transition: transform 1.0s ease-in-out; border: 1px solid #bdc3c7; }
+        .robot-assy.lift-up .cyl-rod { transform: translateY(-90px); }
+        .gripper-head { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 30px; background: #34495e; border-radius: 4px; }
+        .clamp-finger { position: absolute; top: 30px; width: 15px; height: 40px; background: #2c3e50; transition: transform 0.2s; }
+        .cf-l { left: 10px; } .cf-r { right: 10px; }
+        
+        .material { width: 32px; height: 32px; background: #e74c3c; border-radius: 4px; border: 1px solid #c0392b; box-shadow: 0 4px 0 #922b21; position: absolute; z-index: 5; transition: transform 0.05s linear; display: none; }
+
+        .sensor-group { position: absolute; left: 180px; top: 90px; display: flex; flex-direction: column; align-items: center; z-index: 15; }
+        .sensor-body { width: 20px; height: 20px; background: #bdc3c7; border: 2px solid #7f8c8d; }
+        .sensor-led { width: 8px; height: 8px; background: #555; border-radius: 50%; margin: 4px; }
+        .sensor-body.active .sensor-led { background: #ff0000; box-shadow: 0 0 8px red; }
+
+        .io-tag { padding: 5px 10px; background: #34495e; color: #fff; font-size: 11px; border-radius: 4px; min-width: 50px; text-align: center; }
+        .io-tag.on { background: var(--led-on); box-shadow: 0 0 8px var(--led-on); }
+
+        /* --- 梯形图样式 --- */
+        .ladder-container { height: 460px; overflow-y: auto; background: #fff; border: 1px solid #ccc; font-family: monospace; position: relative; }
+        .rail { position: absolute; top:0; bottom:0; width:4px; background:#222; }
+        .rail.l { left:10px; } .rail.r { right:10px; }
+        .rung { position: relative; margin: 0 20px; border-bottom: 1px dashed #eee; }
+        .rung-1 { height: 100px; } .rung-2 { height: 200px; }
+        .w { position: absolute; background: #333; height: 2px; top: 50%; }
+        .w.v { width: 2px; height: auto; }
+        .sym { position: absolute; width: 50px; height: 40px; top: 50%; transform: translateY(-50%); text-align: center; background: #fff; z-index: 5; }
+        .box { position: absolute; height: 34px; border: 2px solid #333; background: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; top: 50%; transform: translateY(-50%); z-index: 5; padding: 0 5px; }
+        .on { color: var(--wire-on) !important; border-color: var(--wire-on) !important; background-color: var(--wire-on) !important; transition: 0.4s; }
+        .box.on { background-color: #fff !important; }
+
+        .logger { height: 120px; background: #2f3640; color: #f1f2f6; padding: 8px; font-size: 12px; overflow-y: auto; }
+
+        /* --- 3D 仿真区 --- */
+        #three-container { width: 1300px; height: 650px; background: #1a1a1a; border-radius: 8px; position: relative; }
+        .ui-3d { position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; pointer-events: none; }
+
+        /* 解说区 */
+        .explanation { background: #fffbf0; border: 1px solid #f39c12; padding: 20px; border-radius: 8px; width: 1260px; margin-top: 20px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<h1><span class="badge">PLC DIGITAL TWIN</span> 转盘搬运系统：进料 -> 旋转 -> 出料</h1>
+
+<div class="tabs-header">
+    <button class="tab-btn active" onclick="switchTab('2d')">2D 机械与逻辑监控</button>
+    <button class="tab-btn" onclick="switchTab('3d')">3D 实时数字孪生</button>
+</div>
+
+<div id="tab-2d" class="tab-content active">
+    <div class="main-container">
+        <div class="panel">
+            <div class="panel-title">现场机械 (Machine View)</div>
+            <div class="machine-stage">
+                <div class="conveyor-in"></div>
+                <div class="conveyor-out"></div>
+                <div class="sensor-group">
+                    <div class="sensor-body" id="sen-body"><div class="sensor-led"></div></div>
+                    <div style="font-size:10px; margin-top:4px;">X004</div>
+                </div>
+                <div class="robot-assy" id="robot-assy">
+                    <div class="cyl-body" id="cyl-body"></div>
+                    <div class="cyl-rod">
+                        <div class="gripper-head">
+                            <div class="clamp-finger cf-l" id="finger-l"></div>
+                            <div class="clamp-finger cf-r" id="finger-r"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="material" id="material"></div>
+                <div class="turntable" id="turntable"><div class="station-mark"></div></div>
+            </div>
+            <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; background:#eee; padding:10px;">
+                <label><input type="checkbox" id="auto-sw" onchange="sim.toggleAuto()"> 自动循环运行</label>
+                <div style="display:flex; gap:8px;">
+                    <div class="io-tag" id="tag-x4">X004</div>
+                    <div class="io-tag" id="tag-y6">Y006</div>
+                    <div class="io-tag" id="tag-y11">Y011</div>
+                    <div class="io-tag" style="background:#555" id="tag-d50">D50: 1</div>
+                </div>
+                <button onclick="sim.reset()">系统重置</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">梯形图监控 (Ladder Monitor)</div>
+            <div class="ladder-container">
+                <div class="rail l"></div><div class="rail r"></div>
+                <div class="rung rung-1">
+                    <div class="w" style="left:10px; width:30px;"></div>
+                    <div class="box" id="i-cmp" style="left:40px; width:80px;">= D50 K1</div>
+                    <div class="w" id="w1-1" style="left:120px; width:40px;"></div>
+                    <div class="sym" id="s-x4" style="left:160px;"><div class="sym-draw">| |</div><div class="sym-addr">X004</div></div>
+                    <div class="w" id="w1-2" style="left:210px; width:180px;"></div>
+                    <div class="box" id="i-y6" style="right:60px; width:70px;">SET Y006</div>
+                    <div class="w" style="right:10px; width:50px;"></div>
+                </div>
+                <div class="rung rung-2">
+                    <div class="w" style="left:10px; width:30px; top:30px;"></div>
+                    <div class="sym" id="s-y6" style="left:40px; top:30px;"><div class="sym-draw">| |</div><div class="sym-addr">Y006</div></div>
+                    <div class="w" id="w2-1" style="left:90px; width:300px; top:30px;"></div>
+                    <div class="sym" id="c-t202" style="right:60px; top:30px;"><div class="sym-draw">( T202 )</div></div>
+                    <div class="w" style="right:10px; width:50px; top:30px;"></div>
+                    <div class="w v" id="wv-1" style="left:130px; top:30px; height:60px;"></div>
+                    <div class="w" id="w2-2" style="left:130px; width:30px; top:90px;"></div>
+                    <div class="sym" id="s-t202" style="left:160px; top:90px;"><div class="sym-draw">| |</div><div class="sym-addr">T202</div></div>
+                    <div class="w" id="w2-3" style="left:210px; width:30px; top:90px;"></div>
+                    <div class="w v" id="wv-2" style="left:240px; top:90px; height:60px;"></div>
+                    <div class="w" id="w2-4" style="left:240px; width:150px; top:90px;"></div>
+                    <div class="box" id="i-y11" style="right:60px; width:70px; top:90px;">SET Y011</div>
+                    <div class="w" id="w2-5" style="left:240px; width:150px; top:150px;"></div>
+                    <div class="box" id="i-mov" style="right:60px; width:80px; top:150px;">MOV K2 D50</div>
+                </div>
+            </div>
+            <div class="logger" id="logger"></div>
+        </div>
+    </div>
+</div>
+
+<div id="tab-3d" class="tab-content">
+    <div id="three-container">
+        <div class="ui-3d">
+            <h3 style="margin:0">3D Digital Twin Status</h3>
+            <p id="3d-info">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<div class="explanation">
+    <strong style="color:#d35400; font-size:18px;">上帝视角：PLC 步进与搬运动作解说</strong><br>
+    1. <strong>进料过程 (Infeed)</strong>：开启自动模式后，红色物料从左侧传送带滑入。当触碰传感器 <strong>X004</strong> 时，PLC 梯形图第一行接通，触发 <strong>SET Y006</strong>（夹紧）。<br>
+    2. <strong>搬运逻辑</strong>：夹紧后延时 <strong>T202</strong> 结束，PLC 执行 <strong>SET Y011</strong>（提升）并将步序 <strong>D50</strong> 改为 2。这确保了“先夹再提”的机械顺序。<br>
+    3. <strong>转盘功能</strong>：本系统转盘旋转 90 度是为了将物料从<strong>水平进料线</strong>转接到<strong>垂直出料线</strong>，实现产线的 90 度直角转弯。<br>
+    4. <strong>出料过程 (Outfeed)</strong>：到达 90 度位置后，夹爪松开 (RST Y6)，物料不再凭空消失，而是顺着右侧的出料滑道滑出视野，完成一个闭环循环。
+</div>
+
+<script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    // --- 全局状态 ---
+    window.sys = {
+        D50: 1, X4: false, Y6: false, Y11: false,
+        T202: { val: 0, set: 50, done: false },
+        angle: 0, hasMaterial: false, 
+        matPos: { x: -250, y: 120, state: 'idle' }, // state: idle, infeed, picked, outfeed
+        autoMode: false
+    };
+
+    const log = (msg) => {
+        const l = document.getElementById('logger');
+        l.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        l.scrollTop = l.scrollHeight;
+    };
+
+    // --- 逻辑控制 ---
+    window.sim = {
+        toggleAuto: () => {
+            sys.autoMode = document.getElementById('auto-sw').checked;
+            if(sys.autoMode && sys.matPos.state === 'idle') sim.spawn();
+        },
+        spawn: () => {
+            sys.hasMaterial = true;
+            sys.matPos = { x: -200, y: 120, state: 'infeed' };
+            document.getElementById('material').style.display = 'block';
+            log("新物料进入进料口...");
+        },
+        reset: () => {
+            location.reload();
+        }
+    };
+
+    // --- 3D 渲染器初始化 ---
+    const container = document.getElementById('three-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x222222);
+    const camera = new THREE.PerspectiveCamera(45, 1300/650, 0.1, 2000);
+    camera.position.set(400, 400, 400);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(1300, 650);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    // 灯光与环境
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(200, 500, 200);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+    scene.add(new THREE.GridHelper(1000, 20, 0x444444, 0x333333));
+
+    // --- 3D 模型创建 ---
+    // 进料线
+    const feedIn = new THREE.Mesh(new THREE.BoxGeometry(300, 10, 40), new THREE.MeshPhongMaterial({color: 0x34495e}));
+    feedIn.position.set(-250, 50, 0);
+    scene.add(feedIn);
+
+    // 出料线
+    const feedOut = new THREE.Mesh(new THREE.BoxGeometry(40, 10, 300), new THREE.MeshPhongMaterial({color: 0x34495e}));
+    feedOut.position.set(0, 30, 250);
+    scene.add(feedOut);
+
+    // 转盘
+    const tableGroup = new THREE.Group();
+    const disk = new THREE.Mesh(new THREE.CylinderGeometry(100, 100, 10, 32), new THREE.MeshPhongMaterial({color: 0x95a5a6}));
+    tableGroup.add(disk);
+    scene.add(tableGroup);
+
+    // 机械臂
+    const robot = new THREE.Group();
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(20, 300, 20), new THREE.MeshPhongMaterial({color: 0x2c3e50}));
+    pillar.position.y = 150;
+    robot.add(pillar);
+    
+    const slider = new THREE.Group();
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(100, 20, 30), new THREE.MeshPhongMaterial({color: 0x7f8c8d}));
+    slider.add(arm);
+    const fingerL = new THREE.Mesh(new THREE.BoxGeometry(10, 40, 10), new THREE.MeshPhongMaterial({color: 0x333}));
+    const fingerR = fingerL.clone();
+    fingerL.position.set(-20, -30, 0);
+    fingerR.position.set(20, -30, 0);
+    slider.add(fingerL, fingerR);
+    slider.position.y = 280;
+    robot.add(slider);
+    scene.add(robot);
+
+    // 3D 物料
+    const mat3d = new THREE.Mesh(new THREE.BoxGeometry(32, 32, 32), new THREE.MeshPhongMaterial({color: 0xe74c3c}));
+    scene.add(mat3d);
+
+    // --- 主循环 (20ms) ---
+    setInterval(() => {
+        // PLC 逻辑模拟
+        if (sys.matPos.state === 'infeed') {
+            sys.matPos.x += 2;
+            if (sys.matPos.x >= -100) {
+                sys.X4 = true;
+                if (sys.D50 === 1) sys.Y6 = true;
+            }
+        }
+
+        if (sys.Y6) {
+            if (sys.T202.val < sys.T202.set) sys.T202.val++;
+            else sys.T202.done = true;
+        }
+
+        if (sys.T202.done && sys.D50 === 1) {
+            sys.Y11 = true;
+            sys.D50 = 2;
+            sys.matPos.state = 'picked';
+            log("PLC: Step 1 -> Step 2 (提升并准备旋转)");
+            
+            // 动作序列
+            setTimeout(() => {
+                sys.X4 = false;
+                sys.angle = 90;
+                log("机械: 旋转转盘 90°...");
+                setTimeout(() => {
+                    sys.Y6 = false; // 放料
+                    sys.matPos.state = 'outfeed';
+                    log("机械: 到达出料口，松开夹爪");
+                    setTimeout(() => {
+                        sys.Y11 = false;
+                        setTimeout(() => {
+                            sys.angle = 0;
+                            sys.D50 = 1;
+                            log("系统: 复位完成，等待下一次循环");
+                            if(sys.autoMode) setTimeout(sim.spawn, 1000);
+                        }, 1000);
+                    }, 800);
+                }, 1600);
+            }, 1000);
+        }
+
+        if (sys.matPos.state === 'outfeed') {
+            sys.matPos.z = (sys.matPos.z || 100) + 3;
+            if (sys.matPos.z > 500) {
+                sys.matPos.state = 'idle';
+                sys.matPos.z = 100;
+                sys.hasMaterial = false;
+            }
+        }
+
+        update2D();
+    }, 20);
+
+    function update2D() {
+        // 2D 视图渲染
+        const mat = document.getElementById('material');
+        if (sys.matPos.state === 'infeed') {
+            mat.style.left = (50 + (sys.matPos.x + 200) * 0.75) + 'px';
+            mat.style.top = '105px';
+        } else if (sys.matPos.state === 'picked') {
+            mat.style.left = '50%';
+            mat.style.transform = 'translateX(-50%)';
+            mat.style.top = sys.Y11 ? '110px' : '200px';
+        } else if (sys.matPos.state === 'outfeed') {
+            mat.style.left = (250 + (sys.matPos.z - 100)) + 'px';
+            mat.style.top = (250 + (sys.matPos.z - 100) * 0.5) + 'px';
+        } else {
+            mat.style.display = 'none';
+        }
+
+        // 梯形图高亮
+        const setOn = (id, cond) => document.getElementById(id).classList.toggle('on', !!cond);
+        setOn('i-cmp', sys.D50 === 1);
+        setOn('s-x4', sys.X4);
+        setOn('i-y6', sys.Y6);
+        setOn('s-y6', sys.Y6);
+        setOn('c-t202', sys.Y6);
+        setOn('s-t202', sys.T202.done);
+        setOn('i-y11', sys.Y11);
+        setOn('i-mov', sys.Y11);
+        setOn('tag-x4', sys.X4);
+        setOn('tag-y6', sys.Y6);
+        setOn('tag-y11', sys.Y11);
+        document.getElementById('tag-d50').innerText = "D50: " + sys.D50;
+        document.getElementById('sen-body').classList.toggle('active', sys.X4);
+        document.getElementById('robot-assy').classList.toggle('lift-up', sys.Y11);
+        document.getElementById('cyl-body').classList.toggle('air-in', sys.Y11);
+        document.getElementById('turntable').style.transform = `translateX(-50%) rotateX(60deg) rotateZ(${sys.angle}deg)`;
+        
+        const fap = sys.Y6 ? 20 : 0;
+        document.getElementById('finger-l').style.transform = `translateX(${fap}px)`;
+        document.getElementById('finger-r').style.transform = `translateX(${-fap}px)`;
+    }
+
+    // 3D 动画每帧执行
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // 转盘平滑旋转
+        tableGroup.rotation.y = THREE.MathUtils.lerp(tableGroup.rotation.y, -sys.angle * Math.PI/180, 0.05);
+        
+        // 机械臂平滑升降
+        const targetY = sys.Y11 ? 320 : 250;
+        slider.position.y = THREE.MathUtils.lerp(slider.position.y, targetY, 0.1);
+        
+        // 夹爪平滑
+        const fTarget = sys.Y6 ? 10 : 25;
+        fingerL.position.x = THREE.MathUtils.lerp(fingerL.position.x, -fTarget, 0.2);
+        fingerR.position.x = THREE.MathUtils.lerp(fingerR.position.x, fTarget, 0.2);
+
+        // 3D 物料同步
+        if (sys.matPos.state === 'infeed') {
+            mat3d.visible = true;
+            mat3d.position.set(sys.matPos.x, 70, 0);
+        } else if (sys.matPos.state === 'picked') {
+            mat3d.visible = true;
+            mat3d.position.set(0, slider.position.y - 45, 0);
+            mat3d.rotation.y = tableGroup.rotation.y;
+            // 旋转时物料随转盘偏移
+            const r = 0; // 物料在圆心
+            mat3d.position.x = Math.sin(tableGroup.rotation.y) * r;
+        } else if (sys.matPos.state === 'outfeed') {
+            mat3d.visible = true;
+            mat3d.position.set(0, 50, sys.matPos.z);
+        } else {
+            mat3d.visible = false;
+        }
+
+        document.getElementById('3d-info').innerText = `Step: ${sys.D50} | T202: ${sys.T202.val} | Y011: ${sys.Y11?'Up':'Down'}`;
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.switchTab = (tab) => {
+        document.getElementById('tab-2d').classList.toggle('active', tab === '2d');
+        document.getElementById('tab-3d').classList.toggle('active', tab === '3d');
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.innerText.includes(tab.toUpperCase())));
+    };
+
+</script>
+</body>
+</html>
