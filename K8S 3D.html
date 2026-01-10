@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>K8s 专家级全景仿真系统 - 三视图融合版</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/renderers/CSS2DRenderer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --primary: #326ce5;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --ingress-color: #8b5cf6;
+            --terminal-bg: #010409;
+            --fe-color: #3b82f6;
+            --be-color: #a855f7;
+            --db-color: #f97316;
+        }
+
+        body, html { 
+            margin: 0; padding: 0; 
+            background: #0a0f1e; 
+            color: #f8fafc; 
+            font-family: 'Fira Code', monospace; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+
+        /* --- 头部导航 --- */
+        #top-nav {
+            height: 65px; 
+            background: rgba(13, 17, 23, 0.95); 
+            display: flex; 
+            align-items: center;
+            padding: 0 30px; 
+            border-bottom: 1px solid #30363d; 
+            z-index: 1000; 
+            position: relative;
+        }
+        .nav-brand { 
+            font-size: 22px; 
+            font-weight: 900; 
+            color: var(--primary); 
+            letter-spacing: 1px; 
+            margin-right: 50px; 
+        }
+        .tab-btn {
+            background: #21262d; 
+            color: #8b949e; 
+            border: 1px solid #30363d; 
+            padding: 10px 20px; 
+            margin-right: 12px;
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            transition: all 0.2s;
+        }
+        .tab-btn.active { 
+            background: var(--primary); 
+            color: white; 
+            border-color: var(--primary); 
+            box-shadow: 0 0 20px rgba(50, 108, 229, 0.3); 
+        }
+
+        /* --- 主视图区 --- */
+        .view-content { 
+            height: calc(100vh - 65px); 
+            width: 100%; 
+            display: none; 
+            position: relative; 
+        }
+        .view-content.active { 
+            display: flex; 
+        }
+
+        /* --- TAB1: 3D 拟物化交互视图 --- */
+        #view-3d-container {
+            flex: 1; 
+            padding: 20px; 
+            overflow: hidden; 
+            background: #0d1117;
+            perspective: 1500px;
+        }
+        .k8s-3d-stage {
+            position: relative;
+            width: 1100px;
+            height: 750px;
+            margin: 0 auto;
+            transform: rotateX(10deg);
+            transform-style: preserve-3d;
+            background: #ffffff;
+            border-radius: 30px;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.15), inset 0 0 20px rgba(0,0,0,0.05);
+            border: 5px solid #fff;
+            overflow: hidden;
+        }
+
+        /* 物理区域布局 */
+        .area-3d {
+            position: absolute;
+            border-radius: 20px;
+            padding: 20px;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+        #master-area-3d {
+            top: 40px; left: 40px; width: 450px; height: 600px;
+            background: linear-gradient(145deg, rgba(50, 108, 229, 0.08), rgba(255,255,255,1));
+            border: 2px solid var(--primary);
+            box-shadow: 10px 10px 30px rgba(50, 108, 229, 0.1);
+        }
+        #node-area-3d {
+            top: 40px; right: 40px; width: 450px; height: 650px;
+            background: linear-gradient(145deg, rgba(16, 185, 129, 0.08), rgba(255,255,255,1));
+            border: 2px solid var(--secondary);
+            box-shadow: -10px 10px 30px rgba(16, 185, 129, 0.1);
+        }
+        .area-label-3d {
+            position: absolute; top: -15px; left: 30px;
+            background: #334155; color: white; padding: 5px 20px;
+            border-radius: 20px; font-weight: bold; font-size: 14px;
+        }
+
+        /* 3D 拟物化组件 */
+        .component-3d {
+            position: absolute;
+            width: 150px; height: 90px;
+            border-radius: 15px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: white; font-weight: bold;
+            cursor: pointer;
+            transform: translateZ(30px);
+            box-shadow: 0 10px 0px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            text-align: center;
+            padding: 10px;
+        }
+        .component-3d:active {
+            transform: translateZ(10px);
+            box-shadow: 0 4px 0px rgba(0,0,0,0.2);
+        }
+        .annotation-3d { 
+            font-size: 10px; 
+            font-weight: normal; 
+            margin-top: 5px; 
+            opacity: 0.9; 
+            line-height: 1.2; 
+        }
+
+        /* 组件坐标 */
+        .c-api-3d { background: var(--accent); top: 50px; left: 150px; border: 2px solid #d97706; }
+        .c-etcd-3d { background: var(--danger); top: 200px; left: 50px; border: 2px solid #dc2626; }
+        .c-sched-3d { background: #8b5cf6; top: 200px; left: 250px; border: 2px solid #7c3aed; }
+        .c-ctrl-3d { background: #ec4899; top: 380px; left: 150px; border: 2px solid #db2777; }
+        .c-kubelet-3d { background: #06b6d4; top: 50px; right: 250px; border: 2px solid #0891b2; }
+        .c-proxy-3d { background: #f97316; top: 50px; right: 50px; border: 2px solid #ea580c; }
+        .c-runtime-3d { 
+            background: #475569; 
+            top: 220px; 
+            right: 125px; 
+            width: 200px; 
+            height: 110px; 
+            border: 2px solid #1e293b; 
+        }
+
+        /* Pod 容器生产区 */
+        #pod-container-3d {
+            position: absolute;
+            bottom: 40px; right: 50px;
+            width: 350px; height: 180px;
+            background: #f8fafc;
+            border: 3px dashed #cbd5e1;
+            border-radius: 20px;
+            display: flex; 
+            flex-wrap: wrap;
+            gap: 15px; 
+            justify-content: center; 
+            align-items: center;
+            padding: 20px;
+            transform: translateZ(10px);
+        }
+        .pod-3d {
+            width: 80px; height: 80px;
+            background: #10b981; 
+            border: 2px solid #059669;
+            border-radius: 12px; 
+            display: flex;
+            justify-content: center; 
+            align-items: center;
+            color: white; 
+            font-size: 11px;
+            box-shadow: 0 6px 0px #047857;
+            opacity: 0; 
+            transform: translateY(30px);
+        }
+
+        /* 侧边逻辑说明栏 */
+        #logic-panel-3d {
+            position: absolute; 
+            left: 20px; 
+            bottom: 20px;
+            width: 380px; 
+            background: rgba(0,0,0,0.8);
+            color: #4ade80; 
+            padding: 15px;
+            border-radius: 10px; 
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px; 
+            border-left: 4px solid #4ade80;
+            pointer-events: none; 
+            opacity: 0;
+        }
+
+        /* 动画数据包 */
+        .packet-3d {
+            position: absolute; 
+            width: 20px; 
+            height: 20px;
+            background: white; 
+            border-radius: 50%;
+            border: 3px solid var(--accent);
+            z-index: 999; 
+            display: none;
+            box-shadow: 0 0 15px #fff;
+        }
+
+        /* --- TAB2: 2D 逻辑架构图 --- */
+        #view-2d-container { 
+            flex: 1; 
+            padding: 20px; 
+            overflow: hidden; 
+            background: #0d1117; 
+        }
+        .k8s-blueprint { 
+            position: relative; 
+            width: 1200px; 
+            height: 850px; 
+            margin: 0 auto; 
+            transform: scale(0.85); 
+            transform-origin: top center; 
+        }
+
+        /* Ingress 区域 */
+        .ingress-gate {
+            position: absolute; 
+            top: 10px; 
+            left: 50px; 
+            width: 220px; 
+            height: 100px;
+            background: rgba(139, 92, 246, 0.1); 
+            border: 2px solid var(--ingress-color); 
+            border-radius: 12px;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+        }
+
+        .master-hq-2d {
+            position: absolute; 
+            top: 130px; 
+            left: 50px; 
+            width: 300px; 
+            height: 600px;
+            background: rgba(50, 108, 229, 0.05); 
+            border: 2px solid var(--primary); 
+            border-radius: 20px;
+        }
+
+        /* 矩阵化 Node 阵列 */
+        .worker-matrix {
+            position: absolute; 
+            top: 20px; 
+            left: 400px; 
+            width: 800px; 
+            height: 800px;
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 20px;
+        }
+        .node-card {
+            background: rgba(22, 27, 34, 0.8); 
+            border: 1px solid #30363d;
+            border-radius: 12px; 
+            height: 250px; 
+            position: relative; 
+            overflow: hidden;
+            transition: border 0.3s;
+        }
+        .node-card.active-node { 
+            border: 2px solid var(--secondary); 
+            box-shadow: 0 0 15px rgba(16,185,129,0.2); 
+        }
+        .node-header { 
+            padding: 8px; 
+            font-size: 10px; 
+            background: #161b22; 
+            color: var(--secondary); 
+            border-bottom: 1px solid #30363d; 
+        }
+        
+        /* Pod 内部矩阵布局 */
+        .pod-grid {
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 8px; 
+            padding: 15px;
+        }
+        .pod-unit {
+            width: 35px; 
+            height: 35px; 
+            border-radius: 4px; 
+            display: flex; 
+            align-items: center;
+            justify-content: center; 
+            font-size: 8px; 
+            font-weight: bold; 
+            color: white;
+            opacity: 0; 
+            transform: scale(0.5);
+        }
+        .p-fe { background: var(--fe-color); box-shadow: 0 0 8px var(--fe-color); }
+        .p-be { background: var(--be-color); box-shadow: 0 0 8px var(--be-color); }
+        .p-db { background: var(--db-color); box-shadow: 0 0 8px var(--db-color); }
+
+        /* 组件 */
+        .comp-2d {
+            width: 150px; 
+            height: 60px; 
+            border-radius: 6px; 
+            margin: 20px auto;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            font-size: 11px; 
+            font-weight: bold; 
+            color: white; 
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        #orb-path { 
+            position: absolute; 
+            width: 12px; 
+            height: 12px; 
+            background: white; 
+            border-radius: 50%; 
+            display: none; 
+            z-index: 3000; 
+            box-shadow: 0 0 20px white; 
+        }
+
+        /* --- TAB3: 3D 专家拓扑 --- */
+        #canvas-3d { 
+            flex: 1; 
+            background: #020617; 
+        }
+        #overlay-3d { 
+            position: absolute; 
+            bottom: 30px; 
+            left: 30px; 
+            pointer-events: none; 
+        }
+        .tag-3d {
+            color: #fff;
+            background: rgba(0,0,0,0.8);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        /* 增强型瀑布流日志控制台 */
+        #expert-console {
+            width: 420px; 
+            background: var(--terminal-bg); 
+            border-left: 1px solid #30363d;
+            display: flex; 
+            flex-direction: column; 
+            padding: 0; 
+            position: relative;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+        .console-title { 
+            background: #161b22; 
+            padding: 12px 15px; 
+            font-size: 13px; 
+            color: var(--secondary); 
+            border-bottom: 1px solid #30363d; 
+            display: flex; 
+            justify-content: space-between; 
+        }
+        #log-waterfall {
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column-reverse;
+        }
+        .log-line {
+            font-size: 11px; 
+            margin-bottom: 6px; 
+            line-height: 1.5; 
+            border-left: 3px solid #30363d;
+            padding-left: 10px; 
+            animation: logSlide 0.3s ease-out; 
+            opacity: 0.9;
+        }
+        @keyframes logSlide { 
+            from { transform: translateY(-20px); opacity: 0; } 
+            to { transform: translateY(0); opacity: 0.9; } 
+        }
+        .t-ts { color: #58a6ff; margin-right: 5px; }
+        .t-comp { color: var(--accent); font-weight: bold; }
+        .t-event { color: #d1d5db; }
+
+        /* 操作按钮 */
+        .btn-panel { 
+            position: absolute; 
+            bottom: 30px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            gap: 20px; 
+            z-index: 2000; 
+        }
+        .main-btn {
+            padding: 15px 35px; 
+            border-radius: 8px; 
+            border: none; 
+            font-weight: bold; 
+            cursor: pointer;
+            transition: all 0.2s; 
+            box-shadow: 0 8px 0 #1e40af;
+        }
+        .btn-deploy { background: var(--primary); color: white; }
+        .btn-ingress { background: var(--ingress-color); color: white; box-shadow: 0 8px 0 #5b21b6; }
+        .btn-3d-deploy { background: var(--accent); color: white; box-shadow: 0 8px 0 #d97706; }
+    </style>
+</head>
+<body>
+
+<nav id="top-nav">
+    <div class="nav-brand">K8S EXPERT SIM - 三视图融合版</div>
+    <button class="tab-btn active" onclick="switchView(1)">3D 拟物化交互视图</button>
+    <button class="tab-btn" onclick="switchView(2)">2D 集群矩阵 (Logical View)</button>
+    <button class="tab-btn" onclick="switchView(3)">3D 全景拓扑 (Physical View)</button>
+</nav>
+
+<!-- TAB1: 3D 拟物化交互视图 -->
+<div id="view-1" class="view-content active">
+    <div id="view-3d-container">
+        <div class="k8s-3d-stage">
+            <!-- 指令逻辑显示器 -->
+            <div id="logic-panel-3d">>> 正在初始化集群...</div>
+
+            <div id="master-area-3d" class="area-3d">
+                <span class="area-label-3d">CONTROL PLANE (总控中心)</span>
+                <div class="component-3d c-api-3d" id="api-server-3d">API SERVER<div class="annotation-3d">唯一接线员<br>验证并转发所有指令</div></div>
+                <div class="component-3d c-etcd-3d" id="etcd-3d">ETCD<div class="annotation-3d">核心数据库<br>存储集群所有状态</div></div>
+                <div class="component-3d c-sched-3d" id="scheduler-3d">SCHEDULER<div class="annotation-3d">资源调度专家<br>负责挑选干活的节点</div></div>
+                <div class="component-3d c-ctrl-3d" id="controller-3d">CONTROLLER<div class="annotation-3d">巡检监控官<br>确保副本数始终达标</div></div>
+            </div>
+
+            <div id="node-area-3d" class="area-3d">
+                <span class="area-label-3d">WORKER NODE (执行车间)</span>
+                <div class="component-3d c-kubelet-3d" id="kubelet-3d">KUBELET<div class="annotation-3d">驻厂经理<br>接收总部指令并开工</div></div>
+                <div class="component-3d c-proxy-3d" id="proxy-3d">KUBE-PROXY<div class="annotation-3d">网络网格员<br>维护Pod之间的通信</div></div>
+                
+                <!-- 容器运行时 - 机械臂 -->
+                <div class="component-3d c-runtime-3d" id="runtime-3d">
+                    CONTAINER RUNTIME
+                    <div class="annotation-3d">【物理机械臂】<br>负责拉取镜像并真正运行容器</div>
+                </div>
+
+                <!-- 容器生产区 -->
+                <div id="pod-container-3d">
+                    <div class="pod-3d">NGINX</div>
+                    <div class="pod-3d">REDIS</div>
+                    <div class="pod-3d">PYTHON</div>
+                    <div class="pod-3d">NODEJS</div>
+                </div>
+            </div>
+
+            <div id="p-task-3d" class="packet-3d"></div>
+        </div>
+    </div>
+</div>
+
+<!-- TAB2: 2D 矩阵视图 -->
+<div id="view-2" class="view-content">
+    <div id="view-2d-container">
+        <div class="k8s-blueprint">
+            <!-- Ingress Controller -->
+            <div class="ingress-gate" id="ingress-2d">
+                <span style="font-size:12px; color:var(--ingress-color); font-weight:bold;">INGRESS CONTROLLER</span>
+                <span style="font-size:10px; color:#8b949e">*.k8s.expert.com</span>
+            </div>
+
+            <!-- Master HQ -->
+            <div class="master-hq-2d">
+                <div style="padding:10px; font-size:12px; color:var(--primary); font-weight:bold; border-bottom:1px solid #30363d">CONTROL PLANE</div>
+                <div class="comp-2d" id="api-2d" style="background:var(--accent)">API SERVER</div>
+                <div class="comp-2d" id="etcd-2d" style="background:var(--danger)">ETCD STORE</div>
+                <div class="comp-2d" id="sched-2d" style="background: #8b5cf6">SCHEDULER</div>
+                <div class="comp-2d" id="ctrl-2d" style="background: #ec4899">CONTROLLER MGR</div>
+            </div>
+
+            <!-- Worker Matrix -->
+            <div class="worker-matrix" id="worker-grid">
+                <!-- 生成 4 个大规模 Node -->
+                <div class="node-card" id="node-0">
+                    <div class="node-header">NODE-01 (IP: 10.0.1.101)</div>
+                    <div class="pod-grid" id="grid-0"></div>
+                </div>
+                <div class="node-card" id="node-1">
+                    <div class="node-header">NODE-02 (IP: 10.0.1.102)</div>
+                    <div class="pod-grid" id="grid-1"></div>
+                </div>
+                <div class="node-card" id="node-2">
+                    <div class="node-header">NODE-03 (IP: 10.0.1.103)</div>
+                    <div class="pod-grid" id="grid-2"></div>
+                </div>
+                <div class="node-card" id="node-3">
+                    <div class="node-header">NODE-04 (IP: 10.0.1.104)</div>
+                    <div class="pod-grid" id="grid-3"></div>
+                </div>
+            </div>
+
+            <div id="orb-path"></div>
+        </div>
+    </div>
+</div>
+
+<!-- TAB3: 3D 视图 -->
+<div id="view-3" class="view-content">
+    <div id="canvas-3d"></div>
+    <div id="overlay-3d">
+        <div style="background:rgba(0,0,0,0.8); padding:15px; border-radius:10px; border-left:4px solid var(--primary)">
+            <h4 style="margin:0 0 5px 0">物理层拓扑仿真</h4>
+            <p style="margin:0; font-size:12px; color:var(--text-gray)">展示 Master 节点与多机架 Worker 阵列的通信管道</p>
+        </div>
+    </div>
+</div>
+
+<!-- 瀑布流控制台 -->
+<aside id="expert-console">
+    <div class="console-title">
+        <span>CLUSTER EVENTS WATERFALL</span>
+        <span id="status-dot" style="color:var(--secondary)">● ONLINE</span>
+    </div>
+    <div id="log-waterfall"></div>
+</aside>
+
+<!-- 操作按钮 -->
+<div class="btn-panel">
+    <button class="main-btn btn-3d-deploy" onclick="start3DDeploy()">🚀 3D 拟物化部署</button>
+    <button class="main-btn btn-deploy" onclick="startExpertDeploy()">📊 2D 矩阵部署</button>
+    <button class="main-btn btn-ingress" onclick="triggerIngressFlow()">🌐 模拟 Ingress 流量</button>
+</div>
+
+<script type="module">
+    import * as THREE from "https://esm.sh/three@0.165.0";
+    import { OrbitControls } from "https://esm.sh/three@0.165.0/examples/jsm/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "https://esm.sh/three@0.165.0/examples/jsm/renderers/CSS2DRenderer.js";
+
+    // --- 日志引擎 ---
+    function addLog(comp, event, level='INFO') {
+        const waterfall = document.getElementById('log-waterfall');
+        const ts = new Date().toLocaleTimeString().split(' ')[0];
+        const log = document.createElement('div');
+        log.className = 'log-line';
+        log.innerHTML = `<span class="t-ts">[${ts}]</span><span class="t-comp">[${comp}]</span> <span class="t-event">${event}</span>`;
+        waterfall.prepend(log);
+        if(waterfall.childNodes.length > 50) waterfall.lastChild.remove();
+    }
+
+    // --- 视图切换 ---
+    window.switchView = (id) => {
+        document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === id-1));
+        document.querySelectorAll('.view-content').forEach((v, i) => v.classList.toggle('active', i === id-1));
+        if(id === 3 && !scene3D) init3D();
+        addLog('SYS', `Switched to ${id === 1 ? '3D Interactive View' : id === 2 ? 'Logical Matrix View' : 'Physical Topology View'}`);
+    };
+
+    // --- TAB1: 3D 拟物化部署逻辑 ---
+    const logicPanel3d = document.getElementById('logic-panel-3d');
+    const packet3d = document.getElementById('p-task-3d');
+
+    function updateLogic3d(text) {
+        logicPanel3d.style.opacity = 1;
+        logicPanel3d.innerText = `>> LOG: ${text}`;
+    }
+
+    // 获取组件中心位置
+    function getPos3d(id) {
+        const el = document.getElementById(id);
+        const stage = document.querySelector('.k8s-3d-stage').getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        return {
+            x: rect.left - stage.left + rect.width / 2 - 10,
+            y: rect.top - stage.top + rect.height / 2 - 10
+        };
+    }
+
+    window.start3DDeploy = async () => {
+        const tl = gsap.timeline();
+        const btn = document.querySelector('.btn-3d-deploy');
+        btn.disabled = true;
+
+        // 初始化位置
+        const apiPos = getPos3d('api-server-3d');
+        const etcdPos = getPos3d('etcd-3d');
+        const schedPos = getPos3d('scheduler-3d');
+        const kubeletPos = getPos3d('kubelet-3d');
+        const runtimePos = getPos3d('runtime-3d');
+        const podPos = getPos3d('pod-container-3d');
+
+        updateLogic3d("用户发起部署请求，正在通过 API Server 认证...");
+        addLog('KUBECTL', 'POST /api/v1/namespaces/default/deployments');
+        
+        // 1. User -> API
+        tl.set(packet3d, { display: 'block', x: 0, y: 300, scale: 1 })
+          .to(packet3d, { duration: 0.8, x: apiPos.x, y: apiPos.y, ease: "back.out" })
+          .to('#api-server-3d', { scale: 1.2, z: 60, duration: 0.2, yoyo: true, repeat: 1 })
+          .add(() => addLog('AUTH', 'RBAC: User admin authorized via ServiceAccount Token.'));
+
+        // 2. API -> ETCD (存储)
+        tl.add(() => updateLogic3d("API Server 验证权限通过，正在将状态写入 Etcd 数据库..."))
+          .to(packet3d, { duration: 0.5, x: etcdPos.x, y: etcdPos.y })
+          .to('#etcd-3d', { backgroundColor: "#ff0000", duration: 0.3, yoyo: true, repeat: 1 })
+          .add(() => addLog('ETCD', 'MVCC: Created key /registry/deployments/nginx-app. CAS successful.'));
+
+        // 3. API -> Scheduler (调度)
+        tl.add(() => updateLogic3d("Scheduler 发现未分配节点的 Pod，开始计算最佳物理节点..."))
+          .to(packet3d, { duration: 0.4, x: apiPos.x, y: apiPos.y })
+          .to(packet3d, { duration: 0.5, x: schedPos.x, y: schedPos.y })
+          .to('#scheduler-3d', { rotate: 360, duration: 0.5 })
+          .add(() => addLog('SCHED', 'Predicates: Filtering nodes by taints, tolerations and resource requests...'))
+          .add(() => addLog('SCHED', 'Priorities: Scoring 4 nodes based on ImageLocality and BalancedResourceAllocation...'));
+
+        // 4. Scheduler -> API -> Kubelet (跨机通信)
+        tl.add(() => updateLogic3d("调度完成！API Server 正在向目标节点 Kubelet 下达制造指令..."))
+          .to(packet3d, { duration: 0.4, x: apiPos.x, y: apiPos.y })
+          .to(packet3d, { 
+              duration: 1, 
+              x: kubeletPos.x, y: kubeletPos.y, 
+              scale: 1.5,
+              boxShadow: "0 0 30px #f59e0b"
+          })
+          .add(() => addLog('KUBELET', 'Node-01 received PodSpec. Starting PLEG container creation...'));
+
+        // 5. Kubelet -> Runtime (机械臂工作)
+        tl.add(() => updateLogic3d("Kubelet 驻厂经理收到指令，正在启动容器运行时机械臂..."))
+          .to(packet3d, { duration: 0.5, x: runtimePos.x, y: runtimePos.y })
+          .to('#runtime-3d', { skewX: 10, duration: 0.2, yoyo: true, repeat: 3 })
+          .add(() => addLog('RUNTIME', 'Container runtime pulling image nginx:latest...'));
+
+        // 6. Runtime -> Pod 生成
+        tl.add(() => updateLogic3d("机械臂工作完毕，应用容器（Pod）正在实例化并上线..."))
+          .to(packet3d, { duration: 0.6, x: podPos.x, y: podPos.y, scale: 0.1, opacity: 0 })
+          .to('.pod-3d', { 
+              opacity: 1, 
+              y: 0, 
+              duration: 0.5, 
+              stagger: 0.2, 
+              ease: "elastic.out(1, 0.5)",
+              onStart: () => {
+                  confetti({ particleCount: 150, spread: 70, origin: { y: 0.6, x: 0.8 } });
+                  addLog('POD', 'Pod nginx-app-7d8f9 started successfully on Node-01');
+              }
+          });
+
+        tl.add(() => {
+            updateLogic3d("部署大功告成！集群状态已同步。");
+            btn.disabled = false;
+            addLog('SYS', 'Deployment completed successfully. All pods are running.');
+            setTimeout(() => { logicPanel3d.style.opacity = 0; }, 3000);
+        });
+    };
+
+    // --- TAB2: 2D 矩阵部署逻辑 ---
+    window.startExpertDeploy = async () => {
+        const orb = document.getElementById('orb-path');
+        const tl = gsap.timeline();
+        const getCenter = (id) => {
+            const el = document.getElementById(id);
+            const stage = document.querySelector('.k8s-blueprint').getBoundingClientRect();
+            const rect = el.getBoundingClientRect();
+            return { x: rect.left - stage.left + rect.width/2 - 6, y: rect.top - stage.top + rect.height/2 - 6 };
+        };
+
+        // 清理旧 Pod
+        document.querySelectorAll('.pod-unit').forEach(p => p.remove());
+        document.querySelectorAll('.node-card').forEach(n => n.classList.remove('active-node'));
+
+        addLog('KUBECTL', 'POST /api/v1/namespaces/default/deployments');
+        
+        // 1. 进入 API Server
+        const pApi = getCenter('api-2d'), pEtcd = getCenter('etcd-2d'), pSched = getCenter('sched-2d');
+        tl.set(orb, { display: 'block', x: 0, y: 0, opacity: 1 })
+          .to(orb, { duration: 0.8, x: pApi.x, y: pApi.y, ease: "power2.out" })
+          .add(() => addLog('AUTH', 'RBAC: User admin authorized via ServiceAccount Token.'));
+
+        // 2. 写入 Etcd
+        tl.to(orb, { duration: 0.5, x: pEtcd.x, y: pEtcd.y })
+          .to('#etcd-2d', { scale: 1.1, duration: 0.2, yoyo: true, repeat: 1 })
+          .add(() => addLog('ETCD', 'MVCC: Created key /registry/deployments/nginx-app. CAS successful.'));
+
+        // 3. 调度判定
+        tl.to(orb, { duration: 0.5, x: pSched.x, y: pSched.y })
+          .add(() => addLog('SCHED', 'Predicates: Filtering nodes by taints, tolerations and resource requests...'))
+          .add(() => addLog('SCHED', 'Priorities: Scoring 4 nodes based on ImageLocality and BalancedResourceAllocation...'))
+          .to('#sched-2d', { rotation: 360, duration: 0.8 });
+
+        // 4. 多节点矩阵分发
+        const podTypes = [
+            { class: 'p-db', tag: 'DB' }, 
+            { class: 'p-fe', tag: 'FE' }, { class: 'p-fe', tag: 'FE' }, { class: 'p-fe', tag: 'FE' },
+            { class: 'p-be', tag: 'MD' }, { class: 'p-be', tag: 'MD' }, { class: 'p-be', tag: 'MD' },
+            { class: 'p-be', tag: 'SYS' }, { class: 'p-be', tag: 'SYS' }, { class: 'p-be', tag: 'SYS' },
+            { class: 'p-be', tag: 'INT' }, { class: 'p-be', tag: 'INT' }, { class: 'p-be', tag: 'INT' }
+        ];
+
+        tl.add(() => {
+            podTypes.forEach((type, i) => {
+                setTimeout(() => {
+                    const nodeId = i % 4;
+                    const grid = document.getElementById(`grid-${nodeId}`);
+                    const pod = document.createElement('div');
+                    pod.className = `pod-unit ${type.class}`;
+                    pod.innerText = type.tag;
+                    grid.appendChild(pod);
+                    
+                    gsap.to(pod, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out" });
+                    addLog('KUBELET', `Successfully pulled image for ${type.tag} on Node-0${nodeId+1}`);
+                    
+                    // 飞向 Node 的动画
+                    const cNode = getCenter(`node-${nodeId}`);
+                    const cOrb = orb.cloneNode(true);
+                    document.querySelector('.k8s-blueprint').appendChild(cOrb);
+                    gsap.to(cOrb, { 
+                        x: cNode.x, 
+                        y: cNode.y, 
+                        opacity: 0, 
+                        duration: 0.6, 
+                        onComplete: () => {
+                            cOrb.remove();
+                            document.getElementById(`node-${nodeId}`).classList.add('active-node');
+                        }
+                    });
+                }, i * 150);
+            });
+            orb.style.display = 'none';
+        });
+    };
+
+    // --- Ingress 流量模拟 ---
+    window.triggerIngressFlow = () => {
+        addLog('INGRESS', 'New traffic detected: host=k8s.expert.com, path=/api');
+        const orb = document.getElementById('orb-path');
+        const pIngress = { x: 50 + 110, y: 10 + 50 };
+        const tl = gsap.timeline();
+
+        tl.set(orb, { display: 'block', x: -100, y: 60, backgroundColor: '#8b5cf6', scale: 1.5 })
+          .to(orb, { x: pIngress.x, y: pIngress.y, duration: 1 })
+          .add(() => addLog('INGRESS', 'Route match: FE microservice. Balancing to EndpointSlice...'));
+
+        // 模拟随机飞向前端 Pod
+        for(let i=0; i<3; i++) {
+            setTimeout(() => {
+                const targetNode = Math.floor(Math.random()*4);
+                const rect = document.getElementById(`node-${targetNode}`).getBoundingClientRect();
+                const stage = document.querySelector('.k8s-blueprint').getBoundingClientRect();
+                const cOrb = orb.cloneNode(true);
+                document.querySelector('.k8s-blueprint').appendChild(cOrb);
+                gsap.to(cOrb, { 
+                    x: rect.left - stage.left + 50, 
+                    y: rect.top - stage.top + 100, 
+                    opacity: 0, 
+                    scale: 0.5, 
+                    duration: 0.8,
+                    onComplete: () => {
+                        cOrb.remove();
+                        addLog('SERVICE', `Request proxied to Pod FE on Node-0${targetNode+1}`);
+                    }
+                });
+            }, i * 300);
+        }
+    };
+
+    // --- TAB3: 3D 拓扑专家 ---
+    let scene3D, camera3D, renderer3D, controls3D, labelRenderer3D;
+    let nodeFleet = [];
+
+    function init3D() {
+        const container = document.getElementById('canvas-3d');
+        scene3D = new THREE.Scene();
+        scene3D.background = new THREE.Color(0x020617);
+        scene3D.fog = new THREE.Fog(0x020617, 100, 400);
+
+        camera3D = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera3D.position.set(150, 120, 200);
+
+        renderer3D = new THREE.WebGLRenderer({ antialias: true });
+        renderer3D.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer3D.domElement);
+
+        labelRenderer3D = new CSS2DRenderer();
+        labelRenderer3D.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer3D.domElement.style.position = 'absolute';
+        labelRenderer3D.domElement.style.top = '0';
+        labelRenderer3D.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer3D.domElement);
+
+        controls3D = new OrbitControls(camera3D, renderer3D.domElement);
+        scene3D.add(new THREE.GridHelper(500, 50, 0x1e293b, 0x0f172a));
+
+        // 光照
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
+        scene3D.add(hemi);
+
+        // Master 建筑 (拟物化总部)
+        const masterHQ = createMasterModel();
+        masterHQ.position.set(0, 5, -80);
+        scene3D.add(masterHQ);
+
+        // Worker 矩阵 (3x3 机架阵列)
+        for(let i=0; i<3; i++) {
+            for(let j=0; j<3; j++) {
+                const node = createNodeRack(i, j);
+                node.position.set(-80 + i*80, 2, 20 + j*60);
+                scene3D.add(node);
+                nodeFleet.push(node);
+                // 创建通信管道
+                createFiberCable(masterHQ.position, node.position);
+            }
+        }
+
+        animate3D();
+    }
+
+    function createMasterModel() {
+        const group = new THREE.Group();
+        // 主体
+        const base = new THREE.Mesh(new THREE.BoxGeometry(60, 20, 40), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+        // 发光塔 (API Server)
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(5, 8, 40, 6), new THREE.MeshStandardMaterial({color: 0xf59e0b, emissive: 0xf59e0b, emissiveIntensity: 0.5}));
+        tower.position.y = 30;
+        group.add(base, tower);
+        add3DLabel(group, "MASTER HQ", 50);
+        return group;
+    }
+
+    function createNodeRack(i, j) {
+        const group = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(40, 4, 30), new THREE.MeshStandardMaterial({color: 0x064e3b}));
+        const server = new THREE.Mesh(new THREE.BoxGeometry(30, 15, 20), new THREE.MeshStandardMaterial({color: 0x334155}));
+        server.position.y = 8;
+        group.add(base, server);
+        
+        // 机架指示灯
+        const led = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        led.position.set(16, 8, 10.1);
+        group.add(led);
+
+        add3DLabel(group, `NODE-${i}${j}`, 20);
+        return group;
+    }
+
+    function createFiberCable(p1, p2) {
+        const curve = new THREE.CatmullRomCurve3([
+            p1,
+            new THREE.Vector3((p1.x+p2.x)/2, 20, (p1.z+p2.z)/2),
+            p2
+        ]);
+        const points = curve.getPoints(50);
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.LineBasicMaterial({color: 0x326ce5, transparent: true, opacity: 0.3});
+        scene3D.add(new THREE.Line(geo, mat));
+    }
+
+    function add3DLabel(obj, text, y) {
+        const div = document.createElement('div');
+        div.className = 'tag-3d';
+        div.textContent = text;
+        const label = new CSS2DObject(div);
+        label.position.set(0, y, 0);
+        obj.add(label);
+    }
+
+    function animate3D() {
+        requestAnimationFrame(animate3D);
+        controls3D.update();
+        renderer3D.render(scene3D, camera3D);
+        labelRenderer3D.render(scene3D, camera3D);
+    }
+
+    // 初始欢迎
+    window.onload = () => {
+        addLog('SYS', 'Expert Cluster Control Plane v1.20 initialized.');
+        addLog('SYS', 'StorageClass: "SSD-Standard" ready.');
+        
+        // 页面初始化3D浮动效果
+        gsap.to(".area-3d", {
+            y: "10",
+            duration: 2,
+            repeat: -1,
+            yoyo: true,
+            ease: "sine.inOut",
+            stagger: 0.5
+        });
+    }
+
+    // 窗口大小调整
+    window.addEventListener('resize', () => {
+        if(camera3D) {
+            const container = document.getElementById('canvas-3d');
+            camera3D.aspect = container.clientWidth / container.clientHeight;
+            camera3D.updateProjectionMatrix();
+            renderer3D.setSize(container.clientWidth, container.clientHeight);
+            if (labelRenderer3D) {
+                labelRenderer3D.setSize(container.clientWidth, container.clientHeight);
+            }
+        }
+    });
+</script>
+</body>
+</html>
