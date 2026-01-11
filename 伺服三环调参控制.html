@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>伺服三环控制仿真系统 - 整合版</title>
+    <!-- 引入公共依赖 -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css" />
+    <script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        /* ========== 新增 Tab 切换样式 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .tab-container {
+            max-width: 100%;
+            min-height: 100vh;
+            background: #fdfdfd;
+        }
+        .tab-nav {
+            display: flex;
+            background: #2c3e50;
+            padding: 0 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tab-nav-item {
+            padding: 15px 30px;
+            color: #ecf0f1;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-nav-item.active {
+            background: #34495e;
+            border-bottom: 3px solid #3498db;
+            color: #fff;
+        }
+        .tab-nav-item:hover {
+            background: #34495e;
+        }
+        .tab-content {
+            width: 100%;
+            min-height: calc(100vh - 62px);
+        }
+        .tab-panel {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* ========== Tab1 原有样式 (完整保留) ========== */
+        #tab1-panel {
+            background: #fdfdfd;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: #333;
+            padding: 20px;
+        }
+        #tab1-panel .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        #tab1-panel .header {
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        #tab1-panel .layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+        #tab1-panel #jxgbox {
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            background: white;
+        }
+        #tab1-panel .math-display {
+            background: #f8f9fa;
+            padding: 20px;
+            border-left: 5px solid #0072b2;
+            border-radius: 4px;
+        }
+        #tab1-panel .math-display h3 {
+            margin-top: 0;
+            font-size: 1rem;
+            color: #0072b2;
+        }
+        #tab1-panel .control-panel {
+            background: #fff;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #tab1-panel .param-row {
+            margin: 15px 0;
+        }
+        #tab1-panel label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        #tab1-panel input[type="range"] {
+            width: 100%;
+        }
+        #tab1-panel .val {
+            color: #d55e00;
+            font-family: monospace;
+        }
+        #tab1-panel .loop-desc {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+        #tab1-panel .highlight {
+            font-weight: bold;
+            color: #000;
+        }
+        #tab1-panel .math-notes {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: #555;
+            background: #eee;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        /* ========== Tab2 原有样式 (完整保留) ========== */
+        #tab2-panel {
+            background: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            display: flex;
+            height: calc(100vh - 62px);
+            overflow: hidden;
+        }
+        #tab2-panel .sidebar {
+            width: 380px;
+            background: #1e1e1e;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        #tab2-panel h1 {
+            font-size: 1.1rem;
+            color: #00ffcc;
+            border-bottom: 2px solid #00ffcc;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+        #tab2-panel h2 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            margin-top: 20px;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #tab2-panel h2::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #333;
+        }
+        #tab2-panel .param-group {
+            background: #262626;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+        #tab2-panel label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin: 8px 0;
+            font-weight: 500;
+        }
+        #tab2-panel input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #00ffcc;
+            margin-top: 5px;
+        }
+        #tab2-panel .val-display {
+            color: #00ffcc;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        #tab2-panel .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 15px;
+            position: relative;
+        }
+        #tab2-panel .expert-advice {
+            background: rgba(0, 255, 204, 0.1);
+            border: 1px solid #00ffcc;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 80px;
+            transition: all 0.3s ease;
+        }
+        #tab2-panel .advice-title {
+            color: #00ffcc;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #tab2-panel .advice-content {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #ccc;
+        }
+        #tab2-panel .motor-stage {
+            height: 180px;
+            background: radial-gradient(circle, #2a2a2a 0%, #000 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border: 1px solid #333;
+        }
+        #tab2-panel .motor-shaft {
+            width: 100px;
+            height: 100px;
+            border: 8px solid #444;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #tab2-panel .motor-shaft::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 50%;
+            background: #00ffcc;
+            top: 0;
+            left: calc(50% - 3px);
+            transform-origin: bottom center;
+            box-shadow: 0 0 15px #00ffcc;
+            border-radius: 3px;
+        }
+        #tab2-panel .motor-label {
+            position: absolute;
+            bottom: 10px;
+            right: 20px;
+            font-family: 'Courier New', monospace;
+            color: #00ffcc;
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        #tab2-panel .charts-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 12px;
+        }
+        #tab2-panel .chart-box {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid #333;
+        }
+        #tab2-panel .tuning-steps {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+        #tab2-panel .step {
+            margin-bottom: 8px;
+            color: #888;
+        }
+        #tab2-panel .step.active {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+        #tab2-panel button {
+            background: #00ffcc;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            transition: 0.3s;
+            margin-top: 10px;
+            text-transform: uppercase;
+        }
+        #tab2-panel button:hover {
+            filter: brightness(1.2);
+            transform: translateY(-2px);
+        }
+        #tab2-panel .btn-reset {
+            background: #ff4444;
+            color: white;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="tab-container">
+        <!-- Tab 导航栏 -->
+        <div class="tab-nav">
+            <div class="tab-nav-item active" data-tab="tab1">伺服三环嵌套控制：数学架构仿真</div>
+            <div class="tab-nav-item" data-tab="tab2">专家级伺服三环 PID 仿真教学系统</div>
+        </div>
+
+        <!-- Tab 内容区域 -->
+        <div class="tab-content">
+            <!-- Tab1 面板 (原有Tab1完整内容) -->
+            <div class="tab-panel active" id="tab1-panel">
+                <div class="container">
+                    <div class="header">
+                        <h1>伺服嵌套三环 (Cascade Control) 数学架构</h1>
+                        <p>基于 JSXGraph 的动态控制框图与物理仿真</p>
+                    </div>
+
+                    <div class="layout">
+                        <!-- 动态框图展示 -->
+                        <div id="jxgbox" class="jxgbox"></div>
+
+                        <!-- 侧边公式与控制 -->
+                        <div class="side-bar">
+                            <div class="math-display" id="math-output">
+                                <h3>当前传递函数状态</h3>
+                                <div id="formula-pos">$$ \omega_{ref} = K_{p} \cdot ( \theta_{ref} - \theta ) $$</div>
+                                <div id="formula-speed">$$ I_{ref} = K_{p} e_\omega + K_{i} \int e_\omega dt $$</div>
+                                <div id="formula-torque">$$ V_{out} = K_{p} e_i + K_{i} \int e_i dt $$</div>
+                            </div>
+
+                            <div class="control-panel">
+                                <div class="param-row">
+                                    <label>目标位置 θ_ref: <span class="val" id="v_target">0</span>°</label>
+                                    <input type="range" id="target" min="-180" max="180" value="45">
+                                </div>
+                                <div class="param-row">
+                                    <label>负载转矩 T_load: <span class="val" id="v_load">0</span> Nm</label>
+                                    <input type="range" id="load" min="0" max="50" step="1" value="0">
+                                </div>
+                                <hr>
+                                <div class="loop-desc">
+                                    <p><span class="highlight">1. 位置环 (P):</span> 外环计算位置误差，输出目标转速。</p>
+                                    <p><span class="highlight">2. 速度环 (PI):</span> 中环抵抗 <span style="color:red">T_load</span>，Ki 积分项负责消除静差。</p>
+                                    <p><span class="highlight">3. 电流环 (PI):</span> 内环响应最快，直接决定磁场转矩。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="math-notes">
+                    <strong>💡 数学说明：</strong>
+                    <ul>
+                        <li><strong>内环 (电流环):</strong> 它的带宽必须最高（通常是速度环的10倍）。它处理的是电学方程 \( V = IR + L\frac{di}{dt} + K_e\omega \)。</li>
+                        <li><strong>中环 (速度环):</strong> 它是机械能的守护者。当你在滑块上增加 <strong>T_load</strong> 时，速度会瞬间下降，此时 PI 控制器中的 <strong>I (积分项)</strong> 开始累积，强制增加电流环的给定值，直到电机转矩能够抵消负载，转速恢复平衡。</li>
+                        <li><strong>外环 (位置环):</strong> 它是指挥官。它只关心 $\Delta\theta$。在现代伺服中，位置环通常只用 P 控制，因为积分项放在外环容易引起超调和低频震荡。</li>
+                    </ul>
+                </div>
+
+                <script>
+                    // ========== Tab1 原有脚本 (完整保留，封装在IIFE中避免冲突) ==========
+                    (function() {
+                        // ================= 初始化 JSXGraph 画板 =================
+                        const board = JXG.JSXGraph.initBoard('jxgbox', {
+                            boundingbox: [-10, 10, 10, -10],
+                            axis: false,
+                            showCopyright: false,
+                            pan: {enabled: false}
+                        });
+
+                        // 绘制框图结构 (背景)
+                        const posBox = board.create('polygon', [[-9,2], [-6,2], [-6,-2], [-9,-2]], {fillColor:'#e6f3ff', strokeColor:'#0072b2', fixed:true});
+                        const spdBox = board.create('polygon', [[-5,2], [-2,2], [-2,-2], [-5,-2]], {fillColor:'#fff4e6', strokeColor:'#d55e00', fixed:true});
+                        const curBox = board.create('polygon', [[-1,2], [2,2], [2,-2], [-1,-2]], {fillColor:'#f3e6ff', strokeColor:'#cc79a7', fixed:true});
+                        const motorBox = board.create('polygon', [[4,3], [8,3], [8,-3], [4,-3]], {fillColor:'#eee', strokeColor:'#333', fixed:true});
+
+                        board.create('text', [-8.8, 0, '位置 P'], {fontSize:14});
+                        board.create('text', [-4.8, 0, '速度 PI'], {fontSize:14});
+                        board.create('text', [-0.8, 0, '电流 PI'], {fontSize:14});
+                        board.create('text', [5, 0, '电机/负载'], {fontSize:14});
+
+                        // 绘制物理反馈动态圆 (右侧模拟电机转动)
+                        const center = board.create('point', [6, -6], {visible:false});
+                        const motorCircle = board.create('circle', [center, 3], {strokeColor: '#333', strokeWidth:2});
+                        const shaftLine = board.create('segment', [center, [6, -3]], {strokeColor: '#d55e00', strokeWidth:5});
+                        const targetPointer = board.create('segment', [center, [6, -3]], {strokeColor: '#0072b2', strokeWidth:2, dash:2});
+
+                        // 绘制误差动态指示 (动态箭头，表示误差大小)
+                        const errArrow = board.create('arrow', [[-9, 4], [-9, 4]], {strokeColor:'red', strokeWidth:3});
+
+                        // ================= 仿真核心逻辑 =================
+                        let state = {
+                            pos: 0, speed: 0, current: 0,
+                            target: 45, load: 0,
+                            int_speed: 0, int_curr: 0
+                        };
+
+                        const params = {
+                            kp_p: 2.0,
+                            kp_s: 1.5, ki_s: 0.8,
+                            kp_c: 5.0, ki_c: 2.0,
+                            J: 0.5, R: 1.2, Kt: 1.0, dt: 0.02
+                        };
+
+                        function simulate() {
+                            // 1. 位置环 (P控制)
+                            let error_p = (state.target - state.pos);
+                            let targetSpeed = error_p * params.kp_p;
+
+                            // 2. 速度环 (PI控制)
+                            let error_s = targetSpeed - state.speed;
+                            state.int_speed += error_s * params.dt;
+                            let targetCurr = (error_s * params.kp_s) + (state.int_speed * params.ki_s);
+
+                            // 3. 电流环 (PI控制)
+                            let error_c = targetCurr - state.current;
+                            state.int_curr += error_c * params.dt;
+                            let voltage = (error_c * params.kp_c) + (state.int_curr * params.ki_c);
+
+                            // 电机物理模型
+                            // 转矩 T = Kt * I; 加速度 a = (T - T_load) / J
+                            state.current = voltage / params.R; // 简化：忽略电感 L
+                            let torque = params.Kt * state.current;
+                            let accel = (torque - state.load) / params.J;
+                            
+                            state.speed += accel * params.dt;
+                            state.pos += state.speed * params.dt;
+
+                            // 更新 UI
+                            updateVisuals(error_p);
+                        }
+
+                        function updateVisuals(error_p) {
+                            // 更新右侧电机旋转 ( shaftLine )
+                            let rad = state.pos * Math.PI / 180;
+                            shaftLine.point2.setPosition(JXG.COORDS_BY_USER, [
+                                6 + 3 * Math.sin(rad),
+                                -6 + 3 * Math.cos(rad)
+                            ]);
+
+                            // 更新目标虚线指针
+                            let tRad = state.target * Math.PI / 180;
+                            targetPointer.point2.setPosition(JXG.COORDS_BY_USER, [
+                                6 + 3 * Math.sin(tRad),
+                                -6 + 3 * Math.cos(tRad)
+                            ]);
+
+                            // 更新误差指示箭头 (位置环误差可视化)
+                            // 箭头长度随 error_p 变化
+                            errArrow.point2.setPosition(JXG.COORDS_BY_USER, [-9 + error_p/10, 4]);
+
+                            board.update();
+                        }
+
+                        // ================= 交互绑定 =================
+                        document.getElementById('target').addEventListener('input', (e) => {
+                            state.target = parseFloat(e.target.value);
+                            document.getElementById('v_target').innerText = state.target;
+                        });
+
+                        document.getElementById('load').addEventListener('input', (e) => {
+                            state.load = parseFloat(e.target.value);
+                            document.getElementById('v_load').innerText = state.load;
+                        });
+
+                        // 启动主循环
+                        setInterval(simulate, 20);
+                    })();
+                </script>
+            </div>
+
+            <!-- Tab2 面板 (原有Tab2完整内容) -->
+            <div class="tab-panel" id="tab2-panel">
+                <div class="sidebar">
+                    <h1>SERVO EXPERT V2.0</h1>
+                    
+                    <div class="param-group">
+                        <label>1. 目标位置 (Deg): <span class="val-display" id="v_targetPos">0</span></label>
+                        <input type="range" id="targetPos" min="-1800" max="1800" value="0">
+                        <label>负载转矩 (Nm): <span class="val-display" id="v_loadTorque">0</span></label>
+                        <input type="range" id="loadTorque" min="0" max="15" step="0.1" value="0">
+                    </div>
+
+                    <h2>位置环 (Position - P)</h2>
+                    <div class="param-group">
+                        <label>Kp (位置): <span class="val-display" id="v_kp_p">1.0</span></label>
+                        <input type="range" id="kp_p" min="0" max="10" step="0.1" value="1.0">
+                    </div>
+
+                    <h2>速度环 (Speed - PI)</h2>
+                    <div class="param-group">
+                        <label>Kp (速度): <span class="val-display" id="v_kp_s">0.5</span></label>
+                        <input type="range" id="kp_s" min="0" max="5" step="0.01" value="0.5">
+                        <label>Ki (速度): <span class="val-display" id="v_ki_s">0.1</span></label>
+                        <input type="range" id="ki_s" min="0" max="5" step="0.01" value="0.1">
+                    </div>
+
+                    <h2>电流环 (Current - PI)</h2>
+                    <div class="param-group">
+                        <label>Kp (电流): <span class="val-display" id="v_kp_c">2.0</span></label>
+                        <input type="range" id="kp_c" min="0" max="20" step="0.1" value="2.0">
+                        <label>Ki (电流): <span class="val-display" id="v_ki_c">0.5</span></label>
+                        <input type="range" id="ki_c" min="0" max="10" step="0.1" value="0.5">
+                    </div>
+
+                    <h2>电机动力学 (Physics)</h2>
+                    <div class="param-group">
+                        <label>惯量 J: <span class="val-display" id="v_inertia">0.02</span></label>
+                        <input type="range" id="inertia" min="0.005" max="0.2" step="0.001" value="0.02">
+                        <label>电阻 R (Ω): <span class="val-display" id="v_res">2.5</span></label>
+                        <input type="range" id="resistance" min="0.1" max="10" step="0.1" value="2.5">
+                    </div>
+
+                    <button onclick="resetSystem()" class="btn-reset">紧急停止 / 系统复位</button>
+                </div>
+
+                <div class="main-content">
+                    <!-- 实时专家建议面板 -->
+                    <div class="expert-advice" id="advicePanel">
+                        <div class="advice-title">💡 专家调试建议:</div>
+                        <div class="advice-content" id="adviceText">
+                            欢迎来到伺服专家控制系统。请先尝试设置一个“目标位置”，然后观察三环控制如何协同工作。
+                        </div>
+                    </div>
+
+                    <div class="motor-stage">
+                        <div class="motor-shaft" id="motorShaft"></div>
+                        <div class="motor-label" id="statsDisplay">POS: 0.0° | SPD: 0 RPM</div>
+                    </div>
+
+                    <div class="charts-container">
+                        <div class="chart-box"><canvas id="posChart"></canvas></div>
+                        <div class="chart-box"><canvas id="speedChart"></canvas></div>
+                        <div class="chart-box"><canvas id="currentChart"></canvas></div>
+                        <div class="chart-box"><canvas id="voltageChart"></canvas></div>
+                    </div>
+
+                    <div class="tuning-steps">
+                        <div style="color:#00ffcc; margin-bottom:10px; font-weight:bold;">标准调试步骤：</div>
+                        <div class="step" id="step1">1. 调电流环 Kp：直到电流响应迅速。</div>
+                        <div class="step" id="step2">2. 调速度环 Ki：消除带负载时的静差。</div>
+                        <div class="step" id="step3">3. 调位置环 Kp：提升响应速度（过大将抖动）。</div>
+                    </div>
+                </div>
+
+                <script type="module">
+                    // ========== Tab2 原有脚本 (完整保留) ==========
+                    import gsap from 'https://esm.sh/gsap';
+                    import Chart from 'https://esm.sh/chart.js/auto';
+
+                    // ================= 实时解说词典 =================
+                    const EXPERT_TIPS = {
+                        targetPos: "改变目标位置。观察位置曲线（青色）如何追随设定值。伺服系统的核心就是实现高精度的位置追踪。",
+                        loadTorque: "负载转矩模拟外部阻力。你会看到电流环迅速增加电流来对抗阻力，这体现了系统的抗干扰能力。",
+                        kp_p: "位置环 Kp：决定响应快慢。伺服标准通常只用 P。增加它能减小滞后，但如果内环（速度环）不够稳，会引起剧烈震荡。",
+                        kp_s: "速度环 Kp：系统的'刚性'。增加它可以让速度跟随更紧密，但过大会放大电机噪声和高频震荡。",
+                        ki_s: "速度环 Ki：消除稳态误差。在有负载转矩时，必须靠 Ki 才能让实际速度完美匹配目标，否则会‘带不动’。",
+                        kp_c: "电流环 Kp：转矩响应的灵魂。它是最内环，必须第一个调稳。它决定了电机产生力量的速度。",
+                        ki_c: "电流环 Ki：确保电流（转矩）准确。因为电流环频率极高，通常设置较小，以保证稳定性。",
+                        inertia: "转动惯量 J：物理特性。增加惯量会让电机显得‘笨重’。你需要更大的电流环增益来驱动大惯量负载。",
+                        resistance: "电机电阻 R：影响电流响应速度。模拟真实电机的发热和阻抗特性。"
+                    };
+
+                    // ================= 物理参数与状态 =================
+                    const cfg = {
+                        dt: 0.01, 
+                        maxVoltage: 48, maxCurrent: 25,
+                        Kt: 0.6, // 转矩常数
+                        Ke: 0.5, // 反电动势常数
+                        B: 0.02  // 阻尼
+                    };
+
+                    let state = {
+                        targetPos: 0, targetSpeed: 0, targetCurrent: 0,
+                        pos: 0, speed: 0, current: 0, voltage: 0,
+                        err_p_int: 0, err_s_int: 0, err_c_int: 0,
+                        loadTorque: 0
+                    };
+
+                    const params = {
+                        kp_p: 1.0, kp_s: 0.5, ki_s: 0.1, kp_c: 2.0, ki_c: 0.5,
+                        J: 0.02, R: 2.5
+                    };
+
+                    // ================= 初始化图表 =================
+                    const createChart = (id, label, color) => {
+                        return new Chart(document.getElementById(id), {
+                            type: 'line',
+                            data: { labels: [], datasets: [{ label, data: [], borderColor: color, borderWidth: 1.5, pointRadius: 0, fill: false }] },
+                            options: { 
+                                animation: false, responsive: true, maintainAspectRatio: false,
+                                scales: { x: { display: false }, y: { grid: { color: '#222' }, ticks: { color: '#666' } } },
+                                plugins: { legend: { labels: { color: '#aaa', size: 10 } } }
+                            }
+                        });
+                    };
+
+                    const charts = {
+                        pos: createChart('posChart', '位置 Position (Deg)', '#00ffcc'),
+                        speed: createChart('speedChart', '速度 Speed (RPM)', '#ffff00'),
+                        current: createChart('currentChart', '电流 Current (A)', '#ff00ff'),
+                        voltage: createChart('voltageChart', '输出电压 Voltage (V)', '#ffffff')
+                    };
+
+                    // ================= 核心控制逻辑 (三环嵌套) =================
+                    function updatePhysics() {
+                        // --- 1. 位置环 (Outer Loop) ---
+                        // 伺服行业标准只用 P，避免积分引起的相位滞后和震荡
+                        const err_p = state.targetPos - state.pos;
+                        state.targetSpeed = err_p * params.kp_p;
+                        
+                        // --- 2. 速度环 (Middle Loop) ---
+                        // PI 控制：负责抗干扰，克服负载转矩波动
+                        const err_s = (state.targetSpeed * Math.PI/180 * 60) - (state.speed * Math.PI/180 * 60); 
+                        state.err_s_int += err_s * cfg.dt;
+                        state.targetCurrent = (err_s * params.kp_s) + (state.err_s_int * params.ki_s);
+                        state.targetCurrent = Math.max(-cfg.maxCurrent, Math.min(cfg.maxCurrent, state.targetCurrent));
+
+                        // --- 3. 电流/转矩环 (Inner Loop) ---
+                        // PI 控制：响应最快的一环，直接控制电机电磁转矩
+                        const err_c = state.targetCurrent - state.current;
+                        state.err_c_int += err_c * cfg.dt;
+                        let v_out = (err_c * params.kp_c) + (state.err_c_int * params.ki_c);
+                        
+                        // 反电动势补偿 (Back-EMF Compensation): 电机转动产生反向电压，需在驱动中抵消
+                        const backEMF = cfg.Ke * (state.speed * Math.PI/180);
+                        state.voltage = Math.max(-cfg.maxVoltage, Math.min(cfg.maxVoltage, v_out + backEMF));
+
+                        // --- 4. 电机物理模拟 ---
+                        // 电流 I = (V - e) / R
+                        state.current = (state.voltage - backEMF) / params.R;
+                        
+                        // 机械动力学：加速度 = (电磁转矩 - 负载转矩 - 阻尼) / 惯量 J
+                        const torque = cfg.Kt * state.current;
+                        const acceleration = (torque - state.loadTorque - cfg.B * (state.speed * Math.PI/180)) / params.J;
+                        
+                        const rad_s = (state.speed * Math.PI/180) + acceleration * cfg.dt;
+                        state.speed = rad_s * 180 / Math.PI; 
+                        state.pos += state.speed * cfg.dt;
+
+                        // --- 5. 视觉渲染 ---
+                        gsap.set("#motorShaft", { rotation: state.pos });
+                        document.getElementById('statsDisplay').innerText = `POS: ${state.pos.toFixed(1)}° | SPD: ${(state.speed/6).toFixed(0)} RPM`;
+                    }
+
+                    // ================= 主循环 =================
+                    function loop() {
+                        updatePhysics();
+                        if (Math.floor(Date.now() / 16) % 3 === 0) updateCharts();
+                        requestAnimationFrame(loop);
+                    }
+
+                    function updateCharts() {
+                        Object.keys(charts).forEach(key => {
+                            const chart = charts[key];
+                            let val = state[key];
+                            if (key === 'speed') val /= 6; 
+                            
+                            chart.data.labels.push("");
+                            chart.data.datasets[0].data.push(val);
+                            if (chart.data.labels.length > 60) {
+                                chart.data.labels.shift();
+                                chart.data.datasets[0].data.shift();
+                            }
+                            chart.update('none');
+                        });
+                    }
+
+                    // ================= 交互绑定与动态解说 =================
+                    const bind = (id, target, isFloat = true) => {
+                        const el = document.getElementById(id);
+                        const disp = document.getElementById('v_' + id);
+                        
+                        el.addEventListener('input', (e) => {
+                            const val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
+                            if (target in params) params[target] = val;
+                            else state[target] = val;
+                            disp.innerText = val.toFixed(isFloat ? 2 : 0);
+
+                            // 触发动态专家提示
+                            const advicePanel = document.getElementById('advicePanel');
+                            const adviceText = document.getElementById('adviceText');
+                            adviceText.innerText = EXPERT_TIPS[id] || "正在调节系统参数...";
+                            
+                            // 引导步骤高亮
+                            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+                            if(id.includes('kp_c')) document.getElementById('step1').classList.add('active');
+                            if(id.includes('ki_s')) document.getElementById('step2').classList.add('active');
+                            if(id.includes('kp_p')) document.getElementById('step3').classList.add('active');
+                        });
+                    };
+
+                    bind('targetPos', 'targetPos', false);
+                    bind('loadTorque', 'loadTorque');
+                    bind('kp_p', 'kp_p');
+                    bind('kp_s', 'kp_s');
+                    bind('ki_s', 'ki_s');
+                    bind('kp_c', 'kp_c');
+                    bind('ki_c', 'ki_c');
+                    bind('inertia', 'J');
+                    bind('resistance', 'R');
+
+                    window.resetSystem = () => {
+                        state.pos = 0; state.speed = 0; state.current = 0;
+                        state.err_p_int = 0; state.err_s_int = 0; state.err_c_int = 0;
+                        state.targetPos = 0;
+                        document.getElementById('targetPos').value = 0;
+                        document.getElementById('v_targetPos').innerText = "0";
+                        document.getElementById('adviceText').innerText = "系统已重置。建议从调节电流环 Kp 开始。";
+                    };
+
+                    loop();
+                </script>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 切换核心脚本 -->
+    <script>
+        // 绑定Tab切换事件
+        document.querySelectorAll('.tab-nav-item').forEach(item => {
+            item.addEventListener('click', function() {
+                // 移除所有active状态
+                document.querySelectorAll('.tab-nav-item').forEach(nav => nav.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+                
+                // 给当前点击的Tab添加active状态
+                this.classList.add('active');
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(`${tabId}-panel`).classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
