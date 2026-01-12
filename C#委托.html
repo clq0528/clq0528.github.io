@@ -325,6 +325,25 @@ del.accept("Hi");</code></pre>
          * 3. Func：0-16输入参数，必须有返回值
          * 4. Predicate：仅1参数，返回bool
          */
+        
+        /* 
+         * 交互设计与知识点映射总结
+         * 拟物化 (Neumorphism) 设计：
+         * 页面使用了柔和的阴影（box-shadow）模拟物理表面的凸起和凹陷，让初学者感觉到“方法”是可以被“移动”和“插拔”的实体。
+         * 
+         * GSAP 交互动画 (3.1 - 3.4 节内容的体现)：
+         * 绑定 (Bind)：点击“绑定方法”，方法块会平滑移动到委托中心。这演示了 method = new MethodDelegate(Add) 的过程。
+         * 执行 (Invoke)：点击“执行委托”，会有一个橙色光球（信号）从委托插座传向绑定的方法。这模拟了委托作为“中间人”调用目标方法的过程。
+         * 清空 (Clear)：演示了 OnDelegate = null 的物理回归。
+         * 
+         * 多语言类比 (2.5 节内容的体现)：
+         * JavaScript 类比：强调 JS 中函数直接作为参数传递（Callback），对比 C# 需要先定义类型的严谨性。
+         * Java 类比：将 C# 的 Action/Func 与 Java 8 引入的 Consumer/Function 接口一一对应。Java 初学者会立刻明白 Func<T, res> 就是 Function<T, R>。
+         * 
+         * JSXGraph 逻辑可视化 (2.4 节内容的体现)：
+         * 专门针对 Predicate。通过一个可拖动的蓝色点。当点的坐标大于 100 时，文本变为绿色“True”，小于 100 时为红色“False”。
+         * 这直观展示了 Predicate 的唯一职责：根据输入（T）返回布尔判断。
+         */
     </script>
 </body>
 </html>
