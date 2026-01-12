@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C# 委托交互式教学 - 拟物化风格</title>
+    <!-- 引入库 -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.5.0/distrib/jsxgraphcore.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.5.0/distrib/jsxgraph.css" />
+    
+    <style>
+        :root {
+            --bg: #e0e5ec;
+            --shadow-light: #ffffff;
+            --shadow-dark: #a3b1c6;
+            --accent: #4a90e2;
+            --text: #444;
+        }
+
+        body {
+            background-color: var(--bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 拟物化卡片 */
+        .neu-card {
+            background: var(--bg);
+            border-radius: 30px;
+            box-shadow: 20px 20px 60px var(--shadow-dark), -20px -20px 60px var(--shadow-light);
+            padding: 30px;
+            margin: 20px;
+            width: 90%;
+            max-width: 900px;
+        }
+
+        .neu-button {
+            background: var(--bg);
+            border: none;
+            padding: 15px 30px;
+            border-radius: 15px;
+            box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: bold;
+            color: var(--accent);
+            margin: 10px;
+        }
+
+        .neu-button:active {
+            box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+            transform: scale(0.98);
+        }
+
+        .code-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .code-block {
+            background: #f0f3f7;
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 13px;
+            box-shadow: inset 2px 2px 5px var(--shadow-dark);
+            overflow-x: auto;
+        }
+
+        .code-block h4 { margin-top: 0; color: #555; border-bottom: 1px solid #ccc; }
+
+        /* 动画画布区 */
+        #viz-container {
+            width: 100%;
+            height: 300px;
+            background: var(--bg);
+            border-radius: 20px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
+        }
+
+        .method-box {
+            width: 120px;
+            height: 60px;
+            background: #fff;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            box-shadow: 5px 5px 10px var(--shadow-dark);
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .delegate-socket {
+            width: 150px;
+            height: 80px;
+            border: 3px dashed var(--accent);
+            border-radius: 15px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: var(--accent);
+            color: white;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        #jxgbox { width: 100%; height: 200px; border-radius: 15px; margin-top: 10px;}
+        
+        /* 参考来源样式 */
+        .reference {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="neu-card">
+        <h1>C# 委托 (Delegate) 交互教学</h1>
+        <!-- 核心概念注释对应：委托的官方定义和个人理解 -->
+        <p><strong>拟物化隐喻：</strong> 委托就像一个“多功能插座”。你可以把不同的“电器”（方法）插上去执行。
+        <br/><small>【知识点】委托是一种定义方法签名的类型，可封装和执行方法，事件是特殊的委托</small></p>
+        
+        <div id="viz-container">
+            <div id="socket" class="delegate-socket">委托插座 (Action)</div>
+            <div id="method-1" class="method-box" style="top: 20px; left: 20px;">方法A: 送货</div>
+            <div id="method-2" class="method-box" style="top: 20px; right: 20px;">方法B: 打印</div>
+            <div id="data-flow" style="position: absolute; width: 20px; height: 20px; background: orange; border-radius: 50%; display: none;"></div>
+        </div>
+
+        <div style="text-align: center;">
+            <button class="neu-button" onclick="animateBind('method-1')">绑定方法A</button>
+            <button class="neu-button" onclick="animateBind('method-2')">绑定方法B</button>
+            <button class="neu-button" onclick="executeDelegate()">执行委托 (Invoke)</button>
+            <button class="neu-button" style="color: #e74c3c;" onclick="clearDelegate()">清空委托</button>
+        </div>
+    </div>
+
+    <!-- 类比区 -->
+    <div class="neu-card">
+        <h3>多语言类比：谁才是委托？</h3>
+        <div class="code-container">
+            <div class="code-block">
+                <h4>C# (Delegate)</h4>
+                <!-- 对应知识点：自定义delegate的声明方式（0-32个参数，可指定返回值） -->
+                <pre><code>// 声明：自定义delegate（支持0-32个参数，可指定返回值）
+delegate void MyDel(string s);
+// 使用：关联兼容签名的方法
+MyDel del = Console.WriteLine;
+del("Hi");</code></pre>
+            </div>
+            <div class="code-block">
+                <h4>JavaScript (Callback)</h4>
+                <pre><code>// 声明
+// JS中函数是一等公民
+const del = (s) => 
+  console.log(s);
+// 使用
+del("Hi");</code></pre>
+            </div>
+            <div class="code-block">
+                <h4>Java (Functional)</h4>
+                <pre><code>// 声明
+Consumer&lt;String&gt; del = 
+  System.out::println;
+// 使用
+del.accept("Hi");</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 四大天王区 -->
+    <div class="neu-card">
+        <h3>委托四大类型可视化 (JSXGraph)</h3>
+        <p>通过输入输出观察 Predicate 和 Func 的区别：
+        <br/><small>【知识点】现代C#中Action/Func支持0-16个参数（早期版本为4个）</small></p>
+        <div id="jxgbox" class="jxgbox"></div>
+        <div class="code-container">
+            <div class="code-block">
+                <span class="badge">Action</span>
+                <!-- 对应知识点：Action的核心特征 -->
+                <p>无返回值（void）。支持0-16个参数，类似 JS 的 <code>void function</code>
+                <br/>示例：Action&lt;int, string&gt;（两个参数，无返回值）</p>
+            </div>
+            <div class="code-block">
+                <span class="badge">Func&lt;T, res&gt;</span>
+                <!-- 对应知识点：Func的核心特征 -->
+                <p>必须有返回值。支持0-16个输入参数，最后一个泛型为返回类型，类似 Java 的 <code>Function&lt;T,R&gt;</code>
+                <br/>示例：Func&lt;int, string&gt;（int参数，返回string）</p>
+            </div>
+            <div class="code-block">
+                <span class="badge">Predicate&lt;T&gt;</span>
+                <!-- 对应知识点：Predicate的核心特征 -->
+                <p>仅接受1个参数，返回值固定为bool。常用于集合筛选（Array.Find/List.FindAll），类似 Java 的 <code>Predicate&lt;T&gt;</code>
+                <br/>示例：Predicate&lt;int&gt; p = x => x > 100;</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 参考出处展示 -->
+    <div class="reference">
+        参考来源：<a href="https://mp.weixin.qq.com/s/2PQphH_oPIwZncEe6MH-mA" target="_blank">C# 的四种委托实现详解</a>
+    </div>
+
+    <script>
+        // --- GSAP 交互动画逻辑 ---
+        let currentBinding = null;
+        let isExecuting = false;
+
+        /**
+         * 绑定方法到委托的动画
+         * 【委托知识点】委托实例可关联任意兼容签名的方法，这是委托的核心特性（类型安全的函数指针）
+         * @param {string} methodId 方法元素ID
+         */
+        function animateBind(methodId) {
+            const method = document.getElementById(methodId);
+            const socket = document.getElementById('socket');
+            
+            gsap.to(method, {
+                x: (window.innerWidth < 900 ? 50 : 250) * (methodId === 'method-1' ? 1 : -1),
+                y: 100,
+                backgroundColor: "#4a90e2",
+                color: "white",
+                duration: 0.8,
+                ease: "back.out(1.7)"
+            });
+            currentBinding = methodId;
+        }
+
+        /**
+         * 执行委托的动画
+         * 【委托知识点】委托支持多播（多个方法绑定到同一委托依次调用），此处模拟单方法调用
+         */
+        function executeDelegate() {
+            if(!currentBinding || isExecuting) return;
+            isExecuting = true;
+            
+            const ball = document.getElementById('data-flow');
+            ball.style.display = 'block';
+            
+            // 模拟信号传递动画（委托调用关联方法的过程）
+            const tl = gsap.timeline({ onComplete: () => { 
+                isExecuting = false; 
+                ball.style.display = 'none';
+            }});
+
+            tl.fromTo(ball, {x: 450, y: 150, scale: 0}, {x: 450, y: 150, scale: 1.5, duration: 0.3})
+              .to(ball, {
+                  x: currentBinding === 'method-1' ? 150 : 750, 
+                  y: 50, 
+                  duration: 0.5,
+                  ease: "power2.in"
+              })
+              .to(`#${currentBinding}`, { scale: 1.2, duration: 0.2, yoyo: true, repeat: 1 });
+        }
+
+        /**
+         * 清空委托的动画
+         * 【委托知识点】清空委托推荐使用GetInvocationList遍历移除（多线程安全），而非循环减自身
+         */
+        function clearDelegate() {
+            gsap.to(".method-box", {
+                x: 0, y: 0, 
+                backgroundColor: "#fff", 
+                color: "#444", 
+                duration: 0.5 
+            });
+            currentBinding = null;
+            // 【补充】C#中清空委托的标准写法参考：
+            // Delegate[] dels = del.GetInvocationList();
+            // foreach (var d in dels) del -= (MyDel)d;
+        }
+
+        // --- JSXGraph 逻辑 ---
+        // 用坐标系展示 Predicate 的过滤逻辑：输入一个数，返回是否大于100
+        // 【委托知识点】Predicate<T> 典型用途：集合筛选（Array.Find/List.FindAll）
+        const board = JXG.JSXGraph.initBoard('jxgbox', {
+            boundingbox: [-10, 50, 200, -20], 
+            axis: true,
+            showCopyright: false,
+            showNavigation: false
+        });
+
+        const inputPoint = board.create('point', [50, 0], {name: '输入参数', color: 'blue'});
+        // 模拟 Predicate<int> p = x => x > 100;（Predicate固定返回bool）
+        const resultText = board.create('text', [120, 30, function() {
+            const val = inputPoint.X();
+            return val > 100 ? "Predicate 结果: True (通过)" : "Predicate 结果: False (拦截)";
+        }], {fontSize: 14, color: function() { return inputPoint.X() > 100 ? 'green' : 'red' }});
+
+        board.create('segment', [[100, -10], [100, 50]], {dash: 2, strokeColor: 'gray'});
+        board.create('text', [105, 45, "阈值: 100"]);
+
+        // --- 初始化完成提示 ---
+        console.log("C# Delegate Tutorial Ready.");
+        /* 
+         * 委托四大类型总结（参考：https://mp.weixin.qq.com/s/2PQphH_oPIwZncEe6MH-mA）
+         * 1. delegate：0-32参数，返回值任意/无
+         * 2. Action：0-16参数，无返回值
+         * 3. Func：0-16输入参数，必须有返回值
+         * 4. Predicate：仅1参数，返回bool
+         */
+    </script>
+</body>
+</html>
