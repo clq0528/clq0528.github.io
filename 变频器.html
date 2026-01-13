@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>工业级变频器(VFD)交互式仿真演示</title>
+    <!-- 标准化 CDN 引入（按优先级排序） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.1/backbone-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.6.5/joint.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/jsplumb.min.js"></script>
+
+    <style>
+        :root { 
+            --bg: #0f172a; 
+            --panel: #1e293b; 
+            --text: #f8fafc; 
+            --accent: #38bdf8; 
+            --active-tab: #38bdf8;
+            --tab-hover: #273449;
+        }
+        body { 
+            background: var(--bg); 
+            color: var(--text); 
+            font-family: 'Segoe UI', system-ui; 
+            margin: 0; 
+            overflow-x: hidden; 
+            line-height: 1.6;
+        }
+        
+        .dashboard { 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+        }
+        header { 
+            padding: 20px; 
+            background: var(--panel); 
+            border-bottom: 2px solid var(--accent); 
+            text-align: center; 
+        }
+
+        /* 标签页样式 */
+        .tab-container {
+            padding: 0 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 2px;
+            background: var(--tab-hover);
+            border-radius: 8px 8px 0 0;
+            padding: 2px;
+        }
+        .tab-btn {
+            padding: 12px 24px;
+            background: var(--panel);
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            background: var(--active-tab);
+            color: var(--bg);
+        }
+        .tab-btn:hover:not(.active) {
+            background: var(--tab-hover);
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background: var(--panel);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
+        }
+        .tab-content.active {
+            display: flex;
+            gap: 20px;
+            height: calc(100% - 44px);
+        }
+        
+        .main-content { 
+            display: flex; 
+            flex: 1; 
+            gap: 20px; 
+        }
+        #canvas-container, #canvas-container-2 { 
+            flex: 3; 
+            background: #fff; 
+            border-radius: 12px; 
+            position: relative; 
+            overflow: hidden; 
+        }
+        .logic-panel { 
+            flex: 1; 
+            background: var(--panel); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+        
+        .control-ui { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 20px; 
+            background: rgba(0,0,0,0.8); 
+            padding: 15px; 
+            border-radius: 8px; 
+            width: 300px; 
+        }
+        .potentiometer { 
+            width: 100%; 
+            cursor: pointer; 
+        }
+        
+        .logic-step { 
+            margin-bottom: 25px; 
+            border-left: 4px solid var(--accent); 
+            padding-left: 15px; 
+        }
+        .logic-step h3 { 
+            margin-top: 0; 
+            color: var(--accent); 
+            font-size: 1.1rem; 
+        }
+        .logic-step p { 
+            font-size: 0.9rem; 
+            line-height: 1.6; 
+            color: #cbd5e1; 
+        }
+        .logic-step code {
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #facc15;
+        }
+
+        /* 电路元件样式 */
+        .electron { fill: #facc15; filter: drop-shadow(0 0 5px #facc15); }
+        .wire { fill: none; stroke: #334155; stroke-width: 2; }
+        .component { stroke: #1e293b; stroke-width: 2; fill: #e2e8f0; }
+        .gate-pulse { fill: #ef4444; opacity: 0; }
+        .thyristor { stroke: #1e293b; stroke-width: 2; fill: #e2e8f0; }
+        .load-resistor { stroke: #1e293b; stroke-width: 2; fill: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <header>
+        <h1>工业级变频器(VFD)交互式仿真演示</h1>
+    </header>
+
+    <!-- 标签页容器 -->
+    <div class="tab-container">
+        <div class="tab-buttons">
+            <button class="tab-btn active" data-tab="tab1">三相AC-DC-AC变频器</button>
+            <button class="tab-btn" data-tab="tab2">交-交(AC-AC)变频器</button>
+        </div>
+
+        <!-- Tab1: 原有三相AC-DC-AC电路 -->
+        <div class="tab-content active" id="tab1">
+            <!-- 电路图绘制区域 -->
+            <div id="canvas-container">
+                <svg id="vfd-svg" width="100%" height="100%" viewBox="0 0 1000 600">
+                    <!-- 1. 输入电源段 -->
+                    <path id="path-L1" d="M 50 100 H 150" class="wire" />
+                    <path id="path-L2" d="M 50 150 H 150" class="wire" />
+                    <path id="path-L3" d="M 50 200 H 150" class="wire" />
+                    
+                    <!-- 2. 整流桥模块 -->
+                    <rect x="150" y="80" width="100" height="150" rx="5" class="component" />
+                    <text x="165" y="160" font-weight="bold">整流桥</text>
+
+                    <!-- 3. 中间直流链路 (DC Link) -->
+                    <path id="dc-plus" d="M 250 100 H 500" class="wire" />
+                    <path id="dc-minus" d="M 250 200 H 500" class="wire" />
+                    <!-- 滤波电容 -->
+                    <rect x="350" y="100" width="10" height="100" fill="#64748b" />
+                    <text x="340" y="90" font-size="12">C (滤波)</text>
+
+                    <!-- 4. 逆变桥 (Inverter Bridge) - 6个IGBT -->
+                    <g id="inverter">
+                        <rect id="VT1" x="500" y="50" width="40" height="60" class="component" />
+                        <circle id="G1" cx="500" cy="80" r="5" class="gate-pulse" />
+                        
+                        <rect id="VT3" x="600" y="50" width="40" height="60" class="component" />
+                        <circle id="G3" cx="600" cy="80" r="5" class="gate-pulse" />
+                        
+                        <rect id="VT5" x="700" y="50" width="40" height="60" class="component" />
+                        <circle id="G5" cx="700" cy="80" r="5" class="gate-pulse" />
+
+                        <rect id="VT4" x="500" y="190" width="40" height="60" class="component" />
+                        <circle id="G4" cx="500" cy="220" r="5" class="gate-pulse" />
+                        
+                        <rect id="VT6" x="600" y="190" width="40" height="60" class="component" />
+                        <circle id="G6" cx="600" cy="220" r="5" class="gate-pulse" />
+                        
+                        <rect id="VT2" x="700" y="190" width="40" height="60" class="component" />
+                        <circle id="G2" cx="700" cy="220" r="5" class="gate-pulse" />
+                    </g>
+
+                    <!-- 5. 负载电机 -->
+                    <circle cx="850" cy="150" r="40" class="component" fill="#334155" id="motor" />
+                    <text x="835" y="155" fill="white" font-weight="bold">M</text>
+                    
+                    <!-- 动画小球 (电流颗粒) -->
+                    <circle id="electron1" r="4" class="electron" />
+                    <circle id="electron2" r="4" class="electron" />
+                </svg>
+
+                <!-- 交互控制台 -->
+                <div class="control-ui">
+                    <label>频率调节电位器 (<code>u_c</code>): <span id="freq-val">30</span> Hz</label>
+                    <input type="range" min="1" max="100" value="30" class="potentiometer" id="speed-slider">
+                    <div style="margin-top:10px; font-size:12px; color:#aaa;">调节滑块观察电流流速与开关频率变化</div>
+                </div>
+            </div>
+
+            <!-- 逻辑说明区域 (整合用户提供的说明) -->
+            <div class="logic-panel">
+                <div class="logic-step">
+                    <h3>SVG 布局设计</h3>
+                    <p>使用 <code>&lt;rect&gt;</code> 和 <code>&lt;path&gt;</code> 重构电路图：</p>
+                    <ul style="color:#cbd5e1; font-size:0.9rem;">
+                        <li>VT1-VT6 代表六个晶闸管（Thyristors/IGBT）</li>
+                        <li>G1-G6 代表从触发电路传来的脉冲信号</li>
+                        <li>DC Link 段的矩形为滤波电容 C</li>
+                    </ul>
+                </div>
+                <div class="logic-step">
+                    <h3>1. 交-直变换 (Rectifier)</h3>
+                    <p>三相工频交流电 (L1/L2/L3) 进入由二极管组成的整流桥，将交流电变为脉动的直流电。该阶段电压幅值固定。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>2. 直流平滑 (DC Link)</h3>
+                    <p>大容量电解电容起蓄能和平滑作用。它消除了整流后的纹波，为逆变器提供一个稳定的电压源 <code>U_d</code>。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>3. 直-交变换 (Inverter) - GSAP 动画逻辑</h3>
+                    <p>核心部分：通过控制 VT1-VT6 的开关时序 (PWM 调制)，将直流电斩波成频率和电压可调的三相交流电。</p>
+                    <p><strong>触发序列</strong>：三相全控桥每隔 60° 触发一个管子，电感性负载需两个管子导通（上+下桥臂），序列为：1-2 → 2-3 → 3-4 → 4-5 → 5-6 → 6-1。</p>
+                    <p><strong>视觉反馈</strong>：通过改变 fill 属性让晶闸管“亮起”，模拟导通状态。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>4. 电位器交互逻辑</h3>
+                    <p>调节电位器改变 <code>u_c</code> 控制信号，触发电路根据该信号调节 PWM 的脉冲宽度，从而改变电机转速。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>后续扩展建议</h3>
+                    <ul style="color:#cbd5e1; font-size:0.9rem;">
+                        <li>电流流动：扩展 MotionPathPlugin，让电流小球沿完整路径移动（L1→VT1→电机→L2）</li>
+                        <li>波形联动：在电路图下方添加 SVG 坐标系，实时绘制整流后的 <code>u_d</code> 电压波形</li>
+                        <li>交互性：通过 <code>u_c</code> 滑块改变 <code>tl.timeScale()</code> 模拟频率变化（已实现基础版）</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab2: 交-交(AC-AC)变频器电路 -->
+        <div class="tab-content" id="tab2">
+            <div id="canvas-container-2">
+                <svg id="vfd-svg-2" width="100%" height="100%" viewBox="0 0 1000 600">
+                    <!-- 1. 输入电源 -->
+                    <path d="M 50 150 H 200" class="wire" />
+                    <text x="60" y="140" fill="#334155" font-weight="bold">AC 380V 50Hz</text>
+                    
+                    <!-- 2. 晶闸管矩阵 (交交变频核心) -->
+                    <g id="thyristor-matrix">
+                        <!-- 上桥臂晶闸管 -->
+                        <rect id="T1" x="200" y="100" width="30" height="80" class="thyristor" />
+                        <rect id="T3" x="300" y="100" width="30" height="80" class="thyristor" />
+                        <rect id="T5" x="400" y="100" width="30" height="80" class="thyristor" />
+                        
+                        <!-- 下桥臂晶闸管 -->
+                        <rect id="T2" x="200" y="200" width="30" height="80" class="thyristor" />
+                        <rect id="T4" x="300" y="200" width="30" height="80" class="thyristor" />
+                        <rect id="T6" x="400" y="200" width="30" height="80" class="thyristor" />
+                        
+                        <text x="250" y="170" font-weight="bold">晶闸管矩阵</text>
+                    </g>
+
+                    <!-- 3. 输出滤波 -->
+                    <path d="M 450 150 H 600" class="wire" />
+                    <circle cx="520" cy="150" r="15" class="component" fill="#64748b" />
+                    <text x="510" y="120" font-size="12">L (滤波电感)</text>
+                    
+                    <!-- 4. 负载 -->
+                    <rect x="650" y="120" width="80" height="60" class="load-resistor" />
+                    <text x="665" y="155" fill="white" font-weight="bold">电机负载</text>
+                    
+                    <!-- 动画电流小球 -->
+                    <circle id="electron-ac" r="4" class="electron" />
+                </svg>
+
+                <!-- Tab2 交互控制台 -->
+                <div class="control-ui">
+                    <label>输出频率调节: <span id="freq-val-2">15</span> Hz</label>
+                    <input type="range" min="1" max="50" value="15" class="potentiometer" id="speed-slider-2">
+                    <div style="margin-top:10px; font-size:12px; color:#aaa;">交交变频最高输出频率≈输入1/2</div>
+                </div>
+            </div>
+
+            <!-- Tab2 逻辑说明 -->
+            <div class="logic-panel">
+                <div class="logic-step">
+                    <h3>交-交(AC-AC)变频器拓扑</h3>
+                    <p>无需中间直流环节，直接将工频交流电转换为可调频率的交流电，也称为周波变换器。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>核心原理</h3>
+                    <p>通过控制 6 个晶闸管的导通/关断时序，将输入的固定频率交流电“切割”成输出的可变频率交流电：</p>
+                    <ul style="color:#cbd5e1; font-size:0.9rem;">
+                        <li>上桥臂 (T1/T3/T5) 控制正半周输出</li>
+                        <li>下桥臂 (T2/T4/T6) 控制负半周输出</li>
+                        <li>输出频率 ≤ 输入频率的 1/2（通常≤25Hz）</li>
+                    </ul>
+                </div>
+                <div class="logic-step">
+                    <h3>应用场景</h3>
+                    <p>适用于低速、大功率场合（如轧钢机、矿井提升机），无需直流滤波电容，可靠性高，但输出频率受限。</p>
+                </div>
+                <div class="logic-step">
+                    <h3>动画逻辑</h3>
+                    <p>通过 GSAP 控制晶闸管的亮灭序列，模拟不同输出频率下的导通时序；电流小球流速随频率调节同步变化。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 注册 GSAP 插件
+    gsap.registerPlugin(MotionPathPlugin);
+
+    // ========== Tab 切换逻辑 ==========
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 移除所有激活状态
+            tabButtons.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            // 激活当前tab
+            const tabId = btn.getAttribute('data-tab');
+            btn.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // 确保切换后动画正常运行
+            if (tabId === 'tab1') restartTab1Animations();
+            if (tabId === 'tab2') initTab2Animations();
+        });
+    });
+
+    // ========== Tab1: 三相AC-DC-AC 动画逻辑 ==========
+    // 1. 电流流动动画
+    let electronTl, gateTl;
+    function initTab1Animations() {
+        // 销毁原有动画避免叠加
+        if (electronTl) electronTl.kill();
+        if (gateTl) gateTl.kill();
+
+        // 电流小球动画（DC Link + 输入电源）
+        electronTl = gsap.timeline({ repeat: -1 });
+        electronTl.to("#electron1", {
+            duration: 2,
+            ease: "none",
+            motionPath: { path: "#dc-plus", align: "#dc-plus", alignOrigin: [0.5, 0.5] }
+        });
+        electronTl.to("#electron2", {
+            duration: 2,
+            ease: "none",
+            motionPath: { path: "#path-L1", align: "#path-L1", alignOrigin: [0.5, 0.5] }
+        }, 0);
+
+        // 2. IGBT触发脉冲动画（按60°相位差的标准序列）
+        gateTl = gsap.timeline({ repeat: -1 });
+        // 触发序列：1-2 → 2-3 → 3-4 → 4-5 → 5-6 → 6-1
+        const triggerSequence = [
+            ['#VT1', '#VT2'], ['#VT2', '#VT3'], ['#VT3', '#VT4'],
+            ['#VT4', '#VT5'], ['#VT5', '#VT6'], ['#VT6', '#VT1']
+        ];
+        
+        triggerSequence.forEach((pair, index) => {
+            const delay = index * 0.4; // 60°相位差对应时间延迟
+            gateTl.to(pair, { fill: "#4ade80", duration: 0.2 }, delay)
+                  .to(pair, { fill: "#e2e8f0", duration: 0.2 }, delay + 0.2);
+            // 同步显示门极脉冲
+            gateTl.to(`#G${pair[0].slice(-1)}`, { opacity: 1, duration: 0.2 }, delay)
+                  .to(`#G${pair[0].slice(-1)}`, { opacity: 0, duration: 0.2 }, delay + 0.2);
+        });
+
+        // 3. 电位器交互
+        const slider = document.getElementById('speed-slider');
+        const freqDisplay = document.getElementById('freq-val');
+        
+        slider.addEventListener('input', function() {
+            const val = this.value;
+            freqDisplay.innerText = val;
+            
+            // 频率越高，动画速度越快（时间缩放）
+            const scale = val / 30;
+            gsap.to([electronTl, gateTl], { timeScale: scale, duration: 0.5 });
+            
+            // 电机颜色随频率变化（模拟负载/功耗）
+            const motorColor = d3.interpolateRgb("#334155", "#ef4444")(val/100);
+            d3.select("#motor").style("fill", motorColor);
+        });
+    }
+
+    // 重启Tab1动画（切换回Tab1时）
+    function restartTab1Animations() {
+        initTab1Animations();
+        // 恢复滑块值
+        const slider = document.getElementById('speed-slider');
+        const scale = slider.value / 30;
+        gsap.to([electronTl, gateTl], { timeScale: scale, duration: 0.5 });
+    }
+
+    // ========== Tab2: 交-交变频器 动画逻辑 ==========
+    function initTab2Animations() {
+        // 电流流动动画
+        const acElectronTl = gsap.timeline({ repeat: -1 });
+        acElectronTl.to("#electron-ac", {
+            duration: 3,
+            ease: "none",
+            motionPath: { path: "#vfd-svg-2 path", align: "#vfd-svg-2 path", alignOrigin: [0.5, 0.5] }
+        });
+
+        // 晶闸管触发动画
+        const acGateTl = gsap.timeline({ repeat: -1 });
+        const thyristors = ['#T1','#T2','#T3','#T4','#T5','#T6'];
+        thyristors.forEach((id, index) => {
+            acGateTl.to(id, { fill: "#4ade80", duration: 0.3 }, index * 0.3)
+                    .to(id, { fill: "#e2e8f0", duration: 0.3 }, index * 0.3 + 0.3);
+        });
+
+        // 滑块交互
+        const slider2 = document.getElementById('speed-slider-2');
+        const freqDisplay2 = document.getElementById('freq-val-2');
+        
+        slider2.addEventListener('input', function() {
+            const val = this.value;
+            freqDisplay2.innerText = val;
+            
+            // 交交变频输出频率受限，速度缩放系数调整
+            const scale = val / 15;
+            gsap.to([acElectronTl, acGateTl], { timeScale: scale, duration: 0.5 });
+        });
+    }
+
+    // ========== 初始化 ==========
+    // 页面加载时初始化Tab1动画
+    window.addEventListener('load', () => {
+        initTab1Animations();
+        // 预初始化Tab2动画（首次切换时触发）
+        document.querySelector('[data-tab="tab2"]').addEventListener('click', initTab2Animations);
+        console.log("变频器仿真系统已就绪 | 支持Tab1(AC-DC-AC)/Tab2(AC-AC)切换");
+    });
+</script>
+
+</body>
+</html>
