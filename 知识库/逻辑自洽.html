@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>业务流程补充原型</title>
+    <!-- 引入基础样式库 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/ant-design-vue/1.7.8/antd.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f5; padding: 20px; font-family: "Helvetica Neue",Helvetica,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","微软雅黑",Arial,sans-serif; }
+        .page-header { background: #fff; padding: 16px 32px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,21,41,.08); }
+        .breadcrumb { color: rgba(0,0,0,.45); margin-bottom: 8px; font-size: 14px; }
+        .content-card { background: #fff; padding: 24px; border-radius: 4px; }
+        .search-bar { margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 15px; }
+        .search-item { display: flex; align-items: center; }
+        .search-item label { margin-right: 8px; white-space: nowrap; }
+        .input-box { width: 180px; }
+        /* === 按截图修改：主要按钮为浅蓝色背景，白色文字 === */
+        .ant-btn-primary {
+            background-color: #40a9ff !important; /* 调整为更接近截图的浅蓝色 */
+            border-color: #40a9ff !important;
+            color: white !important; /* 确保文字为白色 */
+        }
+        .ant-btn-primary:hover {
+            background-color: #69c0ff !important;
+            border-color: #69c0ff !important;
+        }
+        /* === 按截图修改：重置/次要按钮为白底、细黑边、黑字 === */
+        .ant-btn:not(.ant-btn-primary) {
+            background-color: white !important;
+            border: 1px solid #d9d9d9 !important; /* 细黑边 */
+            color: rgba(0, 0, 0, 0.85) !important; /* 黑色文字 */
+        }
+        .table-action-btn { color: #1890ff; cursor: pointer; margin-right: 12px; }
+        .section-title { font-size: 18px; font-weight: bold; margin: 40px 0 20px; color: #333; border-left: 4px solid #1890ff; padding-left: 10px; }
+        .status-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .status-wait { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
+        .status-done { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    </style>
+</head>
+<body>
+
+<!-- ================= 页面 A: 技改问题工单 ================= -->
+<div class="section-title">补充页面 A：前端业务 - 技改问题工单 (对应流程10)</div>
+<div class="page-header">
+    <div class="breadcrumb">运维管理 / 技改问题工单</div>
+    <div style="font-size: 20px; font-weight: 600;">技改问题列表</div>
+</div>
+<div class="content-card">
+    <div class="search-bar">
+        <div class="search-item"><label>技改编号:</label><input type="text" class="ant-input input-box" placeholder="请输入"></div>
+        <div class="search-item"><label>技改类型:</label><input type="text" class="ant-input input-box" placeholder="请选择"></div>
+        <div class="search-item"><label>状态:</label><input type="text" class="ant-input input-box" placeholder="请选择"></div>
+        <!-- 查询按钮：蓝色背景，白色文字 -->
+        <button class="ant-btn ant-btn-primary">查询</button>
+        <!-- 重置按钮：白色背景，黑边，黑色文字 -->
+        <button class="ant-btn">重置</button>
+    </div>
+    <div style="margin-bottom: 16px;">
+        <button class="ant-btn ant-btn-primary">+ 新建技改工单</button>
+        <button class="ant-btn" style="margin-left: 8px;">批量导出</button>
+    </div>
+    <table class="ant-table" style="width: 100%; border: 1px solid #f0f0f0;">
+        <thead class="ant-table-thead">
+            <tr>
+                <th style="width: 50px; text-align: center;"><input type="checkbox"></th>
+                <th>序号</th><th>技改编号</th><th>技改项目名称</th><th>申请部门</th><th>申请人</th><th>申请时间</th><th>状态</th><th>操作</th>
+            </tr>
+        </thead>
+        <tbody class="ant-table-tbody">
+            <tr><td style="text-align: center;"><input type="checkbox"></td><td>001</td><td>JG-20240101</td><td>风机叶片优化改造</td><td>技术部</td><td>张技术</td><td>2024-01-15</td><td><span class="status-tag status-done">已完成</span></td><td><span class="table-action-btn">查看详情</span></td></tr>
+            <tr><td style="text-align: center;"><input type="checkbox"></td><td>002</td><td>JG-20240102</td><td>齿轮箱润滑系统升级</td><td>技术部</td><td>李工程</td><td>2024-01-16</td><td><span class="status-tag status-wait">进行中</span></td><td><span class="table-action-btn">查看详情</span></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ================= 页面 B: 问题库 ================= -->
+<div class="section-title">补充页面 B：中间层 - 问题库汇总 (对应流程20)</div>
+<div class="page-header">
+    <div class="breadcrumb">问题管理 / 问题库</div>
+    <div style="font-size: 20px; font-weight: 600;">问题数据汇总表</div>
+</div>
+<div class="content-card">
+    <div class="search-bar">
+        <div class="search-item">
+            <label>问题来源:</label>
+            <select class="ant-input input-box"><option>全部</option><option>故障工单</option><option>技改工单</option><option>异常问题</option></select>
+        </div>
+        <div class="search-item"><label>评估状态:</label><select class="ant-input input-box"><option>待评估</option><option>已入库</option><option>不予借鉴</option></select></div>
+        <!-- 过滤搜索按钮：蓝色背景，白色文字 -->
+        <button class="ant-btn ant-btn-primary">过滤搜索</button>
+    </div>
+    <table class="ant-table" style="width: 100%; border: 1px solid #f0f0f0;">
+        <thead class="ant-table-thead">
+            <tr>
+                <th>序号</th><th>问题编号</th><th>来源类型</th><th>关联工单号</th><th>问题简述</th><th>采集时间</th><th>评估状态</th><th>操作</th>
+            </tr>
+        </thead>
+        <tbody class="ant-table-tbody">
+            <tr><td>001</td><td>PROB-001</td><td>故障工单</td><td>PG201806060004</td><td>变流器过热停机</td><td>2024-01-18</td><td><span class="status-tag status-wait">待评估</span></td><td><span class="table-action-btn">价值评估</span></td></tr>
+            <tr><td>002</td><td>PROB-002</td><td>异常问题</td><td>Abnorm-005</td><td>传感器信号频繁跳变</td><td>2024-01-19</td><td><span class="status-tag status-done">已入库</span></td><td><span class="table-action-btn" style="color:rgba(0,0,0,0.25)">已完成</span></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ================= 页面 C: 存在借鉴意义评估 (弹窗详情页) ================= -->
+<div class="section-title">补充页面 C：关键决策 - 问题评估 (对应流程“存在借鉴意义?”)</div>
+<div class="content-card" style="border: 2px dashed #1890ff;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0;">问题价值评估详情</h3>
+        <span style="color: #999;">编号：PROB-001</span>
+    </div>
+    <div style="background: #fafafa; padding: 20px; border-radius: 4px; margin-bottom: 20px;">
+        <p><strong>问题描述：</strong> 现场反馈风机在高温环境下，变流器模块温度超过90度，导致逻辑保护跳闸。</p>
+        <p><strong>处理方案：</strong> 更换外部冷却风扇，并调整散热片间隙，清理积灰。</p>
+        <p><strong>处理结果：</strong> 连续运行72小时未复现，效果良好。</p>
+    </div>
+    <div style="padding: 20px; border: 1px solid #e8e8e8; border-radius: 4px;">
+        <div style="margin-bottom: 15px; color: #f5222d; font-weight: bold;">[ 核心判定 ]：是否存在借鉴意义？</div>
+        <div style="margin-bottom: 20px;">
+            <label style="margin-right: 20px;"><input type="radio" name="significance" checked> 是，具备典型性，建议入库</label>
+            <label><input type="radio" name="significance"> 否，属于偶发个案，不建议入库</label>
+        </div>
+        <div>
+            <label>知识库分类指引：</label>
+            <select class="ant-input" style="width: 250px;"><option>经验库 / 变流器类</option><option>文档库 / 技术规程</option></select>
+        </div>
+    </div>
+    <div style="margin-top: 30px; text-align: center;">
+        <!-- 确认按钮：蓝色背景，白色文字 -->
+        <button class="ant-btn ant-btn-primary" style="padding: 0 40px; height: 40px;">确认进入知识库</button>
+        <!-- 暂不处理按钮：白色背景，黑边，黑色文字 -->
+        <button class="ant-btn" style="margin-left: 15px; padding: 0 40px; height: 40px;">暂不处理</button>
+    </div>
+</div>
+</body>
+</html>
