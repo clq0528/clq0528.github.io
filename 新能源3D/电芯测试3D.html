@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>高精 3D 工业产线 - AOI & 电池检测</title>
+    <style>
+        body { margin: 0; background: radial-gradient(circle, #444, #111); overflow: hidden; }
+        #ui { position: absolute; bottom: 20px; left: 20px; color: #fff; font-family: sans-serif; pointer-events: none; text-shadow: 1px 1px 2px #000; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h1>工业产线 1:1 数字孪生预览</h1>
+        <p>左侧：AOI 检测站 | 中间：电池检测 Pack 单元 | 右侧：导轨下料</p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://esm.sh/three@0.160.0",
+                "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+        // --- 核心场景设置 ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(20, 12, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 3, 0);
+
+        // 环境贴图（提升逼真度的秘诀）
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+        // --- 定义材质 ---
+        const colors = {
+            teal: 0x244d4d,    // 铝型材
+            orange: 0xe68a00,  // 下机柜
+            silver: 0xcccccc,  // 金属板
+            glass: 0x88ccff,   // 玻璃
+            screen: 0x0033aa,  // 屏幕
+            leg: 0x333333      // 脚杯
+        };
+
+        const matTeal = new THREE.MeshStandardMaterial({ color: colors.teal, metalness: 0.8, roughness: 0.3 });
+        const matOrange = new THREE.MeshStandardMaterial({ color: colors.orange, metalness: 0.2, roughness: 0.5 });
+        const matSilver = new THREE.MeshStandardMaterial({ color: colors.silver, metalness: 0.9, roughness: 0.1 });
+        const matGlass = new THREE.MeshStandardMaterial({ color: colors.glass, transparent: true, opacity: 0.3, metalness: 1, roughness: 0 });
+        const matScreen = new THREE.MeshBasicMaterial({ color: colors.screen });
+
+        // --- 辅助函数：创建调节脚杯 ---
+        function createFeet() {
+            const footGeo = new THREE.CylinderGeometry(0.1, 0.15, 0.3);
+            const foot = new THREE.Mesh(footGeo, new THREE.MeshStandardMaterial({color: 0x222222}));
+            foot.position.y = 0.15;
+            return foot;
+        }
+
+        // --- 1. 创建 AOI 检测站 (左侧) ---
+        function createAOIStation() {
+            const group = new THREE.Group();
+            
+            // 铝型材框架
+            const frameGeo = new THREE.BoxGeometry(0.15, 6, 0.15);
+            for(let x of [-1.5, 1.5]) {
+                for(let z of [-1.5, 1.5]) {
+                    const p = new THREE.Mesh(frameGeo, matTeal);
+                    p.position.set(x, 3.3, z);
+                    group.add(p);
+                }
+            }
+            // 玻璃房
+            const glassGeo = new THREE.BoxGeometry(3, 5, 3);
+            const glass = new THREE.Mesh(glassGeo, matGlass);
+            glass.position.y = 3.5;
+            group.add(glass);
+
+            // 底部支撑台
+            const baseGeo = new THREE.BoxGeometry(3.2, 0.5, 3.2);
+            const base = new THREE.Mesh(baseGeo, matTeal);
+            base.position.y = 0.55;
+            group.add(base);
+
+            // 增加脚杯
+            [-1.4, 1.4].forEach(x => [-1.4, 1.4].forEach(z => {
+                const f = createFeet(); f.position.set(x, 0, z); group.add(f);
+            }));
+
+            return group;
+        }
+
+        // --- 2. 创建核心检测单元 (中间) ---
+        function createUnit() {
+            const group = new THREE.Group();
+
+            // 下部橙色柜体（带门缝效果）
+            const cabinet = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3, 2.6), matOrange);
+            cabinet.position.y = 1.8;
+            group.add(cabinet);
+
+            // 上部白色/银色斜面盖
+            const topPart = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2, 2.6), matSilver);
+            topPart.position.y = 4.3;
+            group.add(topPart);
+
+            // 外挂屏幕
+            const screenFrame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.1), matTeal);
+            screenFrame.position.set(0, 4.5, 1.35);
+            group.add(screenFrame);
+            const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), matScreen);
+            screen.position.set(0, 4.5, 1.41);
+            group.add(screen);
+
+            // 外挂键盘托架 (关键细节)
+            const tray = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.8), matSilver);
+            tray.rotation.x = 0.2;
+            tray.position.set(0, 3.5, 1.6);
+            group.add(tray);
+
+            // 信号灯
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1), matSilver);
+            pole.position.set(1.2, 5.8, 0);
+            group.add(pole);
+            const lights = [0x00ff00, 0xffff00, 0xff0000];
+            lights.forEach((c, i) => {
+                const l = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2), new THREE.MeshBasicMaterial({color: c}));
+                l.position.set(1.2, 6.3 + i*0.22, 0);
+                group.add(l);
+            });
+
+            // 脚杯
+            [-1.2, 1.2].forEach(x => [-1.1, 1.1].forEach(z => {
+                const f = createFeet(); f.position.set(x, 0, z); group.add(f);
+            }));
+
+            return group;
+        }
+
+        // --- 3. 创建导轨下料区 (右侧) ---
+        function createConveyor() {
+            const group = new THREE.Group();
+            const railGeo = new THREE.BoxGeometry(6, 0.2, 0.2);
+            for(let z of [-0.8, 0.8]) {
+                const r = new THREE.Mesh(railGeo, matTeal);
+                r.position.set(3, 3, z);
+                group.add(r);
+            }
+            // 横梁支架
+            const legGeo = new THREE.BoxGeometry(0.2, 3, 0.2);
+            const l1 = new THREE.Mesh(legGeo, matTeal); l1.position.set(5, 1.5, 0.8); group.add(l1);
+            const l2 = new THREE.Mesh(legGeo, matTeal); l2.position.set(5, 1.5, -0.8); group.add(l2);
+
+            return group;
+        }
+
+        // --- 组装产线 ---
+        const factoryLine = new THREE.Group();
+
+        // 1. 左侧 AOI
+        const aoi = createAOIStation();
+        aoi.position.x = -10;
+        factoryLine.add(aoi);
+
+        // 2. 中间 4 个检测单元
+        for(let i=0; i<4; i++) {
+            const unit = createUnit();
+            unit.position.x = -6 + (i * 3.2);
+            factoryLine.add(unit);
+        }
+
+        // 3. 右侧下料导轨
+        const conveyor = createConveyor();
+        conveyor.position.x = 6;
+        factoryLine.add(conveyor);
+
+        scene.add(factoryLine);
+
+        // 灯光加强
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(10, 20, 10);
+        sunLight.castShadow = true;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.PointLight(0xffffff, 100);
+        fillLight.position.set(-10, 5, 5);
+        scene.add(fillLight);
+
+        // 地面网格（修正：在 Y=0 以下，防止设备下沉）
+        const grid = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+        grid.position.y = -0.01; 
+        scene.add(grid);
+
+        // 渲染循环
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口适配
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
