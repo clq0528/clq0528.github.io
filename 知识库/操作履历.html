@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MES系统 - 操作履历</title>
+  
+  <!-- 引入 Vue 2 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  
+  <!-- 引入 Element UI 样式 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/theme-chalk/index.css">
+  
+  <!-- 引入 Element UI 组件库 -->
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/index.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: #f5f7fa;
+      color: #333;
+      line-height: 1.5;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+    }
+    
+    .breadcrumb {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+      padding: 8px 0;
+    }
+    
+    .breadcrumb span {
+      color: #409eff;
+      cursor: pointer;
+    }
+    
+    .breadcrumb span:last-child {
+      color: #999;
+    }
+    
+    /* 顶部操作栏 */
+    .top-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .search-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .btn-light-blue {
+      background-color: #e6f4ff !important;
+      border-color: #91caff !important;
+      color: #1890ff !important;
+    }
+    .btn-light-blue:hover {
+      background-color: #bae0ff !important;
+      color: #096dd9 !important;
+    }
+    
+    .table-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f1f1f;
+      border-left: 5px solid #409eff;
+      padding-left: 12px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .table-title i {
+      margin-right: 8px;
+      color: #409eff;
+    }
+    
+    /* 表格样式 */
+    .el-table thead th {
+      background-color: #fafafa !important;
+      font-weight: bold !important;
+      color: #1f2d3d;
+    }
+    
+    /* 履历表格样式 */
+    .operation-type-tag {
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      display: inline-block;
+    }
+    
+    .operation-edit {
+      background-color: #f0f9ff;
+      color: #409eff;
+      border: 1px solid #a0cfff;
+    }
+    
+    .operation-add {
+      background-color: #f0f9eb;
+      color: #67c23a;
+      border: 1px solid #b3e19d;
+    }
+    
+    .operation-delete {
+      background-color: #fef0f0;
+      color: #f56c6c;
+      border: 1px solid #fab6b6;
+    }
+    
+    .json-content {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      background-color: #f8f9fa;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #eaeaea;
+      max-height: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      color: #666;
+    }
+    
+    .json-content:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .json-key {
+      color: #e45649;
+    }
+    
+    .json-string {
+      color: #50a14f;
+    }
+    
+    .json-number {
+      color: #986801;
+    }
+    
+    .json-boolean {
+      color: #a626a4;
+    }
+    
+    /* 变更内容弹窗样式 */
+    .change-modal .el-dialog__body {
+      padding: 0 20px;
+    }
+    
+    .change-content {
+      background-color: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    
+    .change-item {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #e0e0e0;
+    }
+    
+    .change-item:last-child {
+      border-bottom: none;
+    }
+    
+    .change-path {
+      color: #409eff;
+      font-weight: bold;
+    }
+    
+    .change-value {
+      color: #67c23a;
+    }
+    
+    .change-arrow {
+      color: #909399;
+      margin: 0 5px;
+    }
+    
+    .table-footer {
+      margin-top: 20px;
+      padding: 16px;
+      background-color: #fafafa;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #666;
+      border-top: 1px solid #f0f0f0;
+    }
+    
+    /* 空状态提示 */
+    .empty-table {
+      padding: 40px 0;
+      text-align: center;
+      color: #999;
+    }
+    
+    .empty-table i {
+      font-size: 40px;
+      margin-bottom: 16px;
+      color: #d9d9d9;
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+      
+      .top-actions {
+        flex-direction: column;
+      }
+      
+      .action-buttons, .search-actions {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .table-title {
+        font-size: 18px;
+      }
+      
+      .json-content {
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container">
+    <!-- 面包屑导航 -->
+    <div class="breadcrumb">
+      <span>MES生产管理系统</span> / <span>系统日志</span> / <span>操作履历</span>
+    </div>
+    
+    <!-- 顶部操作栏 -->
+    <div class="top-actions">
+      <div class="action-buttons">
+        <el-button type="primary" icon="el-icon-refresh" @click="refreshData">刷新</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-download" @click="handleExport">导出数据</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-delete" type="danger" @click="handleClearLogs">清空日志</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-search" @click="showDetailSearch = true">高级搜索</el-button>
+      </div>
+      <div class="search-actions">
+        <el-input 
+          v-model="searchValue" 
+          placeholder="搜索操作人员/操作类型" 
+          prefix-icon="el-icon-search"
+          style="width: 220px"
+          @input="handleSearch"
+        ></el-input>
+        <el-button icon="el-icon-filter" @click="showFilterModal = true">筛选</el-button>
+      </div>
+    </div>
+
+    <div class="table-title">
+      <i class="el-icon-document"></i>
+      操作履历记录
+    </div>
+
+    <!-- 履历表格 -->
+    <div v-if="filteredData.length > 0">
+      <el-table 
+        :data="filteredData" 
+        border 
+        stripe
+        style="width: 100%"
+        :default-sort = "{prop: 'operationTime', order: 'descending'}"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55"></el-table-column>
+        <el-table-column prop="operationType" label="操作类型" width="120" sortable>
+          <template slot-scope="scope">
+            <span :class="`operation-type-tag operation-${scope.row.operationType}`">
+              {{ getOperationTypeName(scope.row.operationType) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="operator" label="操作人员" width="120" sortable></el-table-column>
+        <el-table-column prop="operationTime" label="操作时间" width="170" sortable></el-table-column>
+        <el-table-column prop="ip" label="操作IP" width="150"></el-table-column>
+        <el-table-column prop="changeContent" label="变更内容" min-width="300">
+          <template slot-scope="scope">
+            <div class="json-content" @click="showChangeDetail(scope.row)">
+              {{ formatChangeContent(scope.row.changeContent) }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template slot-scope="scope">
+            <el-button type="text" @click="showChangeDetail(scope.row)">查看详情</el-button>
+            <el-divider direction="vertical"></el-divider>
+            <el-button type="text" style="color: #f56c6c;" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      
+      <!-- 分页组件 -->
+      <div style="margin-top: 20px; text-align: right;">
+        <el-pagination
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          :current-page="currentPage"
+          :page-sizes="[10, 20, 50, 100]"
+          :page-size="pageSize"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="totalRecords">
+        </el-pagination>
+      </div>
+      
+      <div class="table-footer">
+        备注：本表格记录MES系统所有关键操作的历史记录。数据实时更新，共 {{ totalRecords }} 条记录，当前显示 {{ filteredData.length }} 条。
+      </div>
+    </div>
+    
+    <!-- 空状态提示 -->
+    <div v-else class="empty-table">
+      <i class="el-icon-document-delete"></i>
+      <p>暂无操作记录</p>
+      <el-button type="primary" @click="refreshData" style="margin-top: 16px;">刷新数据</el-button>
+    </div>
+    
+    <!-- 变更内容详情弹窗 -->
+    <el-dialog
+      title="变更内容详情"
+      :visible.sync="showChangeModal"
+      width="800px"
+      class="change-modal"
+    >
+      <div style="margin-bottom: 15px;">
+        <span style="font-weight: bold; margin-right: 20px;">操作类型: </span>
+        <span :class="`operation-type-tag operation-${currentChange.operationType}`">
+          {{ getOperationTypeName(currentChange.operationType) }}
+        </span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <span style="font-weight: bold; margin-right: 20px;">操作人员: </span>
+        <span>{{ currentChange.operator }}</span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <span style="font-weight: bold; margin-right: 20px;">操作时间: </span>
+        <span>{{ currentChange.operationTime }}</span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <span style="font-weight: bold; margin-right: 20px;">操作IP: </span>
+        <span>{{ currentChange.ip }}</span>
+      </div>
+      <div>
+        <span style="font-weight: bold;">变更内容:</span>
+        <div class="change-content">
+          <div v-if="currentChange.operationType === 'edit'">
+            <div v-for="(change, index) in parseEditChanges(currentChange.changeContent)" :key="index" class="change-item">
+              <span class="change-path">{{ change.path }}</span>
+              <span class="change-arrow">→</span>
+              <span class="change-value">{{ change.oldValue }}</span>
+              <span class="change-arrow">→</span>
+              <span class="change-value">{{ change.newValue }}</span>
+            </div>
+          </div>
+          <div v-else-if="currentChange.operationType === 'add'">
+            <div v-for="(item, key) in parseAddChanges(currentChange.changeContent)" :key="key" class="change-item">
+              <span class="change-path">{{ key }}</span>
+              <span class="change-arrow">:</span>
+              <span class="change-value">{{ item }}</span>
+            </div>
+          </div>
+          <div v-else>
+            <pre>{{ currentChange.changeContent }}</pre>
+          </div>
+        </div>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="showChangeModal = false">确定</el-button>
+      </div>
+    </el-dialog>
+    
+    <!-- 筛选弹窗 -->
+    <el-dialog
+      title="筛选条件"
+      :visible.sync="showFilterModal"
+      width="500px"
+    >
+      <el-form :model="filterForm" label-width="80px">
+        <el-form-item label="操作类型">
+          <el-select v-model="filterForm.operationType" placeholder="请选择操作类型" style="width: 100%;">
+            <el-option value="">全部</el-option>
+            <el-option value="edit">修改</el-option>
+            <el-option value="add">新增</el-option>
+            <el-option value="delete">删除</el-option>
+            <el-option value="check">检查</el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="操作人员">
+          <el-input v-model="filterForm.operator" placeholder="请输入操作人员ID或姓名" style="width: 100%;"></el-input>
+        </el-form-item>
+        <el-form-item label="时间范围">
+          <el-date-picker
+            v-model="filterForm.timeRange"
+            type="datetimerange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 100%;"
+            value-format="yyyy-MM-dd HH:mm:ss"
+          >
+          </el-date-picker>
+        </el-form-item>
+        <el-form-item label="操作IP">
+          <el-input v-model="filterForm.ip" placeholder="请输入IP地址" style="width: 100%;"></el-input>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="clearFilter">清空</el-button>
+        <el-button @click="showFilterModal = false">取消</el-button>
+        <el-button type="primary" @click="handleFilter">确定</el-button>
+      </div>
+    </el-dialog>
+    
+    <!-- 高级搜索弹窗 -->
+    <el-dialog
+      title="高级搜索"
+      :visible.sync="showDetailSearch"
+      width="600px"
+    >
+      <el-form :model="detailSearchForm" label-width="100px">
+        <el-form-item label="变更内容">
+          <el-input 
+            v-model="detailSearchForm.changeContent" 
+            placeholder="请输入变更内容关键词" 
+            style="width: 100%;"
+            type="textarea"
+            :rows="3"
+          ></el-input>
+        </el-form-item>
+        <el-form-item label="模块/功能">
+          <el-select v-model="detailSearchForm.module" placeholder="请选择模块" style="width: 100%;">
+            <el-option value="">全部</el-option>
+            <el-option value="排产管理">排产管理</el-option>
+            <el-option value="生产要素">生产要素</el-option>
+            <el-option value="设备管理">设备管理</el-option>
+            <el-option value="质量管理">质量管理</el-option>
+            <el-option value="物料管理">物料管理</el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="最小变更项数">
+          <el-input-number v-model="detailSearchForm.minChanges" :min="1" :max="10" style="width: 100%;"></el-input-number>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showDetailSearch = false">取消</el-button>
+        <el-button type="primary" @click="handleDetailSearch">搜索</el-button>
+      </div>
+    </el-dialog>
+  </div>
+
+  <script>
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          // 搜索和筛选相关
+          searchValue: '',
+          showFilterModal: false,
+          showDetailSearch: false,
+          filterForm: {
+            operationType: '',
+            operator: '',
+            timeRange: [],
+            ip: ''
+          },
+          detailSearchForm: {
+            changeContent: '',
+            module: '',
+            minChanges: 1
+          },
+          // 分页相关
+          currentPage: 1,
+          pageSize: 10,
+          totalRecords: 0,
+          // 表格数据
+          selectedRows: [],
+          allData: [],
+          // 变更内容弹窗
+          showChangeModal: false,
+          currentChange: {
+            operationType: '',
+            operator: '',
+            operationTime: '',
+            ip: '',
+            changeContent: ''
+          }
+        }
+      },
+      computed: {
+        // 计算筛选后的数据
+        filteredData() {
+          let result = this.allData.filter(item => {
+            // 搜索过滤
+            const searchMatch = !this.searchValue || 
+              item.operator.includes(this.searchValue) || 
+              item.operationType.includes(this.searchValue) ||
+              item.ip.includes(this.searchValue) ||
+              JSON.stringify(item.changeContent).includes(this.searchValue);
+            
+            // 操作类型过滤
+            const typeMatch = !this.filterForm.operationType || item.operationType === this.filterForm.operationType;
+            
+            // 操作人员过滤
+            const operatorMatch = !this.filterForm.operator || item.operator.includes(this.filterForm.operator);
+            
+            // 时间范围过滤
+            let timeMatch = true;
+            if (this.filterForm.timeRange && this.filterForm.timeRange.length === 2) {
+              const startTime = new Date(this.filterForm.timeRange[0]).getTime();
+              const endTime = new Date(this.filterForm.timeRange[1]).getTime();
+              const itemTime = new Date(item.operationTime).getTime();
+              timeMatch = itemTime >= startTime && itemTime <= endTime;
+            }
+            
+            // IP过滤
+            const ipMatch = !this.filterForm.ip || item.ip.includes(this.filterForm.ip);
+            
+            // 高级搜索过滤
+            const detailContentMatch = !this.detailSearchForm.changeContent || 
+              JSON.stringify(item.changeContent).toLowerCase().includes(this.detailSearchForm.changeContent.toLowerCase());
+            
+            // 模块过滤
+            const moduleMatch = !this.detailSearchForm.module || 
+              (item.changeContent && JSON.stringify(item.changeContent).includes(this.detailSearchForm.module));
+            
+            return searchMatch && typeMatch && operatorMatch && timeMatch && ipMatch && 
+                   detailContentMatch && moduleMatch;
+          });
+          
+          // 更新总记录数
+          this.totalRecords = result.length;
+          
+          // 分页处理
+          const start = (this.currentPage - 1) * this.pageSize;
+          const end = start + this.pageSize;
+          return result.slice(start, end);
+        }
+      },
+      mounted() {
+        this.loadData();
+      },
+      methods: {
+        // 加载数据
+        loadData() {
+          // 模拟数据，基于截图中的数据扩展
+          this.allData = [
+            {
+              id: 1,
+              operationType: 'edit',
+              operator: '00001',
+              operationTime: '2025-11-24 19:19:42',
+              ip: '192.168.12.131',
+              changeContent: '{"修改项": {"/排产状态":"PRE_PS->LOCK_PS"}}'
+            },
+            {
+              id: 2,
+              operationType: 'edit',
+              operator: '00001',
+              operationTime: '2025-11-24 19:19:39',
+              ip: '192.168.12.131',
+              changeContent: '{"修改项": {"/生产要素Check":"N->Y","/生产要素Check列表/机(设备正常)/生产要素CHECK结果":"0->1"}}'
+            },
+            {
+              id: 3,
+              operationType: 'add',
+              operator: '00001',
+              operationTime: '2025-11-24 19:19:34',
+              ip: '192.168.12.131',
+              changeContent: '{"新增项": {"build":"1266986323811586051","buName":"1"}}'
+            },
+            {
+              id: 4,
+              operationType: 'edit',
+              operator: '00002',
+              operationTime: '2025-11-24 18:30:15',
+              ip: '192.168.12.145',
+              changeContent: '{"修改项": {"/设备状态/设备1":"IDLE->RUNNING","/设备状态/设备2":"MAINTENANCE->IDLE"}}'
+            },
+            /* {
+              id: 5,
+              operationType: 'delete',
+              operator: '00002',
+              operationTime: '2025-11-24 17:45:22',
+              ip: '192.168.12.145',
+              changeContent: '{"删除项": ["/生产计划/订单A", "/生产计划/订单B"]}'
+            },
+            {
+              id: 6,
+              operationType: 'edit',
+              operator: '198734',
+              operationTime: '2025-11-24 16:20:10',
+              ip: '192.168.12.120',
+              changeContent: '{"修改项": {"/物料库存/物料A":"1500->1200","/物料库存/物料B":"800->750"}}'
+            },
+            {
+              id: 7,
+              operationType: 'add',
+              operator: '198734',
+              operationTime: '2025-11-24 15:10:05',
+              ip: '192.168.12.120',
+              changeContent: '{"新增项": {"orderId":"ORD-20251124-001","productCode":"MM-R2R-27","quantity":"500"}}'
+            },
+            {
+              id: 8,
+              operationType: 'check',
+              operator: '00002',
+              operationTime: '2025-11-24 14:05:33',
+              ip: '192.168.12.145',
+              changeContent: '{"检查项": {"/质量检验/批次001":"PASS","/质量检验/批次002":"FAIL","/质量检验/批次003":"PASS"}}'
+            },
+            {
+              id: 9,
+              operationType: 'edit',
+              operator: '00001',
+              operationTime: '2025-11-24 13:40:18',
+              ip: '192.168.12.131',
+              changeContent: '{"修改项": {"/生产要素Check列表/料(用料完备)/生产要素CHECK结果":"0->1","/生产要素Check列表/人(人员到位)/生产要素CHECK结果":"0->1","/生产要素Check列表/法(制程规范)/生产要素CHECK结果":"0->1"}}'
+            },
+            {
+              id: 10,
+              operationType: 'add',
+              operator: '425189',
+              operationTime: '2025-11-24 12:15:47',
+              ip: '192.168.12.167',
+              changeContent: '{"新增项": {"employeeId":"ZH-SK-001","skillName":"Metal Mesh 触控传感器","skillLevel":"5"}}'
+            },
+            {
+              id: 11,
+              operationType: 'edit',
+              operator: '425189',
+              operationTime: '2025-11-24 11:30:22',
+              ip: '192.168.12.167',
+              changeContent: '{"修改项": {"/员工技能/乔欣宇/Metal Mesh":"4->5","/员工技能/乔欣宇/ITO蚀刻":"3->4"}}'
+            },
+            {
+              id: 12,
+              operationType: 'delete',
+              operator: '198734',
+              operationTime: '2025-11-24 10:45:11',
+              ip: '192.168.12.120',
+              changeContent: '{"删除项": ["/过期物料/物料C", "/过期物料/物料D"]}'
+            } */
+          ];
+          
+          this.totalRecords = this.allData.length;
+        },
+        
+        // 获取操作类型名称
+        getOperationTypeName(type) {
+          const typeMap = {
+            'edit': '修改',
+            'add': '新增',
+            'delete': '删除',
+            'check': '检查'
+          };
+          return typeMap[type] || type;
+        },
+        
+        // 格式化变更内容显示
+        formatChangeContent(content) {
+          try {
+            const obj = JSON.parse(content);
+            const key = Object.keys(obj)[0];
+            const value = obj[key];
+            
+            if (key === '修改项') {
+              const changes = Object.keys(value);
+              if (changes.length === 1) {
+                return `修改了 ${changes[0]}`;
+              } else {
+                return `修改了 ${changes.length} 个项`;
+              }
+            } else if (key === '新增项') {
+              const items = Object.keys(value);
+              return `新增了 ${items.length} 个项`;
+            } else if (key === '删除项') {
+              return `删除了 ${value.length} 个项`;
+            } else if (key === '检查项') {
+              const checks = Object.keys(value);
+              return `检查了 ${checks.length} 个项`;
+            }
+          } catch (e) {
+            return content;
+          }
+        },
+        
+        // 解析编辑类型的变更内容
+        parseEditChanges(content) {
+          try {
+            const obj = JSON.parse(content);
+            const changes = [];
+            
+            if (obj.修改项) {
+              for (const [path, value] of Object.entries(obj.修改项)) {
+                if (typeof value === 'string' && value.includes('->')) {
+                  const [oldValue, newValue] = value.split('->');
+                  changes.push({
+                    path,
+                    oldValue,
+                    newValue
+                  });
+                }
+              }
+            }
+            
+            return changes;
+          } catch (e) {
+            return [];
+          }
+        },
+        
+        // 解析新增类型的变更内容
+        parseAddChanges(content) {
+          try {
+            const obj = JSON.parse(content);
+            return obj.新增项 || {};
+          } catch (e) {
+            return {};
+          }
+        },
+        
+        // 显示变更详情
+        showChangeDetail(row) {
+          this.currentChange = { ...row };
+          this.showChangeModal = true;
+        },
+        
+        // 表格选择事件
+        handleSelectionChange(val) {
+          this.selectedRows = val;
+        },
+        
+        // 搜索处理
+        handleSearch() {
+          this.currentPage = 1;
+        },
+        
+        // 筛选处理
+        handleFilter() {
+          this.showFilterModal = false;
+          this.currentPage = 1;
+          this.$message.success('筛选条件已应用');
+        },
+        
+        // 清空筛选
+        clearFilter() {
+          this.filterForm = {
+            operationType: '',
+            operator: '',
+            timeRange: [],
+            ip: ''
+          };
+        },
+        
+        // 高级搜索
+        handleDetailSearch() {
+          this.showDetailSearch = false;
+          this.currentPage = 1;
+          this.$message.success('高级搜索条件已应用');
+        },
+        
+        // 分页处理
+        handleSizeChange(val) {
+          this.pageSize = val;
+          this.currentPage = 1;
+        },
+        handleCurrentChange(val) {
+          this.currentPage = val;
+        },
+        
+        // 操作按钮事件
+        refreshData() {
+          this.loadData();
+          this.$message.success('数据已刷新');
+        },
+        
+        handleExport() {
+          this.$message.success(`已导出 ${this.allData.length} 条操作记录`);
+        },
+        
+        handleClearLogs() {
+          this.$confirm('确定要清空所有操作记录吗？此操作不可恢复。', '确认清空', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            this.allData = [];
+            this.totalRecords = 0;
+            this.$message.success('操作记录已清空');
+          }).catch(() => {
+            this.$message.info('已取消清空');
+          });
+        },
+        
+        handleDelete(record) {
+          this.$confirm(`确定要删除这条操作记录吗？`, '确认删除', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            const index = this.allData.findIndex(item => item.id === record.id);
+            if (index !== -1) {
+              this.allData.splice(index, 1);
+              this.totalRecords = this.allData.length;
+              this.$message.success('记录已删除');
+            }
+          }).catch(() => {
+            this.$message.info('已取消删除');
+          });
+        }
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>员工技能矩阵</title>
+  
+  <!-- 引入 Vue 2 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  
+  <!-- 引入 Element UI 样式 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/theme-chalk/index.css">
+  
+  <!-- 引入 Element UI 组件库 -->
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/index.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: #f5f7fa;
+      color: #333;
+      line-height: 1.5;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+    }
+    
+    .breadcrumb {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+      padding: 8px 0;
+    }
+    
+    .breadcrumb span {
+      color: #409eff;
+      cursor: pointer;
+    }
+    
+    .breadcrumb span:last-child {
+      color: #999;
+    }
+    
+    /* 顶部操作栏 */
+    .top-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .search-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .btn-light-blue {
+      background-color: #e6f4ff !important;
+      border-color: #91caff !important;
+      color: #1890ff !important;
+    }
+    .btn-light-blue:hover {
+      background-color: #bae0ff !important;
+      color: #096dd9 !important;
+    }
+    
+    .table-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f1f1f;
+      border-left: 5px solid #409eff;
+      padding-left: 12px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .table-title i {
+      margin-right: 8px;
+      color: #409eff;
+    }
+    
+    /* 表格样式美化 */
+    .el-table thead th {
+      background-color: #fafafa !important;
+      font-weight: bold !important;
+      color: #1f2d3d;
+    }
+    
+    .skill-rating { 
+      color: #e6a23c; 
+      font-size: 16px; 
+      letter-spacing: 2px;
+    }
+    
+    .status-tag { 
+      border-radius: 4px; 
+      padding: 4px 8px; 
+      font-size: 12px; 
+      display: inline-block;
+    }
+    
+    .status-excellent {
+      background-color: #f0f9ff;
+      color: #67c23a;
+      border: 1px solid #b3e19d;
+    }
+    
+    .status-qualified {
+      background-color: #f0f9ff;
+      color: #409eff;
+      border: 1px solid #a0cfff;
+    }
+    
+    .status-learning {
+      background-color: #fdf6ec;
+      color: #e6a23c;
+      border: 1px solid #f5dab1;
+    }
+    
+    .table-footer {
+      margin-top: 20px;
+      padding: 16px;
+      background-color: #fafafa;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #666;
+      border-top: 1px solid #f0f0f0;
+    }
+    
+    /* 空状态提示 */
+    .empty-table {
+      padding: 40px 0;
+      text-align: center;
+      color: #999;
+    }
+    
+    .empty-table i {
+      font-size: 40px;
+      margin-bottom: 16px;
+      color: #d9d9d9;
+    }
+    
+    /* 响应式设计 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+      
+      .top-actions {
+        flex-direction: column;
+      }
+      
+      .action-buttons, .search-actions {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .table-title {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container">
+    <!-- 面包屑导航 -->
+    <div class="breadcrumb">
+      <span>MES生产管理系统</span> / <span>员工技能管理</span> / <span>技能矩阵</span>
+    </div>
+    
+    <!-- 顶部操作栏 -->
+    <div class="top-actions">
+      <div class="action-buttons">
+        <el-button type="primary" icon="el-icon-plus" @click="handleAddRecord">添加记录</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-download" @click="handleExport">导出数据</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-delete" type="danger" @click="handleBatchDelete">批量删除</el-button>
+        <el-button class="btn-light-blue" icon="el-icon-document" @click="handleShowLogs">操作记录</el-button>
+      </div>
+      <div class="search-actions">
+        <el-input 
+          v-model="searchValue" 
+          placeholder="搜索员工/工号" 
+          prefix-icon="el-icon-search"
+          style="width: 200px"
+          @input="handleSearch"
+        ></el-input>
+        <el-button icon="el-icon-filter" @click="showFilterModal = true">筛选</el-button>
+      </div>
+    </div>
+
+    <div class="table-title">
+      <i class="el-icon-s-management"></i>
+      员工技能矩阵
+    </div>
+
+    <!-- 技能矩阵表格 -->
+    <div v-if="filteredData.length > 0">
+      <el-table 
+        :data="filteredData" 
+        border 
+        stripe
+        style="width: 100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55"></el-table-column>
+        <el-table-column prop="name" label="姓名" width="100"></el-table-column>
+        <el-table-column prop="workId" label="工号" width="120"></el-table-column>
+        <el-table-column prop="product" label="核心产品/工艺" width="250"></el-table-column>
+        <el-table-column prop="code" label="产品/制程编码" width="150"></el-table-column>
+        <el-table-column prop="skillLevel" label="技能评级" width="150">
+          <template slot-scope="scope">
+            <span class="skill-rating">{{ '★'.repeat(scope.row.skillLevel) }}{{ '☆'.repeat(5-scope.row.skillLevel) }}</span>
+            <span style="margin-left: 8px; font-size: 12px; color: #666;">({{ scope.row.skillLevel }}/5)</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="mentor" label="指导老师" width="100"></el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template slot-scope="scope">
+            <span :class="`status-tag status-${getStatusClass(scope.row.status)}`">
+              {{ scope.row.status }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="date" label="最后考核日期" width="120"></el-table-column>
+        <el-table-column label="操作" width="150">
+          <template slot-scope="scope">
+            <el-button type="text" @click="handleEdit(scope.row)">编辑</el-button>
+            <el-divider direction="vertical"></el-divider>
+            <el-button type="text" @click="handleViewDetail(scope.row)">详情</el-button>
+            <el-divider direction="vertical"></el-divider>
+            <el-button type="text" style="color: #f56c6c;" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      
+      <!-- 分页组件 -->
+      <div style="margin-top: 20px; text-align: right;">
+        <el-pagination
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          :current-page="currentPage"
+          :page-sizes="[10, 20, 50, 100]"
+          :page-size="pageSize"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="filteredData.length">
+        </el-pagination>
+      </div>
+      
+      <div class="table-footer">
+        备注：本矩阵记录员工在 Metal Mesh、ITO 等核心生产线上的操作资质。数据最后更新于2026年1月15日。共 {{ filteredData.length }} 条记录。
+      </div>
+    </div>
+    
+    <!-- 空状态提示 -->
+    <div v-else class="empty-table">
+      <i class="el-icon-document-remove"></i>
+      <p>暂无数据，请点击"添加记录"按钮添加员工技能信息</p>
+      <el-button type="primary" @click="handleAddRecord" style="margin-top: 16px;">添加记录</el-button>
+    </div>
+    
+    <!-- 筛选弹窗 -->
+    <el-dialog
+      title="筛选条件"
+      :visible.sync="showFilterModal"
+      width="400px"
+    >
+      <el-form :model="filterForm" label-width="80px">
+        <el-form-item label="技能状态">
+          <el-select v-model="filterForm.status" placeholder="请选择状态" style="width: 100%;">
+            <el-option value="">全部</el-option>
+            <el-option value="优秀">优秀</el-option>
+            <el-option value="合格">合格</el-option>
+            <el-option value="学习中">学习中</el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="技能等级">
+          <el-select v-model="filterForm.level" placeholder="请选择等级" style="width: 100%;">
+            <el-option value="">全部</el-option>
+            <el-option :value="5">5星 (精通)</el-option>
+            <el-option :value="4">4星 (熟练)</el-option>
+            <el-option :value="3">3星 (掌握)</el-option>
+            <el-option :value="2">2星 (学习中)</el-option>
+            <el-option :value="1">1星 (入门)</el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="产品类型">
+          <el-select v-model="filterForm.product" placeholder="请选择产品" style="width: 100%;">
+            <el-option value="">全部</el-option>
+            <el-option value="Metal Mesh">Metal Mesh</el-option>
+            <el-option value="ITO">ITO</el-option>
+            <el-option value="贴合">贴合工艺</el-option>
+            <el-option value="黄光">黄光工艺</el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showFilterModal = false">取消</el-button>
+        <el-button type="primary" @click="handleFilter">确定</el-button>
+      </div>
+    </el-dialog>
+  </div>
+
+  <script>
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          // 搜索和筛选相关
+          searchValue: '',
+          showFilterModal: false,
+          filterForm: {
+            status: '',
+            level: '',
+            product: ''
+          },
+          // 分页相关
+          currentPage: 1,
+          pageSize: 10,
+          // 表格数据
+          selectedRows: [],
+          dataSource: [
+            // 员工1: 乔欣宇
+            { key: 1, name: '乔欣宇', workId: 'ZH-SK-001', product: 'Metal Mesh 触控传感器 (卷对卷)', code: 'MM-R2R-27', skillLevel: 5, mentor: '沈拖马', status: '优秀', date: '2024-11-10' },
+            { key: 2, name: '乔欣宇', workId: 'ZH-SK-001', product: 'ITO 透明导电膜蚀刻', code: 'ITO-ET-15', skillLevel: 4, mentor: '沈拖马', status: '合格', date: '2024-11-12' },
+            { key: 3, name: '乔欣宇', workId: 'ZH-SK-001', product: '车载 3D 曲面贴合工艺', code: 'AUTO-3D-FIT', skillLevel: 3, mentor: '沈拖马', status: '合格', date: '2024-11-14' },
+            
+            // 员工2: 谌青青
+            { key: 6, name: '谌青青', workId: 'ZH-SK-010', product: '86寸 教育商显 Metal Mesh 模组', code: 'MM-EDU-86', skillLevel: 4, mentor: '张睿', status: '合格', date: '2024-11-11' },
+            { key: 7, name: '谌青青', workId: 'ZH-SK-010', product: 'ITO 透明导电膜蚀刻', code: 'ITO-ET-15', skillLevel: 2, mentor: '张睿', status: '学习中', date: '2024-11-11' },
+            
+            // 员工3: 王晓明
+            // { key: 11, name: '王晓明', workId: 'ZH-SK-015', product: 'Metal Mesh 触控传感器 (卷对卷)', code: 'MM-R2R-27', skillLevel: 5, mentor: '张睿', status: '优秀', date: '2024-11-08' },
+            // { key: 12, name: '王晓明', workId: 'ZH-SK-015', product: 'ITO 透明导电膜蚀刻', code: 'ITO-ET-15', skillLevel: 3, mentor: '张睿', status: '合格', date: '2024-11-10' },
+            
+            // 员工4: 李娜
+            // { key: 14, name: '李娜', workId: 'ZH-SK-022', product: '黄光精密曝光制程', code: 'PHOTO-EXP-01', skillLevel: 3, mentor: '张睿', status: '合格', date: '2024-11-13' },
+          ]
+        }
+      },
+      computed: {
+        // 计算筛选后的数据
+        filteredData() {
+          let result = this.dataSource.filter(item => {
+            // 搜索过滤
+            const searchMatch = !this.searchValue || 
+              item.name.includes(this.searchValue) || 
+              item.workId.includes(this.searchValue) ||
+              item.product.includes(this.searchValue) ||
+              item.code.includes(this.searchValue);
+            
+            // 状态过滤
+            const statusMatch = !this.filterForm.status || item.status === this.filterForm.status;
+            
+            // 等级过滤
+            const levelMatch = !this.filterForm.level || item.skillLevel == this.filterForm.level;
+            
+            // 产品过滤
+            const productMatch = !this.filterForm.product || item.product.includes(this.filterForm.product);
+            
+            return searchMatch && statusMatch && levelMatch && productMatch;
+          });
+          
+          // 分页处理
+          const start = (this.currentPage - 1) * this.pageSize;
+          const end = start + this.pageSize;
+          return result.slice(start, end);
+        }
+      },
+      methods: {
+        // 获取状态对应的CSS类
+        getStatusClass(status) {
+          const statusMap = {
+            '优秀': 'excellent',
+            '合格': 'qualified',
+            '学习中': 'learning'
+          };
+          return statusMap[status] || 'default';
+        },
+        
+        // 表格选择事件
+        handleSelectionChange(val) {
+          this.selectedRows = val;
+        },
+        
+        // 搜索处理
+        handleSearch() {
+          this.currentPage = 1; // 搜索时重置到第一页
+        },
+        
+        // 筛选处理
+        handleFilter() {
+          this.showFilterModal = false;
+          this.currentPage = 1; // 筛选时重置到第一页
+          this.$message.success('筛选条件已应用');
+        },
+        
+        // 分页处理
+        handleSizeChange(val) {
+          this.pageSize = val;
+          this.currentPage = 1;
+        },
+        handleCurrentChange(val) {
+          this.currentPage = val;
+        },
+        
+        // 操作按钮事件
+        handleAddRecord() {
+          this.$message.info('添加记录功能开发中...');
+        },
+        
+        handleExport() {
+          this.$message.success(`已导出 ${this.dataSource.length} 条数据`);
+        },
+        
+        handleBatchDelete() {
+          if (this.selectedRows.length === 0) {
+            this.$message.warning('请先选择要删除的记录');
+            return;
+          }
+          
+          this.$confirm('确定要删除选中的记录吗？此操作不可恢复。', '确认删除', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            // 实际项目中这里应该调用API删除
+            this.dataSource = this.dataSource.filter(item => 
+              !this.selectedRows.some(selected => selected.key === item.key)
+            );
+            this.selectedRows = [];
+            this.$message.success('删除成功');
+          }).catch(() => {
+            this.$message.info('已取消删除');
+          });
+        },
+        
+        handleShowLogs() {
+          this.$message.info('操作记录功能开发中...');
+        },
+        
+        handleEdit(record) {
+          this.$message.info(`编辑记录: ${record.name} - ${record.product}`);
+        },
+        
+        handleDelete(record) {
+          this.$confirm(`确定要删除 ${record.name} 的 ${record.product} 技能记录吗？`, '确认删除', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            const index = this.dataSource.findIndex(item => item.key === record.key);
+            if (index !== -1) {
+              this.dataSource.splice(index, 1);
+              this.$message.success('记录已删除');
+            }
+          }).catch(() => {
+            this.$message.info('已取消删除');
+          });
+        },
+        
+        handleViewDetail(record) {
+          this.$message.info(`查看详情: ${record.name} - ${record.product}`);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
