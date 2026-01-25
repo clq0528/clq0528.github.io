@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>EtherCAT 多从站 PDO 通信深度演示 - 优化版</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <style>
+        :root {
+            --master-color: #1890ff;
+            --motor-color: #52c41a;
+            --io-color: #722ed1;
+            --bg-dark: #141414;
+        }
+        body, html { 
+            height: 100%; margin: 0; 
+            background-color: #f0f2f5; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            overflow: hidden;
+        }
+        #app { height: 100vh; display: flex; flex-direction: column; }
+        
+        /* 头部 */
+        .header { 
+            background: #001529; color: white; padding: 0 20px; 
+            line-height: 50px; flex-shrink: 0;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        /* 主布局 */
+        .main-layout { flex: 1; display: flex; overflow: hidden; }
+        
+        /* 侧边栏优化 */
+        .sidebar { 
+            width: 500px; background: white; border-right: 1px solid #d9d9d9;
+            display: flex; flex-direction: column; box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+        }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 16px; }
+        .sidebar-footer { padding: 16px; border-top: 1px solid #eee; background: #fafafa; }
+
+        /* 舞台区域 */
+        .stage { flex: 1; position: relative; background: var(--bg-dark); overflow: hidden; }
+
+        /* 节点样式 */
+        .node { 
+            position: absolute; width: 150px; height: 170px; 
+            border-radius: 8px; border: 2px solid rgba(255,255,255,0.2); 
+            color: white; padding: 12px; display: flex; flex-direction: column; align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
+        }
+        .node.highlight { border-color: #fff; box-shadow: 0 0 25px rgba(255,255,255,0.5); transform: scale(1.05); }
+        .master { left: 40px; top: 50%; transform: translateY(-50%); background: linear-gradient(135deg, #003a8c, #1890ff); }
+        .slave-motor { left: 500px; top: 100px; background: linear-gradient(135deg, #135200, #52c41a); }
+        .slave-io { left: 500px; bottom: 100px; background: linear-gradient(135deg, #22075e, #722ed1); }
+
+        /* 电机动画 */
+        .motor-disc { 
+            width: 50px; height: 50px; border: 3px solid #fff; border-radius: 50%; 
+            margin: 10px 0; position: relative; display: flex; justify-content: center;
+        }
+        .motor-pointer { width: 4px; height: 25px; background: #fff; transform-origin: bottom center; }
+
+        /* IO 模块面板优化 (匹配图片风格) */
+        .io-panel-card {
+            width: 100%; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 8px; margin-top: 8px;
+        }
+        .io-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .io-dot { 
+            width: 14px; height: 14px; border-radius: 2px; background: #333; 
+            border: 1px solid rgba(255,255,255,0.3); transition: 0.2s;
+        }
+        .io-dot.in.active { background: #ff4d4f; box-shadow: 0 0 8px #ff4d4f; }
+        .io-dot.out.active { background: #52c41a; box-shadow: 0 0 8px #52c41a; }
+        .io-label { font-size: 8px; color: #ccc; margin-bottom: 2px; text-align: center; }
+
+        /* 数据帧(Telegram)可视化 */
+        .telegram {
+            position: absolute; padding: 6px 12px; background: white; border-radius: 4px;
+            font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold;
+            box-shadow: 0 0 15px rgba(24, 144, 255, 0.8); z-index: 100; pointer-events: none;
+            display: flex; flex-direction: column; align-items: center; border: 1px solid #1890ff;
+        }
+
+        /* 数据帧结构表格 */
+        .frame-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        .frame-table th { background: #fafafa; padding: 4px; border: 1px solid #e8e8e8; }
+        .frame-table td { padding: 4px; border: 1px solid #e8e8e8; text-align: center; font-family: monospace; }
+        .hex-tag { font-family: monospace; color: #c41d7f; background: #fff0f6; padding: 0 4px; border-radius: 2px; }
+        
+        /* 流程分块显示 */
+        .frame-chunk-container { 
+            display: flex; border: 1px solid #d9d9d9; border-radius: 4px; overflow: hidden; 
+            margin: 10px 0; font-size: 10px;
+        }
+        .chunk { padding: 6px 8px; border-right: 1px solid #d9d9d9; text-align: center; flex: 1; }
+        .chunk:last-child { border-right: none; }
+        .c-head { background: #f5f5f5; }
+        .c-m-cmd { background: #e6f7ff; } /* RxPDO */
+        .c-io-out { background: #f9f0ff; } /* RxPDO */
+        .c-m-fb { background: #f6ffed; } /* TxPDO */
+        .c-io-in { background: #fff7e6; } /* TxPDO */
+        .c-wkc { background: #fff1f0; }
+        
+        /* 字节偏移指示器 */
+        .byte-offset { 
+            display: flex; justify-content: space-between; margin-top: 2px; 
+            font-size: 9px; color: #666; font-family: monospace;
+        }
+        
+        /* 数据帧详细说明 */
+        .frame-detail {
+            background: #f6f6f6; border-left: 4px solid #1890ff; padding: 10px; 
+            margin: 10px 0; border-radius: 4px; font-size: 12px;
+        }
+        .frame-detail h4 { margin-top: 0; color: #1890ff; font-size: 13px; }
+        .byte-map { 
+            display: flex; justify-content: space-between; margin: 8px 0; 
+            font-family: monospace; font-size: 10px; color: #666;
+        }
+        
+        /* EtherCAT 数据帧头部 */
+        .eth-header {
+            background: #001529; color: white; padding: 8px; border-radius: 4px; 
+            margin: 10px 0; font-family: monospace; font-size: 11px;
+        }
+        
+        /* 通信流程步骤 */
+        .step-item {
+            display: flex; margin-bottom: 12px; align-items: flex-start;
+        }
+        .step-number {
+            width: 20px; height: 20px; background: #1890ff; color: white;
+            border-radius: 50%; text-align: center; line-height: 20px;
+            margin-right: 10px; flex-shrink: 0; font-size: 11px;
+        }
+        .step-content { flex: 1; }
+        
+        /* 日志 */
+        .log-area { 
+            background: #001529; color: #00ff00; padding: 10px; 
+            font-family: monospace; font-size: 11px; height: 120px; overflow-y: auto; 
+            border-radius: 4px; margin-top: 10px;
+        }
+        
+        /* EtherCAT 协议说明 */
+        .protocol-note {
+            background: #fff7e6; border: 1px solid #ffd591; border-radius: 4px;
+            padding: 10px; margin: 10px 0; font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="header">
+        <div><a-icon type="gateway"></a-icon> <strong>EtherCAT Real-time Network Simulator</strong></div>
+        <a-space>
+            <a-tag color="cyan">Cycle: {{cycleTime}}ms</a-tag>
+            <a-tag color="orange">Count: {{cycleCount}}</a-tag>
+        </a-space>
+    </div>
+
+    <div class="main-layout">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <a-tabs default-active-key="1" size="small" style="padding: 0 16px;">
+                <a-tab-pane key="1" tab="通信逻辑">
+                    <div class="sidebar-content" style="padding: 10px 0;">
+                        <div class="protocol-note">
+                            <a-icon type="info-circle" style="color: #fa8c16; margin-right: 5px;" />
+                            <strong>EtherCAT 数据帧工作流程</strong>: 主站在每个周期将控制数据打包到以太网帧的Data字段，数据帧在物理环网中传输时，各从站按寻址方式提取或写入数据。
+                        </div>
+                        
+                        <a-collapse v-model="activeCollapse" accordion>
+                            <a-collapse-panel key="1" header="1. EtherCAT 数据帧结构详解">
+                                <div style="font-size: 12px; line-height: 1.5;">
+                                    <p>标准的 EtherCAT 数据帧封装在以太网帧中：</p>
+                                    <div class="eth-header">
+                                        EtherCAT Frame = Ethernet Header + EtherCAT Datagram(s) + Ethernet FCS
+                                    </div>
+                                    
+                                    <p>每个 EtherCAT Datagram 包含：</p>
+                                    <div class="frame-chunk-container">
+                                        <div class="chunk c-head">ECAT<br>Header</div>
+                                        <div class="chunk c-m-cmd">Motor Cmd</div>
+                                        <div class="chunk c-io-out">IO Out</div>
+                                        <div class="chunk c-m-fb">Motor FB</div>
+                                        <div class="chunk c-io-in">IO In</div>
+                                        <div class="chunk c-wkc">WKC</div>
+                                    </div>
+                                    <div class="byte-offset">
+                                        <span>0x0000</span>
+                                        <span>0x0002</span>
+                                        <span>0x0004</span>
+                                        <span>0x0008</span>
+                                        <span>0x000C</span>
+                                        <span>0x000E</span>
+                                    </div>
+                                    
+                                    <div class="frame-detail">
+                                        <h4><a-icon type="database" /> Data 字段具体内容：</h4>
+                                        <div class="step-item">
+                                            <div class="step-number">1</div>
+                                            <div class="step-content">
+                                                <strong>Motor Cmd (2字节):</strong> 电机目标位置，如 <code>0x03E8</code> (十进制1000)<br>
+                                                <small>主站→电机从站的 RxPDO，控制电机运动</small>
+                                            </div>
+                                        </div>
+                                        <div class="step-item">
+                                            <div class="step-number">2</div>
+                                            <div class="step-content">
+                                                <strong>IO Out (2字节):</strong> 数字输出状态，如 <code>0x0003</code><br>
+                                                <small>主站→IO从站的 RxPDO，控制继电器/电磁阀等执行器</small>
+                                            </div>
+                                        </div>
+                                        <div class="step-item">
+                                            <div class="step-number">3</div>
+                                            <div class="step-content">
+                                                <strong>Motor FB (2字节):</strong> 电机实际位置，如 <code>0x03E3</code> (十进制995)<br>
+                                                <small>电机从站→主站的 TxPDO，反馈电机实际位置</small>
+                                            </div>
+                                        </div>
+                                        <div class="step-item">
+                                            <div class="step-number">4</div>
+                                            <div class="step-content">
+                                                <strong>IO In (2字节):</strong> 数字输入状态，如 <code>0x0001</code><br>
+                                                <small>IO从站→主站的 TxPDO，反馈传感器状态</small>
+                                            </div>
+                                        </div>
+                                        <div class="step-item">
+                                            <div class="step-number">5</div>
+                                            <div class="step-content">
+                                                <strong>WKC (2字节):</strong> 工作计数器，如 <code>0x0003</code><br>
+                                                <small>用于校验数据完整性，等于已处理从站数</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <p style="margin-top: 10px;"><strong>示例完整数据帧 (16字节):</strong></p>
+                                    <div style="background:#f5f5f5; padding: 8px; border-radius: 4px; font-family: monospace; word-break: break-all; font-size: 11px;">
+                                        <span style="color:#1890ff; font-weight:bold">03E8</span> <!-- Motor Cmd -->
+                                        <span style="color:#722ed1; font-weight:bold">0003</span> <!-- IO Out -->
+                                        <span style="color:#52c41a; font-weight:bold">03E3</span> <!-- Motor FB -->
+                                        <span style="color:#fa8c16; font-weight:bold">0001</span> <!-- IO In -->
+                                        <span style="color:#f5222d">0003</span> <!-- WKC -->
+                                    </div>
+                                </div>
+                            </a-collapse-panel>
+                            
+                            <a-collapse-panel key="2" header="2. PDO 映射与寻址机制">
+                                <div style="font-size: 12px; line-height: 1.5;">
+                                    <p><strong>PDO (Process Data Object) 映射原理:</strong></p>
+                                    <div class="step-item">
+                                        <div class="step-number">A</div>
+                                        <div class="step-content">
+                                            <strong>逻辑寻址:</strong> 主站通过 <code>0x0000-0xFFFF</code> 的逻辑地址访问从站PDO，不关心物理位置
+                                        </div>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number">B</div>
+                                        <div class="step-content">
+                                            <strong>PDO映射表:</strong> 从站ESCS根据映射表确定数据在帧中的位置偏移
+                                        </div>
+                                    </div>
+                                    
+                                    <p style="margin-top: 15px;"><strong>本示例的PDO映射配置:</strong></p>
+                                    <table style="width:100%; font-size:11px; border-collapse: collapse; margin-top: 8px;">
+                                        <thead>
+                                            <tr style="background:#fafafa">
+                                                <th style="border:1px solid #e8e8e8; padding:4px;">从站</th>
+                                                <th style="border:1px solid #e8e8e8; padding:4px;">PDO类型</th>
+                                                <th style="border:1px solid #e8e8e8; padding:4px;">数据长度</th>
+                                                <th style="border:1px solid #e8e8e8; padding:4px;">帧内偏移</th>
+                                                <th style="border:1px solid #e8e8e8; padding:4px;">示例数据</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">电机从站</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">RxPDO (接收)</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">2字节</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">0x0002</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;"><code>0x03E8</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">IO从站</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">RxPDO (接收)</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">2字节</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">0x0004</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;"><code>0x0003</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">电机从站</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">TxPDO (发送)</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">2字节</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">0x0008</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;"><code>0x03E3</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">IO从站</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">TxPDO (发送)</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">2字节</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;">0x000C</td>
+                                                <td style="border:1px solid #e8e8e8; padding:4px;"><code>0x0001</code></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </a-collapse-panel>
+                            
+                            <a-collapse-panel key="3" header="3. 飞速读写 (On-the-Fly) 流程">
+                                <div style="font-size: 12px; line-height: 1.5;">
+                                    <p><strong>数据帧在环网中的实时处理:</strong></p>
+                                    <div class="step-item">
+                                        <div class="step-number">①</div>
+                                        <div class="step-content">
+                                            <strong>主站组包:</strong> 将电机目标位置(1000)和IO输出状态(0x03)打包到数据帧的指定位置
+                                        </div>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number">②</div>
+                                        <div class="step-content">
+                                            <strong>电机从站处理:</strong> 数据帧经过时，ESC提取0x0002处的2字节作为目标位置，将实际位置写入0x0008处
+                                        </div>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number">③</div>
+                                        <div class="step-content">
+                                            <strong>IO从站处理:</strong> ESC提取0x0004处的2字节控制输出，将输入状态写入0x000C处
+                                        </div>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number">④</div>
+                                        <div class="step-number">④</div>
+                                        <div class="step-content">
+                                            <strong>返回主站:</strong> 更新后的数据帧返回主站，主站读取0x0008和0x000C处数据完成闭环控制
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="protocol-note" style="margin-top: 15px;">
+                                        <a-icon type="clock-circle" style="color: #52c41a; margin-right: 5px;" />
+                                        <strong>关键特性:</strong> 整个处理过程在数据帧经过从站时实时完成，延迟仅取决于物理传输时间，通常在μs级。
+                                    </div>
+                                </div>
+                            </a-collapse-panel>
+                        </a-collapse>
+                        
+                        <div class="log-area" id="log-box">
+                            <div v-for="log in logs" :key="log.id">>> {{log.msg}}</div>
+                        </div>
+                    </div>
+                </a-tab-pane>
+
+                <a-tab-pane key="2" tab="数据帧结构 (Frame Table)">
+                    <div class="sidebar-content" style="padding: 10px 0;">
+                        <h4 style="font-size: 12px;"><a-icon type="table" /> 历史周期数据明细</h4>
+                        <table class="frame-table">
+                            <thead>
+                                <tr>
+                                    <th>周期</th>
+                                    <th class="c-m-cmd">Motor Cmd</th>
+                                    <th class="c-io-out">IO Out</th>
+                                    <th class="c-m-fb">Motor FB</th>
+                                    <th class="c-io-in">IO In</th>
+                                    <th class="c-wkc">WKC</th>
+                                    <th>帧偏移</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="f in frameHistory" :key="f.id">
+                                    <td>{{f.id}}</td>
+                                    <td><span class="hex-tag">{{f.mCmd}}</span><br><small>{{parseInt(f.mCmd, 16)}}</small></td>
+                                    <td><span class="hex-tag">{{f.ioOut}}</span><br><small>OUT: {{this.getOutputBits(parseInt(f.ioOut, 16))}}</small></td>
+                                    <td><span class="hex-tag">{{f.mFb}}</span><br><small>{{parseInt(f.mFb, 16)}}</small></td>
+                                    <td><span class="hex-tag">{{f.ioIn}}</span><br><small>IN: {{this.getInputBits(parseInt(f.ioIn, 16))}}</small></td>
+                                    <td><span class="hex-tag">0x0003</span></td>
+                                    <td>0x0002-0x000E</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div style="margin-top: 15px;">
+                            <h4 style="font-size: 12px;">当前完整帧 (16字节):</h4>
+                            <div style="background:#f5f5f5; padding: 8px; border-radius: 4px; font-family: monospace; word-break: break-all; font-size: 11px;">
+                                <span style="color:#999">0x0000</span><!--ECAT Header-->
+                                <span style="color:#1890ff; font-weight:bold">{{currentRaw.mCmd}}</span>
+                                <span style="color:#722ed1; font-weight:bold">{{currentRaw.ioOut}}</span>
+                                <span style="color:#52c41a; font-weight:bold">{{currentRaw.mFb}}</span>
+                                <span style="color:#fa8c16; font-weight:bold">{{currentRaw.ioIn}}</span>
+                                <span style="color:#f5222d">0003</span><!--WKC-->
+                            </div>
+                            <div class="byte-map">
+                                <span>0x0000</span>
+                                <span>0x0002</span>
+                                <span>0x0004</span>
+                                <span>0x0008</span>
+                                <span>0x000C</span>
+                                <span>0x000E</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; font-size: 11px; color: #666;">
+                            <p><strong>数据帧解释:</strong></p>
+                            <ul style="margin: 5px 0; padding-left: 15px;">
+                                <li><span style="color:#1890ff">蓝色</span>: 电机目标位置 (RxPDO to Motor)</li>
+                                <li><span style="color:#722ed1">紫色</span>: IO输出状态 (RxPDO to IO)</li>
+                                <li><span style="color:#52c41a">绿色</span>: 电机反馈位置 (TxPDO from Motor)</li>
+                                <li><span style="color:#fa8c16">橙色</span>: IO输入状态 (TxPDO from IO)</li>
+                                <li><span style="color:#f5222d">红色</span>: 工作计数器 (Working Counter)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </a-tab-pane>
+            </a-tabs>
+
+            <div class="sidebar-footer">
+                <a-button-group style="width: 100%; margin-bottom: 10px;">
+                    <a-button type="primary" :disabled="isRunning" @click="startSimulation" icon="play-circle" style="width: 50%;">START</a-button>
+                    <a-button type="danger" :disabled="!isRunning" @click="stopSimulation" icon="stop" style="width: 50%;">STOP</a-button>
+                </a-button-group>
+                
+                <div style="margin-top: 10px;">
+                    <span style="font-size: 12px;">电机目标 (Motor Target):</span>
+                    <a-slider v-model="targetPos" :min="0" :max="4000" :disabled="!isRunning" />
+                    <div style="text-align: center; font-family: monospace; font-size: 14px; color: #1890ff; margin-top: 5px;">
+                        {{targetPos}} (0x{{targetPos.toString(16).toUpperCase().padStart(4, '0')}})
+                    </div>
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <span style="font-size: 12px;">模拟外部 IO 输入:</span>
+                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                        <a-checkbox v-for="i in 4" :key="i" v-model="ioInputStates[i-1]">IN{{i-1}}</a-checkbox>
+                    </div>
+                    <div style="font-size: 11px; color: #666; margin-top: 5px;">
+                        当前输入: {{this.getInputBits(this.getInputByte())}} ({{this.toHex(this.getInputByte(), 2)}})
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 动画舞台 -->
+        <div class="stage">
+            <!-- 物理链路 -->
+            <svg style="position:absolute; width:100%; height:100%">
+                <path id="bus-path" d="M 190 300 L 500 185 L 500 415 L 190 300" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3" stroke-dasharray="8,4" />
+            </svg>
+
+            <!-- Master Node -->
+            <div class="node master" :class="{highlight: activeNode === 'master'}">
+                <a-icon type="code" style="font-size: 24px" />
+                <div style="font-weight: bold; margin-top: 5px;">EtherCAT Master</div>
+                <div style="font-size: 10px; opacity: 0.8;">TwinCAT / SOEM</div>
+                <div style="width: 100%; margin-top: 15px; font-size: 11px;">
+                    <div>Target: <span style="color:#fff">{{targetPos}}</span></div>
+                    <div>Actual: <span style="color:#52c41a">{{actualPos}}</span></div>
+                    <div style="margin-top: 5px; font-size: 10px; color: rgba(255,255,255,0.7)">
+                        Frame: {{currentRaw.mCmd}} {{currentRaw.ioOut}}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Motor Slave -->
+            <div class="node slave-motor" :class="{highlight: activeNode === 'motor'}">
+                <div style="font-size: 12px; font-weight: bold;">DS402 Motor</div>
+                <div class="motor-disc">
+                    <div class="motor-pointer" :style="{transform: 'rotate('+motorAngle+'deg)'}"></div>
+                </div>
+                <div style="font-size: 10px;">Cmd: {{mCmdValue}} (0x{{mCmdValue.toString(16).toUpperCase().padStart(4, '0')}})</div>
+                <div style="font-size: 10px;">Stat: <a-badge status="processing" color="yellow" text="OP" /></div>
+                <div style="margin-top: 5px; font-size: 9px; color: rgba(255,255,255,0.7)">
+                    RxPDO: 0x0002<br>TxPDO: 0x0008
+                </div>
+            </div>
+
+            <!-- IO Slave -->
+            <div class="node slave-io" :class="{highlight: activeNode === 'io'}">
+                <div style="width: 100%; display: flex; justify-content: space-between; font-size: 12px;">
+                    <b>Digital IO</b>
+                    <span style="font-size: 10px; opacity:0.7" v-if="isRunning">数据中...</span>
+                </div>
+                
+                <div class="io-panel-card">
+                    <div class="io-label">INPUTS</div>
+                    <div class="io-grid">
+                        <div v-for="i in 4" :key="'in'+i" class="io-dot in" :class="{active: ioInputStates[i-1]}"></div>
+                    </div>
+                    <div class="io-label" style="margin-top: 8px;">OUTPUTS</div>
+                    <div class="io-grid">
+                        <div v-for="i in 4" :key="'out'+i" class="io-dot out" :class="{active: ioOutputStates[i-1]}"></div>
+                    </div>
+                </div>
+                
+                <!-- 匹配图片要求的文字显示 -->
+                <div style="font-size: 10px; font-family: monospace; margin-top: 8px;">
+                    OUT: {{toHex(ioOutVal, 2)}} | FB: {{actualPos}}
+                </div>
+                <div style="font-size: 9px; color: rgba(255,255,255,0.7); margin-top: 3px;">
+                    Input: {{toHex(this.getInputByte(), 2)}} Output: {{toHex(ioOutVal, 2)}}
+                </div>
+                <div style="margin-top: 3px; font-size: 9px; color: rgba(255,255,255,0.7)">
+                    RxPDO: 0x0004<br>TxPDO: 0x000C
+                </div>
+            </div>
+
+            <!-- Telegram Frame -->
+            <div v-if="showFrame" class="telegram" :style="{left: framePos.x+'px', top: framePos.y+'px'}">
+                <div style="font-size: 8px; color: #1890ff;">EtherCAT Frame</div>
+                <div>{{frameText}}</div>
+            </div>
+            
+            <!-- 数据帧内容提示 -->
+            <div v-if="showFrame" class="telegram" :style="{left: (framePos.x + 120)+'px', top: (framePos.y - 20)+'px', background: '#fff7e6', borderColor: '#fa8c16', fontSize: '9px', padding: '4px 8px'}">
+                <div>0x0000 {{currentRaw.mCmd}} {{currentRaw.ioOut}} {{currentRaw.mFb}} {{currentRaw.ioIn}} 0003</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js"></script>
+
+<script>
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                isRunning: false,
+                activeCollapse: '1',
+                cycleTime: 1,
+                cycleCount: 0,
+                targetPos: 1000,
+                actualPos: 0,
+                motorAngle: 0,
+                mCmdValue: 0,
+                ioInputStates: [false, false, false, false],
+                ioOutputStates: [false, false, false, false],
+                ioOutVal: 0,
+                logs: [],
+                frameHistory: [],
+                activeNode: null,
+                showFrame: false,
+                framePos: { x: 190, y: 300 },
+                frameText: '',
+                currentRaw: { mCmd: '03E8', ioOut: '00', mFb: '0000', ioIn: '00' }
+            }
+        },
+        methods: {
+            toHex(val, len) {
+                return '0x' + (val || 0).toString(16).toUpperCase().padStart(len, '0');
+            },
+            
+            getInputByte() {
+                let byte = 0;
+                this.ioInputStates.forEach((state, index) => {
+                    if (state) byte |= (1 << index);
+                });
+                return byte;
+            },
+            
+            getInputBits(byte) {
+                let bits = '';
+                for (let i = 0; i < 4; i++) {
+                    bits += (byte & (1 << i)) ? '1' : '0';
+                }
+                return bits.split('').reverse().join('');
+            },
+            
+            getOutputBits(byte) {
+                return this.getInputBits(byte); // 复用同一函数
+            },
+            
+            addLog(msg) {
+                const now = new Date();
+                const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                this.logs.unshift({ id: Date.now(), msg: `[${time}] ${msg}` });
+                if (this.logs.length > 20) this.logs.pop();
+            },
+            
+            startSimulation() {
+                this.isRunning = true;
+                this.addLog("Network status -> OP (Operational)");
+                this.addLog("Starting cyclic communication @ 1ms");
+                this.runCycle();
+            },
+            
+            stopSimulation() {
+                this.isRunning = false;
+                this.activeNode = null;
+                this.showFrame = false;
+                this.addLog("Network status -> Pre-OP");
+                this.addLog("Cyclic communication stopped");
+            },
+            
+            runCycle() {
+                if (!this.isRunning) return;
+
+                this.cycleCount++;
+                const tl = gsap.timeline({
+                    onComplete: () => {
+                        if (this.isRunning) {
+                            setTimeout(() => this.runCycle(), 100); // 控制循环速度
+                        }
+                    }
+                });
+
+                // 1. Master -> Motor (发送数据帧)
+                tl.to({}, { duration: 0.1, onStart: () => {
+                    this.activeNode = 'master';
+                    this.showFrame = true;
+                    
+                    // 主站组包：将电机目标位置和IO输出状态打包到数据帧
+                    const outVal = this.targetPos > 2000 ? 3 : 1; // 简单逻辑：位置过2000点亮OUT0,1
+                    this.ioOutVal = outVal;
+                    
+                    // 更新当前数据帧的发送部分
+                    this.currentRaw.mCmd = this.targetPos.toString(16).padStart(4, '0').toUpperCase();
+                    this.currentRaw.ioOut = outVal.toString(16).padStart(2, '0').toUpperCase();
+                    
+                    this.frameText = `CMD:${this.targetPos} OUT:${this.toHex(outVal, 2)}`;
+                    this.addLog(`Master sending frame: Motor=${this.currentRaw.mCmd}, IO Out=${this.currentRaw.ioOut}`);
+                }});
+
+                tl.to(this.framePos, {
+                    x: 500, y: 185, duration: 0.8, ease: "power1.inOut",
+                    onStart: () => { 
+                        this.activeNode = null;
+                    }
+                });
+
+                // 2. Motor Processing (电机从站处理)
+                tl.to({}, { duration: 0.5, onStart: () => {
+                    this.activeNode = 'motor';
+                    this.mCmdValue = this.targetPos;
+                    this.motorAngle += (this.targetPos / 100);
+                    
+                    // 电机从站处理：读取RxPDO(目标位置)，写入TxPDO(实际位置)
+                    // 模拟实际位置有微小误差
+                    this.actualPos = Math.max(0, this.targetPos - Math.floor(Math.random() * 10));
+                    this.currentRaw.mFb = this.actualPos.toString(16).padStart(4, '0').toUpperCase();
+                    
+                    this.frameText = `FB:${this.actualPos} OUT:${this.currentRaw.ioOut}`;
+                    this.addLog(`Motor slave processed: Target=${this.currentRaw.mCmd}, Actual=${this.currentRaw.mFb}`);
+                }});
+
+                tl.to(this.framePos, {
+                    x: 500, y: 415, duration: 0.8, ease: "power1.inOut",
+                    onStart: () => { 
+                        this.activeNode = null;
+                    }
+                });
+
+                // 3. IO Processing (IO从站处理)
+                tl.to({}, { duration: 0.5, onStart: () => {
+                    this.activeNode = 'io';
+                    
+                    // IO从站处理：读取RxPDO(输出状态)，写入TxPDO(输入状态)
+                    // 执行输出
+                    this.ioOutputStates = [
+                        !!(this.ioOutVal & 1),  // OUT0
+                        !!(this.ioOutVal & 2),  // OUT1
+                        false,                   // OUT2
+                        false                    // OUT3
+                    ];
+                    
+                    // 采集输入
+                    let inByte = this.getInputByte();
+                    this.currentRaw.ioIn = inByte.toString(16).padStart(2, '0').toUpperCase();
+                    
+                    this.frameText = `FB:${this.actualPos} IN:${this.currentRaw.ioIn}`;
+                    this.addLog(`IO slave processed: Out=${this.currentRaw.ioOut}, In=${this.currentRaw.ioIn}`);
+                }});
+
+                tl.to(this.framePos, {
+                    x: 190, y: 300, duration: 0.8, ease: "power1.inOut",
+                    onStart: () => { 
+                        this.activeNode = null;
+                        // 记录数据帧历史
+                        this.recordHistory();
+                        this.addLog(`Cycle ${this.cycleCount} completed. Full frame: ${this.currentRaw.mCmd} ${this.currentRaw.ioOut} ${this.currentRaw.mFb} ${this.currentRaw.ioIn} 0003`);
+                    }
+                });
+            },
+            
+            recordHistory() {
+                this.frameHistory.unshift({
+                    id: this.cycleCount,
+                    mCmd: this.toHex(parseInt(this.currentRaw.mCmd, 16), 4),
+                    ioOut: this.toHex(parseInt(this.currentRaw.ioOut, 16), 2),
+                    mFb: this.toHex(parseInt(this.currentRaw.mFb, 16), 4),
+                    ioIn: this.toHex(parseInt(this.currentRaw.ioIn, 16), 2)
+                });
+                if (this.frameHistory.length > 50) this.frameHistory.pop();
+            }
+        },
+        mounted() {
+            this.addLog("Initializing EtherCAT Stack...");
+            this.addLog("Scanning bus for slaves...");
+            this.addLog("Found 2 slaves: Motor Drive (ID: 0x1001), Digital IO (ID: 0x2001)");
+            this.addLog("Configuring PDO mapping...");
+            this.addLog("Motor RxPDO: 0x1600, TxPDO: 0x1A00");
+            this.addLog("IO RxPDO: 0x1601, TxPDO: 0x1A01");
+            this.addLog("Entering SAFE-OP state...");
+        }
+    });
+</script>
+</body>
+</html>
