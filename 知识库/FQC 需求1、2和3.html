@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FQC 终检业务原型 - 需求 1, 2 & 3</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f5ff; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .chart-container { width: 100%; min-height: 300px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 6px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* FQC 特色样式 */
+        .inspection-terminal { background: #141414; border-radius: 8px; padding: 20px; color: #fff; }
+        .item-row { background: #1f1f1f; margin-bottom: 10px; padding: 15px; border-radius: 4px; border: 1px solid #333; }
+        .item-row:hover { border-color: #1890ff; }
+        .result-pass { color: #52c41a; font-weight: bold; }
+        .result-fail { color: #f5222d; font-weight: bold; }
+        
+        /* WMS 联动锁定模拟器 */
+        .wms-simulator { background: #fff; border: 2px solid #d9d9d9; border-radius: 8px; height: 100%; }
+        .wms-header { background: #595959; color: #fff; padding: 10px; text-align: center; font-weight: bold; }
+        .wms-locked { background: #fff1f0; opacity: 0.8; cursor: not-allowed; }
+        .lock-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid #f5222d; color: #f5222d; padding: 10px 20px; font-size: 24px; font-weight: bold; text-transform: uppercase; z-index: 10; pointer-events: none; }
+        
+        /* 报表预览样式 */
+        .report-preview { border: 1px solid #eee; padding: 40px; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.05); min-height: 500px; color: #333; }
+        .report-title { text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 横向业务流程图 -->
+        <div class="section-card">
+            <h2>FQC 终检与 WMS 联动 - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[生产任务完工] --> B[扫描批次/产品条码]
+                        B --> C[匹配 FQC 终检方案 R1]
+                        C --> D[执行功能/性能测试 R2]
+                        D --> E{全项合格?}
+                        E -- 否 --> F[WMS 强制入库锁定 R3]
+                        E -- 是 --> G[自动发送入库许可信号]
+                        G --> H[WMS 解锁入库流程 R3]
+                        F -- 品质总监特许审批 --> H
+                        D -. 批量导入 .-> I[单元级数据关联存储 R2]
+
+                        class A,B,D,I business;
+                        class C,G,H system;
+                        class E,F alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 1 & 2：FQC 终检工作站 -->
+        <div class="section-card">
+            <h2>需求 1 & 2：FQC 终检操作终端与数据深度存储</h2>
+            <a-row :gutter="24">
+                <a-col :span="14">
+                    <div class="inspection-terminal">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                            <a-input-search 
+                                placeholder="请扫描工单或产品批次条码" 
+                                enter-button="调阅方案" 
+                                size="large"
+                                style="width: 70%;"
+                                v-model="scanValue"
+                                @search="onScan"
+                            />
+                            <a-button type="dashed" icon="upload" ghost @click="showImport = true">批量导入测试数据</a-button>
+                        </div>
+
+                        <div v-if="hasData">
+                            <a-descriptions title="当前检验工单信息" :column="2" size="small" style="background: #262626; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                                <a-descriptions-item label="工单号"><span style="color: #fff">MO20250124-001</span></a-descriptions-item>
+                                <a-descriptions-item label="机种描述"><span style="color: #fff">智能控制器 V3.0</span></a-descriptions-item>
+                                <a-descriptions-item label="SKU"><span style="color: #fff">SKU-882911</span></a-descriptions-item>
+                                <a-descriptions-item label="产线/责任人"><span style="color: #fff">Line-A / 李工</span></a-descriptions-item>
+                            </a-descriptions>
+
+                            <div v-for="item in fqcItems" :key="item.id" class="item-row">
+                                <a-row type="flex" align="middle">
+                                    <a-col :span="8">
+                                        <div style="font-weight: bold;">{{item.name}}</div>
+                                        <div style="font-size: 12px; color: #8c8c8c;">标准：{{item.std}}</div>
+                                    </a-col>
+                                    <a-col :span="10">
+                                        <a-radio-group v-model="item.res" size="small" button-style="solid">
+                                            <a-radio-button value="PASS">合格</a-radio-button>
+                                            <a-radio-button value="FAIL">不合格</a-radio-button>
+                                        </a-radio-group>
+                                        <div v-if="item.type === 'data'" style="margin-top: 8px;">
+                                            <a-input size="small" style="width: 120px;" placeholder="录入实测值" v-model="item.val" />
+                                            <span style="margin-left: 8px; font-size: 12px;">{{item.unit}}</span>
+                                        </div>
+                                    </a-col>
+                                    <a-col :span="6" style="text-align: right;">
+                                        <span v-if="item.res === 'PASS'" class="result-pass">● OK</span>
+                                        <span v-else-if="item.res === 'FAIL'" class="result-fail">● NG</span>
+                                    </a-col>
+                                </a-row>
+                            </div>
+
+                            <a-button type="primary" block size="large" icon="check-circle" style="margin-top: 20px;" @click="submitFQC">
+                                提交检验并生成报告
+                            </a-button>
+                        </div>
+                        <div v-else style="padding: 100px 0; text-align: center;">
+                            <a-icon type="scan" style="font-size: 48px; opacity: 0.3;" /><br/>
+                            等待扫描产品条码...
+                        </div>
+                    </div>
+                </a-col>
+
+                <a-col :span="10">
+                    <a-tabs default-active-key="1" type="card">
+                        <a-tab-pane key="1" tab="报告在线预览 (R1)">
+                            <div class="report-preview" v-if="isSubmitted">
+                                <div class="report-title">终检合格报告 (FQC REPORT)</div>
+                                <a-descriptions :column="1" size="small" bordered>
+                                    <a-descriptions-item label="报告编号">{{reportNo}}</a-descriptions-item>
+                                    <a-descriptions-item label="工单/机种">MO20250124-001 / 控制器V3</a-descriptions-item>
+                                    <a-descriptions-item label="检验结果"><a-tag color="green">合格 (PASS)</a-tag></a-descriptions-item>
+                                    <a-descriptions-item label="检验员">Admin</a-descriptions-item>
+                                    <a-descriptions-item label="完成时间">{{currentTime}}</a-descriptions-item>
+                                </a-descriptions>
+                                <a-table :columns="reportCols" :data-source="fqcItems" size="small" :pagination="false" style="margin-top: 20px;" bordered></a-table>
+                                <div style="margin-top: 20px; text-align: right;">
+                                    <a-button-group>
+                                        <a-button icon="download">导出PDF</a-button>
+                                        <a-button icon="printer">打印</a-button>
+                                    </a-button-group>
+                                </div>
+                            </div>
+                            <a-empty v-else description="暂无报告，提交检验后自动生成"></a-empty>
+                        </a-tab-pane>
+                        <a-tab-pane key="2" tab="单元级历史数据 (R2)">
+                            <a-list item-layout="horizontal" :data-source="unitDataHistory">
+                                <a-list-item slot="renderItem" slot-scope="item">
+                                    <a-list-item-meta :description="'测试时间: ' + item.time">
+                                        <span slot="title">SN: {{item.sn}} | 导电性能: {{item.conductivity}} kΩ</span>
+                                    </a-list-item-meta>
+                                    <a-tag :color="item.res === 'PASS' ? 'green' : 'red'">{{item.res}}</a-tag>
+                                </a-list-item>
+                            </a-list>
+                        </a-tab-pane>
+                    </a-tabs>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 3：防呆功能模拟器 -->
+        <div class="section-card">
+            <h2>需求 3：FQC - WMS 刚性防呆联动模拟</h2>
+            <a-row :gutter="40">
+                <a-col :span="12">
+                    <div class="wms-simulator">
+                        <div class="wms-header">WMS 数字化仓储系统 - 入库界面</div>
+                        <div style="padding: 20px; position: relative;" :class="!isSubmitted ? 'wms-locked' : ''">
+                            <div v-if="!isSubmitted" class="lock-badge">FQC 待检中 - 锁定</div>
+                            
+                            <a-form layout="vertical">
+                                <a-form-item label="入库批次条码">
+                                    <a-input value="BAT-20250124-001" disabled />
+                                </a-form-item>
+                                <a-form-item label="入库库位">
+                                    <a-select default-value="A-12-05" :disabled="!isSubmitted">
+                                        <a-select-option value="A-12-05">A区-12排-05架</a-select-option>
+                                    </a-select>
+                                </a-form-item>
+                                <a-button type="primary" block :disabled="!isSubmitted" icon="database">
+                                    {{ isSubmitted ? '确认入库 (FQC已解锁)' : '无法入库 (FQC未完成)' }}
+                                </a-button>
+                            </a-form>
+
+                            <div v-if="!isSubmitted" style="margin-top: 15px; text-align: right;">
+                                <a-button type="link" size="small" icon="safety-certificate" @click="showDirectorApproval = true">品质总监特许放行</a-button>
+                            </div>
+                        </div>
+                    </div>
+                </a-col>
+                <a-col :span="12">
+                    <a-card title="联动信号实时监控" icon="radar-chart">
+                        <a-timeline>
+                            <a-timeline-item color="blue">2025-01-24 09:00: 生产任务完工，WMS 生成预入库记录 (锁定态)</a-timeline-item>
+                            <a-timeline-item :color="isSubmitted ? 'green' : 'gray'">
+                                {{ isSubmitted ? '2025-01-24 10:15: FQC 检验合格, 自动下发 [입고 허가] 信号' : '等待 QMS 系统发送检验合格信号...' }}
+                            </a-timeline-item>
+                            <a-timeline-item v-if="isSubmitted" color="green">2025-01-24 10:16: WMS 流程自动解锁，允许库位上架</a-timeline-item>
+                        </a-timeline>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 批量导入弹窗 (R2) -->
+        <a-modal v-model="showImport" title="测试数据批量导入" @ok="handleImport">
+            <div style="padding: 20px; text-align: center; border: 2px dashed #d9d9d9; border-radius: 4px;">
+                <a-icon type="file-excel" style="font-size: 40px; color: #52c41a;" /><br/>
+                <p style="margin-top: 10px;">点击或拖拽测试数据 Excel 模板至此处</p>
+                <a-button type="link">下载测试模板</a-button>
+            </div>
+            <div style="margin-top: 15px;">
+                <a-checkbox checked>自动校验数据完整性</a-checkbox>
+                <p style="font-size: 12px; color: #999;">系统将自动关联单表条码进行存储，并记录导入日志。</p>
+            </div>
+        </a-modal>
+
+        <!-- 特许放行审批 (R3) -->
+        <a-modal v-model="showDirectorApproval" title="品质总监特许入库审批" @ok="directorApprove">
+            <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                <a-form-item label="审批批次">
+                    <a-input value="BAT-20250124-001" disabled />
+                </a-form-item>
+                <a-form-item label="审批理由" required>
+                    <a-textarea placeholder="请输入特许放行理由 (如: 客户紧急交期，同意先行入库并同步贴签)" />
+                </a-form-item>
+                <a-form-item label="审批人">
+                    <a-input value="品质总监 - 王五" disabled />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    scanValue: '',
+                    hasData: false,
+                    isSubmitted: false,
+                    showImport: false,
+                    showDirectorApproval: false,
+                    currentTime: moment().format('YYYY-MM-DD HH:mm:ss'),
+                    reportNo: 'FQC-R-' + moment().format('YYYYMMDD-HHmm'),
+                    fqcItems: [
+                        { id: 1, name: '外观完整性', std: '表面无划痕，丝印清晰', res: 'PASS', type: 'bool' },
+                        { id: 2, name: '响应速度', std: '≤ 50ms', res: 'PASS', val: '42', unit: 'ms', type: 'data' },
+                        { id: 3, name: '导电性能测试', std: '10 ~ 15 kΩ', res: 'PASS', val: '12.5', unit: 'kΩ', type: 'data' },
+                        { id: 4, name: '静电防护检查', std: '符合 ESD 标准', res: 'PASS', type: 'bool' }
+                    ],
+                    unitDataHistory: [
+                        { sn: 'SN-001', conductivity: '12.5', time: '10:15:01', res: 'PASS' },
+                        { sn: 'SN-002', conductivity: '14.8', time: '10:15:22', res: 'PASS' },
+                        { sn: 'SN-003', conductivity: '11.2', time: '10:15:45', res: 'PASS' }
+                    ],
+                    reportCols: [
+                        { title: '检验项目', dataIndex: 'name' },
+                        { title: '判定', dataIndex: 'res' },
+                        { title: '实测数据', dataIndex: 'val' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => { mermaid.init(undefined, '.mermaid'); });
+            },
+            methods: {
+                onScan() {
+                    this.hasData = true;
+                    this.$message.success('已自动关联终检方案并提取基础信息');
+                },
+                submitFQC() {
+                    this.$confirm({
+                        title: '确认提交终检结果?',
+                        content: '提交后将自动生成终检报告，并向 WMS 系统同步解锁信号。',
+                        onOk: () => {
+                            this.isSubmitted = true;
+                            this.$notification.success({
+                                message: '终检合格',
+                                description: '报告已生成。入库信号已推送至 WMS 系统，入库流程已解锁。'
+                            });
+                        }
+                    });
+                },
+                handleImport() {
+                    this.showImport = false;
+                    this.$message.loading('正在校验并导入 500 条单元数据...', 2).then(() => {
+                        this.$message.success('测试数据批量关联存储成功，已存入操作日志');
+                    });
+                },
+                directorApprove() {
+                    this.showDirectorApproval = false;
+                    this.isSubmitted = true;
+                    this.$message.warning('品质总监特许放行已生效，锁定记录已关联批次号。');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>质量异常处理原型 - 需求 1, 2 & 3</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #001529;
+        }
+        .chart-container { 
+            width: 100%; 
+            min-height: 400px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 25px; 
+            color: #001529;
+            font-weight: bold;
+        }
+        
+        /* 状态标记样式 */
+        .status-frozen { color: #f5222d; font-weight: bold; }
+        .status-normal { color: #52c41a; font-weight: bold; }
+        
+        /* 异常等级色块 */
+        .level-major { background: #f5222d; color: #fff; padding: 2px 8px; border-radius: 4px; }
+        .level-important { background: #fa8c16; color: #fff; padding: 2px 8px; border-radius: 4px; }
+        .level-general { background: #1890ff; color: #fff; padding: 2px 8px; border-radius: 4px; }
+
+        /* 模拟系统预警弹窗 */
+        .auto-notify {
+            border: 2px solid #ff4d4f;
+            background: #fff1f0;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(245, 34, 45, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(245, 34, 45, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 34, 45, 0); }
+        }
+
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>异常处理闭环管控 - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef lock fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        Start[检验数据输入] --> AutoJudge{系统自动判定等级 R3}
+                        AutoJudge -- "匹配规则 R2" --> Notify[生成异常通知 R3]
+                        Notify --> Review[人工复核/调整 R3]
+                        Review --> Freeze[执行批次冻结 R1]
+                        Freeze --> Analysis[锁定流转/入库/出货]
+                        Analysis --> Disposal[录入处理方案]
+                        Disposal --> Approve{主管解冻审批 R1}
+                        Approve -- "通过" --> Unfreeze[批次解锁/恢复流转]
+                        Approve -- "驳回" --> Disposal
+
+                        class Start,Notify,Review,Analysis,Disposal,Unfreeze business;
+                        class AutoJudge,Approve system;
+                        class Freeze lock;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 1：批次冻结与解冻工作台 -->
+        <div class="section-card">
+            <h2>需求 1：异常半成品/成品冻结与解冻管控</h2>
+            <a-form layout="inline" style="margin-bottom: 20px;">
+                <a-form-item label="工单号"><a-input placeholder="请输入" /></a-form-item>
+                <a-form-item label="物料号"><a-input placeholder="请输入" /></a-form-item>
+                <a-form-item label="时间范围"><a-range-picker /></a-form-item>
+                <a-button type="primary" icon="search">查询</a-button>
+            </a-form>
+
+            <a-table :columns="freezeColumns" :data-source="freezeData" bordered size="small">
+                <template slot="status" slot-scope="text">
+                    <span :class="text === '已冻结' ? 'status-frozen' : 'status-normal'">
+                        <a-icon :type="text === '已冻结' ? 'lock' : 'unlock'" /> {{text}}
+                    </span>
+                </template>
+                <template slot="action" slot-scope="record">
+                    <a-button v-if="record.status === '正常'" type="danger" size="small" ghost @click="handleFreeze(record)">冻结批次</a-button>
+                    <a-button v-else type="primary" size="small" ghost @click="handleUnfreeze(record)">申请解冻</a-button>
+                    <a-divider type="vertical" />
+                    <a-button type="link" size="small">追溯记录</a-button>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 需求 2 & 3：异常分级规则与自动判定 -->
+        <div class="section-card">
+            <h2>需求 2 & 3：异常等级维护与自动判定中心</h2>
+            <a-tabs default-active-key="1">
+                <a-tab-pane key="1" tab="等级判定规则配置 (R2)">
+                    <div style="margin-bottom: 16px;">
+                        <a-button type="primary" icon="plus">新增分级规则</a-button>
+                        <a-button icon="history" style="margin-left: 8px;">查看修改日志</a-button>
+                    </div>
+                    <a-table :columns="ruleColumns" :data-source="ruleData" bordered size="small">
+                        <template slot="level" slot-scope="text">
+                            <span :class="'level-' + getLevelClass(text)">{{text}}</span>
+                        </template>
+                        <template slot="process" slot-scope="text">
+                            <a-tag color="blue">{{text}}</a-tag>
+                        </template>
+                    </a-table>
+                </a-tab-pane>
+
+                <a-tab-pane key="2" tab="实时异常监控 (R3)">
+                    <!-- 需求 3: 自动预警模拟 -->
+                    <div v-if="autoAnomaly" class="auto-notify">
+                        <a-row type="flex" align="middle">
+                            <a-col :span="2">
+                                <a-icon type="warning" theme="filled" style="font-size: 32px; color: #f5222d;" />
+                            </a-col>
+                            <a-col :span="16">
+                                <div style="font-weight: bold; font-size: 16px;">[系统自动判定] 发现重大质量异常！</div>
+                                <div>检测到 PQC [L1线] 组装工序不良率已达 <span style="color:#f5222d;font-weight:bold">6.2%</span>（触发阈值≥5%）</div>
+                                <div style="font-size: 12px; color: #666;">涉及工单：MO-20260124-09 | 涉及批次：BAT-9921</div>
+                            </a-col>
+                            <a-col :span="6" style="text-align: right;">
+                                <a-button type="primary" @click="showReviewModal = true">人工复核调整</a-button>
+                                <a-button type="danger" style="margin-left: 8px;" @click="quickFreeze">确认冻结</a-button>
+                            </a-col>
+                        </a-row>
+                    </div>
+                    <a-table :columns="anomalyColumns" :data-source="anomalyLogs" bordered size="small" title="异常判定通知记录"></a-table>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+
+        <!-- 解冻审批弹窗 (R1) -->
+        <a-modal v-model="unfreezeModal" title="异常批次解冻申请 (关联异常处理结果)" @ok="confirmUnfreeze">
+            <a-form layout="vertical">
+                <a-form-item label="待解冻批次"><a-input :value="currentBatch" disabled /></a-form-item>
+                <a-form-item label="解冻理由 (处理结果说明)" required>
+                    <a-textarea placeholder="请输入异常处理结论，例如：经全数挑选并复检合格，不合格项已隔离。" :rows="3" />
+                </a-form-item>
+                <a-form-item label="品质主管审批">
+                    <a-input value="张三 (主管)" disabled />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+
+        <!-- 人工复核弹窗 (R3) -->
+        <a-modal v-model="showReviewModal" title="异常等级人工复核" @ok="saveReview">
+            <a-alert message="人工调整将覆盖系统自动判定结果，请务必录入调整理由。" type="warning" show-icon style="margin-bottom: 15px;" />
+            <a-form layout="vertical">
+                <a-form-item label="系统预判等级"><a-tag color="red">重大异常</a-tag></a-form-item>
+                <a-form-item label="调整后等级" required>
+                    <a-select default-value="重要异常">
+                        <a-select-option value="重大异常">重大异常</a-select-option>
+                        <a-select-option value="重要异常">重要异常</a-select-option>
+                        <a-select-option value="一般异常">一般异常</a-select-option>
+                    </a-select>
+                </a-form-item>
+                <a-form-item label="调整理由" required>
+                    <a-textarea placeholder="例如：经核查为系统采集误差，实际不良率为1.2%，故调降等级。" />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    unfreezeModal: false,
+                    showReviewModal: false,
+                    autoAnomaly: true,
+                    currentBatch: '',
+                    freezeColumns: [
+                        { title: '批次号', dataIndex: 'batch' },
+                        { title: '物料名称', dataIndex: 'name' },
+                        { title: '工单号', dataIndex: 'mo' },
+                        { title: '库存数量', dataIndex: 'qty' },
+                        { title: '状态', dataIndex: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '最后操作人', dataIndex: 'user' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    freezeData: [
+                        { id: 1, batch: 'BAT20260124-01', name: 'PCB主板', mo: 'MO-8821', qty: '500', status: '正常', user: '-' },
+                        { id: 2, batch: 'BAT20260122-05', name: '液晶屏', mo: 'MO-8815', qty: '200', status: '已冻结', user: 'Admin' }
+                    ],
+                    ruleColumns: [
+                        { title: '判定项目', dataIndex: 'item' },
+                        { title: '触发条件 (不良率/频次)', dataIndex: 'condition' },
+                        { title: '判定等级', dataIndex: 'level', scopedSlots: { customRender: 'level' } },
+                        { title: '关联流程', dataIndex: 'process', scopedSlots: { customRender: 'process' } },
+                        { title: '最后修改时间', dataIndex: 'time' }
+                    ],
+                    ruleData: [
+                        { item: '性能不良', condition: '不良率 ≥ 5%', level: '重大异常', process: '启动 8D 报告', time: '2026-01-20' },
+                        { item: '外观不良', condition: '月发生频次 ≥ 3次', level: '重要异常', process: '品质专项会议', time: '2026-01-22' },
+                        { item: '尺寸超差', condition: '不良率 ≥ 1%', level: '一般异常', process: '内部整改通知', time: '2026-01-15' }
+                    ],
+                    anomalyColumns: [
+                        { title: '通知时间', dataIndex: 'time' },
+                        { title: '涉及批次', dataIndex: 'batch' },
+                        { title: '异常项', dataIndex: 'item' },
+                        { title: '判定等级', dataIndex: 'level' },
+                        { title: '判定方式', dataIndex: 'method' }
+                    ],
+                    anomalyLogs: [
+                        { time: '2026-01-24 16:30', batch: 'BAT-9921', item: '组装段不良率超标', level: '重大异常', method: '系统自动判断' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                getLevelClass(level) {
+                    if (level === '重大异常') return 'major';
+                    if (level === '重要异常') return 'important';
+                    return 'general';
+                },
+                handleFreeze(record) {
+                    this.$confirm({
+                        title: '确认冻结批次?',
+                        content: `将锁定批次 ${record.batch}，禁止其在 MES/WMS 中进行任何流转操作。`,
+                        onOk: () => {
+                            record.status = '已冻结';
+                            this.$message.error('批次已成功冻结，流转权限已锁定');
+                        }
+                    });
+                },
+                handleUnfreeze(record) {
+                    this.currentBatch = record.batch;
+                    this.unfreezeModal = true;
+                },
+                confirmUnfreeze() {
+                    this.unfreezeModal = false;
+                    this.$notification.success({
+                        message: '申请已提交',
+                        description: '解冻申请已发送至品质主管审批，审批通过后将自动解锁。'
+                    });
+                },
+                saveReview() {
+                    this.showReviewModal = false;
+                    this.$message.success('复核结果已保存，判定等级已更新。');
+                },
+                quickFreeze() {
+                    this.autoAnomaly = false;
+                    this.$message.error('已根据系统预警执行紧急冻结操作。');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

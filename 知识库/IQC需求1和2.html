@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 移动端检验原型 - 需求 1 & 2</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+        }
+        .chart-container { 
+            width: 100%; 
+            height: 500px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        .toolbar { 
+            position: absolute; 
+            top: 10px; 
+            right: 10px; 
+            z-index: 10; 
+            display: flex; 
+            gap: 5px; 
+        }
+        .mobile-emulator { 
+            width: 375px; 
+            height: 667px; 
+            border: 16px solid #333; 
+            border-radius: 36px; 
+            margin: 0 auto; 
+            overflow-y: auto; 
+            background: #fff; 
+            position: relative; 
+        }
+        .mobile-header { 
+            background: #1890ff; 
+            color: #fff; 
+            padding: 15px; 
+            text-align: center; 
+            font-weight: bold; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+        }
+        .status-tag { 
+            margin-bottom: 8px; 
+            display: inline-block; 
+        }
+        h2 { 
+            border-left: 4px solid #1890ff; 
+            padding-left: 10px; 
+            margin-bottom: 20px; 
+            color: #1890ff;
+        }
+        .ant-input-search { 
+            margin-bottom: 15px; 
+        }
+        .mermaid { 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
+        .inspection-item {
+            margin-bottom: 15px; 
+            padding: 10px; 
+            border: 1px solid #f0f0f0; 
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求1流程图 -->
+        <div class="section-card">
+            <h2>需求1：移动终端查看及维护检验相关信息 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                graph LR
+                    classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                    classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                    A[移动端登录 QMS 系统] --> B[输入/扫描物料批次号]
+                    B --> C[系统自动关联检验信息]
+                    C --> D[加载检验项目/标准]
+                    D --> E[动态检验计划判定]
+                    E --> F[在线预览技术文件]
+                    F --> G[权限管控下的标准维护]
+                    G --> H[记录版本日志]
+                    
+                    subgraph 判定逻辑
+                        E1[历史不良率分析] --> E2[加严/常规/免检判定]
+                    end
+
+                    class A,B,D,F,G,H business;
+                    class C,E,E1,E2 system;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求2流程图 -->
+        <div class="section-card">
+            <h2>需求2：移动终端 IQC 检验操作及结果回传 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[开始检验操作] --> B[检验项目判定]
+                        B --> C{OK/NG/特采?}
+                        C -- OK --> D[记录合格结果]
+                        C -- NG --> E[选择不良代码]
+                        C -- 特采 --> F[录入特采原因]
+                        
+                        E --> G[录入不良数量]
+                        G & F & D --> H[生成检验记录]
+                        H --> I[实时同步至 ERP]
+                        I --> J[更新物料批次状态]
+
+                        class A,B,D,E,F,G,H business;
+                        class I,J system;
+                        class C alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 移动端原型 -->
+        <div class="section-card">
+            <h2>需求 1 & 2：移动端 IQC 检验原型</h2>
+            <div class="mobile-emulator">
+                <div class="mobile-header">IQC 移动检验工作台</div>
+                <div style="padding: 15px;">
+                    <!-- 需求 1: 批次扫描与信息加载 -->
+                    <a-input-search
+                        placeholder="扫描或输入物料批次号"
+                        enter-button="加载"
+                        v-model="batchNo"
+                        @search="onSearchBatch"
+                        size="large"
+                    ></a-input-search>
+
+                    <div v-if="loadingInfo">
+                        <a-skeleton active :paragraph="{rows: 4}" />
+                    </div>
+
+                    <div v-else-if="batchInfo">
+                        <a-descriptions title="基础信息" :column="1" size="small" bordered>
+                            <a-descriptions-item label="物料编码">{{batchInfo.materialCode}}</a-descriptions-item>
+                            <a-descriptions-item label="物料名称">{{batchInfo.materialName}}</a-descriptions-item>
+                            <a-descriptions-item label="供应商">{{batchInfo.supplier}}</a-descriptions-item>
+                            <a-descriptions-item label="检验方案">
+                                <a-tag :color="getPlanColor(batchInfo.inspectionPlan)">{{batchInfo.inspectionPlan}}</a-tag>
+                            </a-descriptions-item>
+                            <a-descriptions-item label="检验标准">
+                                <a-button type="link" icon="file-pdf" size="small" @click="viewStandardFile">查看图纸/规格书</a-button>
+                            </a-descriptions-item>
+                        </a-descriptions>
+
+                        <a-divider orientation="left" style="font-size: 14px; margin-top: 20px;">检验项目</a-divider>
+                        
+                        <!-- 需求 2: 检验操作 -->
+                        <div v-for="(item, index) in inspectionItems" :key="index" class="inspection-item">
+                            <div style="font-weight: bold; margin-bottom: 8px;">{{index + 1}}. {{item.name}}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                                标准：{{item.standard}} | 抽样数：{{item.sampleSize}}
+                            </div>
+                            
+                            <a-radio-group v-model="item.result" button-style="solid" size="small" style="margin-bottom: 8px;">
+                                <a-radio-button value="OK">合格</a-radio-button>
+                                <a-radio-button value="NG">不合格</a-radio-button>
+                                <a-radio-button value="SPECIAL">特采</a-radio-button>
+                            </a-radio-group>
+
+                            <div v-if="item.result === 'NG' || item.result === 'SPECIAL'">
+                                <a-select 
+                                    placeholder="请选择不良现象" 
+                                    style="width: 100%; margin-bottom: 5px;" 
+                                    size="small"
+                                    v-model="item.defectCode"
+                                >
+                                    <a-select-option value="D01">表面划伤 (D01)</a-select-option>
+                                    <a-select-option value="D02">尺寸超差 (D02)</a-select-option>
+                                    <a-select-option value="D03">功能失效 (D03)</a-select-option>
+                                    <a-select-option value="D04">包装破损 (D04)</a-select-option>
+                                </a-select>
+                                <a-input 
+                                    size="small" 
+                                    placeholder="输入不良数量" 
+                                    type="number" 
+                                    v-model="item.defectQty"
+                                    style="margin-bottom: 5px;"
+                                />
+                                <a-textarea 
+                                    placeholder="补充说明（可选）" 
+                                    :rows="2" 
+                                    v-model="item.remark"
+                                    size="small"
+                                />
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <a-button 
+                                type="primary" 
+                                block 
+                                @click="submitResult" 
+                                :loading="submitting"
+                                size="large"
+                            >
+                                <a-icon type="cloud-upload" />
+                                提交检验结果并同步ERP
+                            </a-button>
+                        </div>
+                    </div>
+
+                    <div v-else style="text-align: center; color: #999; margin-top: 50px;">
+                        <a-icon type="scan" style="font-size: 40px; margin-bottom: 10px;" />
+                        <div>请扫描物料批次条码开始检验</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                    useMaxWidth: true,
+                    htmlLabels: true,
+                    curve: 'basis'
+                }
+        });
+        
+        // 创建 Vue 应用
+        new Vue({
+            el: '#app',
+            components: {
+                // 注册 Ant Design Vue 组件
+            },
+            data() {
+                return {
+                    batchNo: '',
+                    loadingInfo: false,
+                    submitting: false,
+                    batchInfo: null,
+                    inspectionItems: [
+                        { 
+                            name: '外观检查', 
+                            standard: '表面无划痕、无污渍、无变形', 
+                            sampleSize: '5/50',
+                            result: 'OK',
+                            defectCode: '',
+                            defectQty: 0,
+                            remark: ''
+                        },
+                        { 
+                            name: '关键尺寸A', 
+                            standard: '12.5mm ± 0.05mm', 
+                            sampleSize: '3/50',
+                            result: 'OK',
+                            defectCode: '',
+                            defectQty: 0,
+                            remark: ''
+                        },
+                        { 
+                            name: '功能测试', 
+                            standard: '阻值范围 100-120Ω', 
+                            sampleSize: '5/50',
+                            result: 'OK',
+                            defectCode: '',
+                            defectQty: 0,
+                            remark: ''
+                        }
+                    ]
+                }
+            },
+            mounted() {
+                // 页面加载完成后初始化
+                this.$nextTick(() => {
+                    // 重新渲染 Mermaid 图表
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                onSearchBatch() {
+                    if (!this.batchNo.trim()) {
+                        this.$message.warning('请输入物料批次号');
+                        return;
+                    }
+                    
+                    this.loadingInfo = true;
+                    // 模拟 API 加载
+                    setTimeout(() => {
+                        this.batchInfo = {
+                            materialCode: 'MAT-20251124-001',
+                            materialName: '电容式触摸屏传感器 2.7寸',
+                            supplier: '厦门松霖科技',
+                            inspectionPlan: '常规检验 (AQL 0.65)',
+                            arrivalDate: '2025-01-24',
+                            quantity: 5000
+                        };
+                        this.loadingInfo = false;
+                        this.$notification.success({ 
+                            message: '信息加载成功', 
+                            description: '已成功关联检验标准及技术图纸' 
+                        });
+                    }, 1000);
+                },
+                
+                submitResult() {
+                    // 验证所有检验项目是否已完成
+                    const unfinishedItems = this.inspectionItems.filter(item => !item.result);
+                    if (unfinishedItems.length > 0) {
+                        this.$message.warning('请完成所有检验项目的判定');
+                        return;
+                    }
+                    
+                    this.submitting = true;
+                    // 模拟提交到后端
+                    setTimeout(() => {
+                        this.submitting = false;
+                        this.$message.success('检验结果提交成功');
+                        
+                        // 显示提交结果
+                        this.$info({
+                            title: '提交成功',
+                            content: '检验结果已实时同步至ERP系统，批次状态更新为：待入库',
+                        });
+                        
+                        // 重置表单（在实际应用中可能不需要）
+                        setTimeout(() => {
+                            this.batchInfo = null;
+                            this.batchNo = '';
+                            this.inspectionItems.forEach(item => {
+                                item.result = 'OK';
+                                item.defectCode = '';
+                                item.defectQty = 0;
+                                item.remark = '';
+                            });
+                        }, 2000);
+                    }, 1500);
+                },
+                
+                getPlanColor(plan) {
+                    const colorMap = {
+                        '加严检验': 'red',
+                        '常规检验': 'blue',
+                        '免检': 'green',
+                        '全检': 'orange'
+                    };
+                    return colorMap[plan] || 'blue';
+                },
+                
+                viewStandardFile() {
+                    this.$message.info('正在打开技术图纸文件...');
+                    // 在实际应用中这里会打开PDF或图片查看器
+                }
+            }
+        });
+    </script>
+</body>
+</html>

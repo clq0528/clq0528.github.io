@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 业务原型 - 需求 7 & 8</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+        }
+        .chart-container { 
+            width: 100%; 
+            height: 450px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 4px solid #1890ff; 
+            padding-left: 10px; 
+            margin-bottom: 20px; 
+            color: #1890ff;
+        }
+        .mermaid { 
+            display: flex; 
+            justify-content: center; 
+        }
+        /* 提醒表高亮样式 */
+        .overdue-row {
+            background-color: #fffbe6 !important; /* 标黄 */
+        }
+        .urgent-text {
+            color: #f5222d;
+            font-weight: bold;
+        }
+        .device-status-online {
+            color: #52c41a;
+        }
+        .data-source-tag {
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求7流程图 -->
+        <div class="section-card">
+            <h2>需求7：检验设备对接及数据留存 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef diamond fill:#13c2c2,stroke:#006d75,color:#fff,stroke-width:2px,width:120,height:60;
+
+                        A[检验设备: 测量仪/测试仪] --> B{EIP 接口连接}
+                        B --> C[实时自动采集数据]
+                        C --> D[系统判定并显示]
+                        D --> E{数据完整?}
+                        E -- 否 --> F[手工录入补充-需权限控制]
+                        D & F --> G[数据留存: 不可编辑/时间戳顺序]
+                        G --> H[支持同一项目多次测试对比]
+                        G --> I[趋势分析/历史回溯]
+                        
+                        class A,C,E,G,H,I business;
+                        class B,D,F system;
+                        class E diamond;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求8流程图 -->
+        <div class="section-card">
+            <h2>需求8：入检信息分析提醒表 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef diamond fill:#13c2c2,stroke:#006d75,color:#fff,stroke-width:2px,width:120,height:60;
+
+                        A[ERP/WMS 下发检验通知] --> B[系统提取物料/批次/到货信息]
+                        B --> C[生成入检信息分析提醒表]
+                        C --> D1{急料判定规则}
+                        C --> D2{超期未检判定}
+                        C --> D3{关联标准   }
+                        C --> D4{SOP/图纸文件}
+                        D1 & D2 & D3 & D4 --> E[展示提醒表-标红标黄]
+                        D4 -- 文件缺失 --> F[触发企业微信/邮件提醒工程师]
+                        F --> G[工程师补充文件并限时反馈]
+                        
+                        class A,C,E,G business;
+                        class B,D,F system;
+                        class D1,D2,D3,D4 diamond;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求7原型：设备对接与数据采集 -->
+        <div class="section-card">
+            <h2>需求 7：检验设备实时采集与历史留存</h2>
+            <a-row :gutter="16" style="margin-bottom: 20px;">
+                <a-col :span="8">
+                    <a-card size="small" title="当前连接设备">
+                        <div v-for="dev in devices" :key="dev.id" style="margin-bottom: 8px;">
+                            <a-icon type="api" :class="dev.online ? 'device-status-online' : ''" />
+                            <span style="margin-left: 8px;">{{dev.name}}</span>
+                            <a-tag :color="dev.online ? 'green' : 'red'" size="small" style="float: right;">
+                                {{dev.online ? '在线' : '离线'}}
+                            </a-tag>
+                        </div>
+                    </a-card>
+                </a-col>
+                <a-col :span="16">
+                    <div style="margin-bottom: 10px;">
+                        <span style="font-weight: bold;">实时测试数据流 (批次: BAT-20250124-001)</span>
+                        <a-button type="link" style="float: right;" @click="showHistory = true">查看历史测试记录</a-button>
+                    </div>
+                    <a-table :columns="deviceDataColumns" :data-source="currentTestData" row-key="id" size="small" :pagination="false" bordered>
+                        <template slot="source" slot-scope="text">
+                            <a-tag :color="text === '自动采集' ? 'blue' : 'orange'" class="data-source-tag">{{text}}</a-tag>
+                        </template>
+                        <template slot="val" slot-scope="text, record">
+                            <a-input v-if="record.source === '手工录入'" size="small" :value="text" style="width: 80px;" />
+                            <span v-else style="font-family: monospace; font-weight: bold;">{{text}}</span>
+                        </template>
+                    </a-table>
+                    <p style="font-size: 12px; color: #999; margin-top: 8px;">* 自动采集数据项已锁定，不可编辑。手工录入需 IQC 组长以上权限。</p>
+                </a-col>
+            </a-row>
+
+            <!-- 历史留存数据对比弹窗 -->
+            <a-modal v-model="showHistory" title="同一产品同一测试项历史记录 (时间戳溯源)" width="800px">
+                <a-table :columns="historyDataColumns" :data-source="historyTestData" row-key="id" size="middle" bordered>
+                    <template slot="result" slot-scope="text">
+                        <a-badge :status="text === 'OK' ? 'success' : 'error'" :text="text" />
+                    </template>
+                </a-table>
+                <div style="margin-top: 15px; height: 100px; background: #f0f5ff; display: flex; align-items: center; justify-content: center; color: #1890ff;">
+                    <a-icon type="line-chart" style="font-size: 24px; margin-right: 10px;" /> 此处集成 ECharts 展示该测试项的历史波动趋势图
+                </div>
+            </a-modal>
+        </div>
+
+        <!-- 需求8原型：入检信息分析提醒表 -->
+        <div class="section-card">
+            <h2>需求 8：入检信息分析提醒表 (ERP 同步)</h2>
+            <div style="margin-bottom: 15px;">
+                <a-alert message="检测到 2 项入检任务 SOP 文件缺失，已自动发送企业微信提醒至：技术工程师-王五" type="error" show-icon closable style="margin-bottom: 15px;"></a-alert>
+                <a-space>
+                    <a-button icon="reload">同步 ERP 通知单</a-button>
+                    <a-button type="primary" icon="message" @click="manualAlert">手动提醒负责人</a-button>
+                </a-space>
+            </div>
+            
+            <a-table 
+                :columns="reminderColumns" 
+                :data-source="reminderData" 
+                row-key="id" 
+                bordered 
+                :row-class-name="getRowClass"
+            >
+                <template slot="priority" slot-scope="text">
+                    <span :class="text === '急料' ? 'urgent-text' : ''">
+                        <a-icon v-if="text === '急料'" type="fire" /> {{text}}
+                    </span>
+                </template>
+                <template slot="files" slot-scope="text, record">
+                    <a-tooltip :title="record.sop ? 'SOP已上传' : 'SOP缺失'">
+                        <a-icon type="profile" :style="{ color: record.sop ? '#52c41a' : '#f5222d', fontSize: '18px', marginRight: '10px' }" />
+                    </a-tooltip>
+                    <a-tooltip :title="record.drawing ? '图纸已上传' : '图纸缺失'">
+                        <a-icon type="picture" :style="{ color: record.drawing ? '#52c41a' : '#f5222d', fontSize: '18px', marginRight: '10px' }" />
+                    </a-tooltip>
+                    <a-tooltip :title="record.standard ? '标准已关联' : '标准缺失'">
+                        <a-icon type="read" :style="{ color: record.standard ? '#52c41a' : '#f5222d', fontSize: '18px' }" />
+                    </a-tooltip>
+                </template>
+                <template slot="overdue" slot-scope="text">
+                    <a-tag v-if="text" color="orange">超期 {{text}}h</a-tag>
+                    <a-tag v-else color="green">正常</a-tag>
+                </template>
+            </a-table>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求7数据
+                    showHistory: false,
+                    devices: [
+                        { id: 1, name: 'Hexagon 二次元测量仪', online: true },
+                        { id: 2, name: 'Keyence 高精度性能测试仪', online: true },
+                        { id: 3, name: '电子秤(串口连接)', online: false }
+                    ],
+                    deviceDataColumns: [
+                        { title: '测试项', dataIndex: 'item', key: 'item' },
+                        { title: '标准值', dataIndex: 'std', key: 'std' },
+                        { title: '实测数据', dataIndex: 'val', key: 'val', scopedSlots: { customRender: 'val' } },
+                        { title: '判定', dataIndex: 'judgement', key: 'judgement' },
+                        { title: '数据来源', dataIndex: 'source', key: 'source', scopedSlots: { customRender: 'source' } }
+                    ],
+                    currentTestData: [
+                        { id: 101, item: '关键外径 φ1', std: '12.00±0.05', val: '12.025', judgement: 'OK', source: '自动采集' },
+                        { id: 102, item: '同轴度', std: '< 0.02', val: '0.012', judgement: 'OK', source: '自动采集' },
+                        { id: 103, item: '绝缘电阻', std: '> 10MΩ', val: '50', judgement: 'OK', source: '手工录入' }
+                    ],
+                    historyDataColumns: [
+                        { title: '测试项', dataIndex: 'item' },
+                        { title: '测试时间戳', dataIndex: 'ts' },
+                        { title: '测量值', dataIndex: 'val' },
+                        { title: '检验员', dataIndex: 'inspector' },
+                        { title: '判定', dataIndex: 'result', scopedSlots: { customRender: 'result' } },
+                        { title: '备注', dataIndex: 'remark' }
+                    ],
+                    historyTestData: [
+                        { id: 1, item: '关键外径 φ1', ts: '2025-01-24 10:05:01', val: '12.025', inspector: '张三', result: 'OK', remark: '正式测试' },
+                        { id: 2, item: '关键外径 φ1', ts: '2025-01-24 10:04:45', val: '12.062', inspector: '张三', result: 'NG', remark: '重复测试' },
+                        { id: 3, item: '关键外径 φ1', ts: '2025-01-22 14:00:22', val: '12.010', inspector: '李四', result: 'OK', remark: '上批次记录' }
+                    ],
+                    // 需求8数据
+                    reminderColumns: [
+                        { title: '优先级', dataIndex: 'priority', scopedSlots: { customRender: 'priority' }, width: 100 },
+                        { title: '物料信息', dataIndex: 'material', key: 'material' },
+                        { title: '批次/数量', dataIndex: 'batch', key: 'batch' },
+                        { title: '类型', dataIndex: 'type', key: 'type' },
+                        { title: '文件状态 (SOP/图纸/标准)', key: 'files', scopedSlots: { customRender: 'files' }, width: 180 },
+                        { title: '超期提醒', dataIndex: 'overdue', scopedSlots: { customRender: 'overdue' } },
+                        { title: '工程师', dataIndex: 'engineer', key: 'engineer' }
+                    ],
+                    reminderData: [
+                        { id: 1, priority: '急料', material: '电容屏 2.7 (LCM-202)', batch: 'BAT001 / 500pcs', type: '量产品', sop: false, drawing: true, standard: true, overdue: 4, engineer: '王五' },
+                        { id: 2, priority: '普通', material: '金属外壳 (MET-101)', batch: 'BAT005 / 2000pcs', type: '打样品', sop: true, drawing: false, standard: true, overdue: null, engineer: '王五' },
+                        { id: 3, priority: '普通', material: 'FPC排线 (FPC-05)', batch: 'BAT009 / 100pcs', type: '量产品', sop: true, drawing: true, standard: true, overdue: null, engineer: '赵六' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                getRowClass(record) {
+                    return record.overdue ? 'overdue-row' : '';
+                },
+                manualAlert() {
+                    this.$confirm({
+                        title: '手动触发提醒',
+                        content: '将针对所选的缺失文件批次，再次向技术工程师发送催办提醒，确定吗？',
+                        onOk: () => {
+                            this.$message.success('已通过企业微信发送催办消息');
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

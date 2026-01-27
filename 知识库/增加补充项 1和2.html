@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>补充项集成原型 - 需求 1 & 2</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 400px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; position: relative; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* 状态呼吸灯逻辑 */
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+        .dot-running { background: #52c41a; box-shadow: 0 0 5px #52c41a; }
+        .dot-broken { background: #f5222d; box-shadow: 0 0 8px #f5222d; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* 电测预警模拟 */
+        .test-alarm-panel { background: #fff1f0; border: 2px solid #ffa39e; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .alarm-count { font-size: 24px; font-weight: bold; color: #f5222d; }
+
+        /* 图表模拟 */
+        .trend-chart-mock { height: 180px; width: 100%; background: #fff; border: 1px solid #eee; position: relative; display: flex; align-items: flex-end; padding: 10px; gap: 5px; }
+        .chart-bar { background: #1890ff; flex: 1; min-width: 10px; }
+        
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>补充项：台账联动与电测集成 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        subgraph "台账联动 R1"
+                            SKU[扫描物料/SKU] --> Match[自动关联刀头/治具/校准片台账]
+                            Match --> CheckStatus[显示使用状态/有效期]
+                            CheckStatus --> Update[状态实时更新/维修记录存根]
+                        end
+
+                        subgraph "电测集成 R2"
+                            Soft[功能测试软件 CSV/TXT] --> Interface[接口自动上传 QMS]
+                            ScanSN[扫描周转单条码] --> Compare{数量比对逻辑}
+                            Compare -- "漏测/重复测" --> Alarm[移动端+看板标红报警]
+                            Compare -- "正常" --> Analytics[生成实时参数监控图表]
+                        end
+
+                        Update & Analytics --> Export[报表导出/历史回查]
+
+                        class SKU,CheckStatus,Soft,ScanSN,Analytics business;
+                        class Match,Compare system;
+                        class Alarm alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 1：资产台账关联中心 -->
+        <div class="section-card">
+            <h2>需求 1：产品台账绑定与品种关联查询</h2>
+            <div style="margin-bottom: 20px;">
+                <a-input-search 
+                    placeholder="输入物料编码/SKU (例: SKU-882193)" 
+                    enter-button="关联台账查询" 
+                    size="large" 
+                    style="width: 500px"
+                    v-model="skuInput"
+                    @search="queryLedger"
+                />
+            </div>
+
+            <div v-if="ledgerQueried">
+                <a-row :gutter="16">
+                    <a-col :span="18">
+                        <a-tabs type="card" size="small">
+                            <a-tab-pane key="1" tab="关联刀头/治具台账">
+                                <a-table :columns="ledgerColumns" :data-source="ledgerData" bordered size="small" :pagination="false">
+                                    <template slot="status" slot-scope="text">
+                                        <span>
+                                            <i :class="['status-dot', text === '使用中' ? 'dot-running' : 'dot-broken']"></i>
+                                            {{text}}
+                                        </span>
+                                    </template>
+                                    <template slot="action">
+                                        <a-button type="link" size="small">维护记录</a-button>
+                                        <a-divider type="vertical" />
+                                        <a-button type="link" size="small">查看校准证书</a-button>
+                                    </template>
+                                </a-table>
+                            </a-tab-pane>
+                            <a-tab-pane key="2" tab="检验样品/校准片">
+                                <a-table :columns="sampleColumns" :data-source="sampleData" bordered size="small" :pagination="false">
+                                    <template slot="validity" slot-scope="text, record">
+                                        <a-tag :color="record.isExpired ? 'red' : 'green'">{{text}}</a-tag>
+                                    </template>
+                                </a-table>
+                            </a-tab-pane>
+                        </a-tabs>
+                    </a-col>
+                    <a-col :span="6">
+                        <a-card title="台账导出与打印" size="small">
+                            <p style="font-size: 12px; color: #666;">系统已自动汇总当前品种涉及的 5 类台账，共 12 件资产信息。</p>
+                            <a-button type="primary" icon="file-excel" block @click="$message.success('台账清单导出成功')">导出关联台账</a-button>
+                            <a-button icon="printer" block style="margin-top: 10px;">打印使用记录</a-button>
+                        </a-card>
+                    </a-col>
+                </a-row>
+            </div>
+            <a-empty v-else description="请输入 SKU 以关联生产/检验资产台账" />
+        </div>
+
+        <!-- 需求 2：功能测试软件对接与防呆 -->
+        <div class="section-card">
+            <h2>需求 2：功能测试自动化对接与防呆报警 (电测集成)</h2>
+            
+            <!-- 漏测/重测报警模拟器 -->
+            <div v-if="testAlarm" class="test-alarm-panel">
+                <a-row type="flex" align="middle" :gutter="24">
+                    <a-col :span="2">
+                        <a-icon type="warning" theme="filled" style="font-size: 48px; color: #f5222d;" />
+                    </a-col>
+                    <a-col :span="16">
+                        <div style="font-size: 18px; font-weight: bold; color: #f5222d;">[电测防呆报警] 数量比对异常！</div>
+                        <div style="margin-top: 5px;">
+                            周转单单号：<b>SN20260124991</b> | 
+                            周转单应测数量：<span class="alarm-count">50</span> | 
+                            实际上传成功数：<span class="alarm-count">48</span>
+                        </div>
+                        <div style="color: #cf1322; font-weight: bold;">异常状态：发现漏测 (缺 2 片) ➔ 请核查现场实物！</div>
+                    </a-col>
+                    <a-col :span="6" style="text-align: right;">
+                        <a-button type="danger" @click="testAlarm = false">确认解除警报</a-button>
+                    </a-col>
+                </a-row>
+            </div>
+
+            <a-row :gutter="24">
+                <a-col :span="10">
+                    <a-card title="数据抓取规则配置 (工程师权限)" size="small">
+                        <a-form layout="vertical">
+                            <a-form-item label="管控参数名称"><a-input value="绝缘阻抗 / 抗拉强度" /></a-form-item>
+                            <a-row :gutter="8">
+                                <a-col :span="12">
+                                    <a-form-item label="管控上限 (USL)"><a-input-number style="width:100%" :value="10.5" /></a-form-item>
+                                </a-col>
+                                <a-col :span="12">
+                                    <a-form-item label="管控下限 (LSL)"><a-input-number style="width:100%" :value="8.0" /></a-form-item>
+                                </a-col>
+                            </a-row>
+                            <a-form-item label="数据源接口地址">
+                                <a-input value="\\192.168.10.55\TestSoft\Output" disabled />
+                            </a-form-item>
+                            <a-button type="primary" ghost block icon="save">更新抓取规则</a-button>
+                        </a-form>
+                    </a-card>
+                </a-col>
+
+                <a-col :span="14">
+                    <a-card title="实时监控图表与历史回查" size="small">
+                        <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <b>电测关键参数趋势 (实时数据流)</b>
+                            <a-range-picker size="small" />
+                        </div>
+                        <div class="trend-chart-mock">
+                            <!-- 模拟数据趋势 -->
+                            <div v-for="h in [60, 65, 80, 75, 90, 85, 95, 70, 60, 55, 80]" :key="Math.random()" class="chart-bar" :style="{height: h + '%'}"></div>
+                            <div style="position: absolute; top: 10%; width: 100%; border-top: 1px dashed red;"></div>
+                            <div style="position: absolute; bottom: 30%; width: 100%; border-top: 1px dashed red;"></div>
+                        </div>
+                        <a-table :columns="testColumns" :data-source="testData" bordered size="small" style="margin-top: 15px;">
+                            <template slot="status" slot-scope="text">
+                                <a-badge :status="text === 'PASS' ? 'success' : 'error'" :text="text" />
+                            </template>
+                        </a-table>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    ledgerQueried: false,
+                    skuInput: '',
+                    testAlarm: true,
+                    // 需求 1 数据
+                    ledgerColumns: [
+                        { title: '台账编号', dataIndex: 'id' },
+                        { title: '资产类型', dataIndex: 'type' },
+                        { title: '规格型号', dataIndex: 'model' },
+                        { title: '当前状态', dataIndex: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '最后维护日期', dataIndex: 'date' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    ledgerData: [
+                        { id: 'TOOL-001', type: '刀头', model: 'T10-Precision', status: '使用中', date: '2026-01-20' },
+                        { id: 'JIG-882', type: '贴合治具', model: 'SMART-V3-A', status: '维修中', date: '2026-01-22' }
+                    ],
+                    sampleColumns: [
+                        { title: '资产名称', dataIndex: 'name' },
+                        { title: '有效期至', dataIndex: 'validity', scopedSlots: { customRender: 'validity' } },
+                        { title: '存储位置', dataIndex: 'loc' }
+                    ],
+                    sampleData: [
+                        { name: '功能测试校准片 #A', validity: '2026-06-01', isExpired: false, loc: '标准房-01' },
+                        { name: '检验样品(良品样)', validity: '2026-01-10', isExpired: true, loc: 'QA架-05' }
+                    ],
+                    // 需求 2 数据
+                    testColumns: [
+                        { title: '产品条码', dataIndex: 'sn' },
+                        { title: '测试项', dataIndex: 'item' },
+                        { title: '实测值', dataIndex: 'val' },
+                        { title: '测试软件版本', dataIndex: 'ver' },
+                        { title: '判定', dataIndex: 'status', scopedSlots: { customRender: 'status' } }
+                    ],
+                    testData: [
+                        { sn: 'SN-00982', item: '绝缘阻抗', val: '9.8 MΩ', ver: 'V4.2.1', status: 'PASS' },
+                        { sn: 'SN-00983', item: '绝缘阻抗', val: '7.2 MΩ', ver: 'V4.2.1', status: 'FAIL' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                queryLedger() {
+                    this.$message.loading('正在检索品种关联台账及维护记录...', 1).then(() => {
+                        this.ledgerQueried = true;
+                        this.$notification.success({
+                            message: '数据已关联',
+                            description: '已成功加载该 SKU 生产线所涉及的全部刀头、治具及标准品台账。'
+                        });
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

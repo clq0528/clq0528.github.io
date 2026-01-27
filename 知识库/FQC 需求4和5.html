@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FQC 质量管控原型 - 需求 4 & 5</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #001529;
+        }
+        .chart-container { 
+            width: 100%; 
+            min-height: 400px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 25px; 
+            color: #001529;
+            font-weight: bold;
+        }
+        
+        /* 模拟看板样式 */
+        .dashboard-stat {
+            background: #001529;
+            color: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .dashboard-stat .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1890ff;
+        }
+        .dashboard-stat .label {
+            font-size: 14px;
+            margin-top: 8px;
+            opacity: 0.8;
+        }
+
+        /* 模拟图表占位 */
+        .mock-chart {
+            width: 100%;
+            height: 250px;
+            background: #fdfdfd;
+            border: 1px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            position: relative;
+        }
+        .pareto-bar {
+            background: #003a8c;
+            width: 30px;
+            margin-right: 10px;
+            position: relative;
+        }
+        .pareto-line {
+            position: absolute;
+            width: 80%;
+            height: 2px;
+            background: #ff4d4f;
+            top: 40%;
+            left: 10%;
+        }
+
+        /* 流程图样式覆盖 */
+        .mermaid svg {
+            max-width: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求4流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>需求4：FQC 检验记录报表及图表生成 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef endNode fill:#595959,stroke:#333,color:#fff;
+
+                        Start[检验记录采集] --> Query[多维度条件查询]
+                        Query --> Report[报表数据汇总]
+                        Report --> Export[导出 Excel 明细]
+                        Report --> Pareto[失效原因帕累托图]
+                        Report --> SPC[Xbar-R 控制图]
+                        Report --> BoxPlot[多级箱线图分析]
+                        Pareto & SPC & BoxPlot --> Sync[实时同步车间看板]
+                        Sync --> End((结束))
+
+                        class Start,Query,Report,Export,Pareto,SPC,BoxPlot,Sync business;
+                        class End endNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求4：质量大数据驾驶舱 -->
+        <div class="section-card">
+            <h2>FQC 质量分析驾驶舱 (实时同步)</h2>
+            <a-row :gutter="16" style="margin-bottom: 24px;">
+                <a-col :span="6">
+                    <div class="dashboard-stat">
+                        <div class="value">99.2%</div>
+                        <div class="label">总检合格率 (Batch Pass)</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat">
+                        <div class="value">98.5%</div>
+                        <div class="label">批合格率 (Unit Yield)</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat">
+                        <div class="value">12.5h</div>
+                        <div class="label">月度累计返工工时</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat">
+                        <div class="value">2,840</div>
+                        <div class="label">今日检验总数</div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <a-row :gutter="24">
+                <a-col :span="12">
+                    <a-card title="失效原因帕累托图 (Pareto Analysis)" size="small">
+                        <div class="mock-chart">
+                            <div class="pareto-bar" style="height: 180px;"><span style="font-size:10px;position:absolute;top:-20px">划伤</span></div>
+                            <div class="pareto-bar" style="height: 120px;"><span style="font-size:10px;position:absolute;top:-20px">变形</span></div>
+                            <div class="pareto-bar" style="height: 60px;"><span style="font-size:10px;position:absolute;top:-20px">脏污</span></div>
+                            <div class="pareto-bar" style="height: 30px;"><span style="font-size:10px;position:absolute;top:-20px">其他</span></div>
+                            <div class="pareto-line"></div>
+                            <div style="position:absolute;right:10px;bottom:10px;font-size:12px">累积频率线 (80/20)</div>
+                        </div>
+                    </a-card>
+                </a-col>
+                <a-col :span="12">
+                    <a-card title="关键尺寸 SPC 控制图 (Xbar-R)" size="small">
+                        <div class="mock-chart">
+                            <svg width="100%" height="100%">
+                                <line x1="10%" y1="30%" x2="90%" y2="30%" stroke="#ff4d4f" stroke-dasharray="5,5" />
+                                <text x="92%" y="30%" fill="#ff4d4f" style="font-size:10px">UCL</text>
+                                <line x1="10%" y1="50%" x2="90%" y2="50%" stroke="#52c41a" />
+                                <text x="92%" y="50%" fill="#52c41a" style="font-size:10px">CL</text>
+                                <line x1="10%" y1="70%" x2="90%" y2="70%" stroke="#ff4d4f" stroke-dasharray="5,5" />
+                                <text x="92%" y="70%" fill="#ff4d4f" style="font-size:10px">LCL</text>
+                                <polyline points="40,120 80,110 120,130 160,100 200,115 240,105" fill="none" stroke="#1890ff" stroke-width="2" />
+                            </svg>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+
+            <div style="margin-top: 24px;">
+                <a-button type="primary" icon="file-excel">导出 Excel 统计报表</a-button>
+                <a-button icon="printer" style="margin-left: 8px;">打印趋势报告</a-button>
+            </div>
+        </div>
+
+        <!-- 需求5流程图 -->
+        <div class="section-card">
+            <h2>需求5：抽检计划模板维护及自动带出 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        Role[角色权限校验] --> Maintain[模板维护/复制]
+                        Maintain --> Define[定义 AQL/抽样方案/标准]
+                        Define --> Store[模板库存储]
+                        Store --> Match{工单+机种匹配}
+                        Match -- 自动带出 --> Exec[执行检验]
+                        Exec -- 允许微调 --> Adjust[录入调整理由]
+                        Adjust --> Log[日志自动留存]
+
+                        class Role,Maintain,Define,Store,Exec,Adjust,Log business;
+                        class Match decision;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求5：模板管理中心 -->
+        <div class="section-card">
+            <h2>FQC 智能抽检模板管理中心</h2>
+            <a-tabs default-active-key="1">
+                <a-tab-pane key="1" tab="模板配置">
+                    <a-form layout="inline" style="margin-bottom: 20px;">
+                        <a-form-item label="产品系列">
+                            <a-select style="width: 200px" placeholder="选择系列">
+                                <a-select-option value="v3">智能控制器 V3.0系列</a-select-option>
+                            </a-select>
+                        </a-form-item>
+                        <a-button type="primary" icon="plus">新建模板</a-button>
+                        <a-button icon="copy" style="margin-left: 8px;">从现有模板复制</a-button>
+                    </a-form>
+                    
+                    <a-table :columns="templateColumns" :data-source="templateData" bordered size="small">
+                        <template slot="aql" slot-scope="text">
+                            <a-tag color="blue">{{text}}</a-tag>
+                        </template>
+                        <template slot="action">
+                            <a-button type="link" size="small">编辑</a-button>
+                            <a-divider type="vertical" />
+                            <a-button type="link" size="small">版本历史</a-button>
+                        </template>
+                    </a-table>
+                </a-tab-pane>
+                
+                <a-tab-pane key="2" tab="检验现场 (模拟模板带出)">
+                    <div style="background: #fafafa; padding: 20px; border-radius: 4px;">
+                        <a-alert message="系统提示：已根据工单 MO20250124 自动匹配 [V3-精密级] 抽检模板" type="info" show-icon style="margin-bottom: 16px;"></a-alert>
+                        <a-descriptions title="自动匹配参数" bordered size="small">
+                            <a-descriptions-item label="抽样方案">GB/T 2828.1 (正常检验)</a-descriptions-item>
+                            <a-descriptions-item label="接收质量限 (AQL)">0.65</a-descriptions-item>
+                            <a-descriptions-item label="推荐抽检数">32 PCS</a-descriptions-item>
+                        </a-descriptions>
+                        <div style="margin-top: 20px;">
+                            <a-form-item label="实际抽检数 (允许微调)">
+                                <a-input-number v-model="adjustQty" style="width: 120px"></a-input-number>
+                                <span v-if="adjustQty !== 32" style="margin-left: 15px; color: #ff4d4f;">
+                                    * 偏离推荐值，需录入理由
+                                    <a-input placeholder="录入调整理由" style="width: 200px; margin-left: 10px;"></a-input>
+                                </span>
+                            </a-form-item>
+                        </div>
+                    </div>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    adjustQty: 32,
+                    templateColumns: [
+                        { title: '模板名称', dataIndex: 'name', key: 'name' },
+                        { title: '适用系列', dataIndex: 'series', key: 'series' },
+                        { title: '抽样方案', dataIndex: 'scheme', key: 'scheme' },
+                        { title: 'AQL标准', dataIndex: 'aql', key: 'aql', scopedSlots: { customRender: 'aql' } },
+                        { title: '维护人', dataIndex: 'user', key: 'user' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    templateData: [
+                        { id: 1, name: 'V3-精密级抽检模板', series: '智能控制器V3.0', scheme: 'GB/T 2828.1 单次', aql: '0.65', user: '产品经理-张三' },
+                        { id: 2, name: 'V3-普通级抽检模板', series: '智能控制器V3.0', scheme: 'GB/T 2828.1 单次', aql: '1.5', user: 'FQC主管-李四' },
+                        { id: 3, name: '通用外壳系列模板', series: '五金系列', scheme: '固定比例 10%', aql: '2.5', user: '王五' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

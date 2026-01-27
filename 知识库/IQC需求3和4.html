@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 业务原型 - 需求 3 & 4</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+        }
+        .chart-container { 
+            width: 100%; 
+            height: 450px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 4px solid #1890ff; 
+            padding-left: 10px; 
+            margin-bottom: 20px; 
+            color: #1890ff;
+        }
+        .mermaid { 
+            display: flex; 
+            justify-content: center; 
+        }
+        /* 看板样式 */
+        .priority-high { color: #f5222d; font-weight: bold; }
+        .priority-medium { color: #fa8c16; }
+        .ranking-card { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
+        .ranking-num { font-weight: bold; font-size: 18px; margin-right: 15px; width: 25px; display: inline-block; }
+        .top1 { color: #f5222d; }
+        .top2 { color: #fa8c16; }
+        .top3 { color: #fadb14; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求3流程图 -->
+        <div class="section-card">
+            <h2>需求3：IQC 待检看板及不合格品处理 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[到货单下发] --> B[待检看板展示]
+                        B --> C{优先级判定}
+                        C -- 急料/超期 --> D[看板高亮标红]
+                        C -- 普通 --> E[正常排序]
+                        D & E --> F[执行检验]
+                        F -- 不合格 --> G[发起评审]
+                        G --> H{处置方式}
+                        H -- 特采 --> I[品质主管审批]
+                        H -- 退货 --> J[采购确认/ERP同步]
+                        H -- 挑选 --> K[车间/仓库执行]
+                        I & J & K --> L[同步 ERP 状态]
+
+                        class A,B,F,G,I,J,K,L business;
+                        class C,H system;
+                        class D alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求4流程图 -->
+        <div class="section-card">
+            <h2>需求4：供应商来料质量不良排名 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        A[收集历史数据] --> B[按材料类别分类]
+                        B --> C[统计不良率]
+                        C --> D[应用过滤规则]
+                        D --> E[生成排名榜单]
+                        E --> F[同步车间看板]
+                        E --> G[导出报表]
+                        subgraph 配置规则
+                            C1[不良率阈值配置]
+                            C2[统计周期选择]
+                        end
+
+                        class A,B,C,E,G business;
+                        class D,F system;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求3原型：待检看板 -->
+        <div class="section-card">
+            <h2>需求 3：IQC 待检看板</h2>
+            <div style="margin-bottom: 16px;">
+                <a-radio-group v-model="kanbanTab" button-style="solid">
+                    <a-radio-button value="waiting">待检验 (12)</a-radio-button>
+                    <a-radio-button value="inspecting">检验中 (5)</a-radio-button>
+                    <a-radio-button value="completed">已完成 (45)</a-radio-button>
+                </a-radio-group>
+                <a-button type="primary" icon="redo" style="float: right;">刷新看板</a-button>
+            </div>
+            
+            <a-table :columns="kanbanColumns" :data-source="kanbanData" row-key="id" bordered size="middle">
+                <span slot="priority" slot-scope="text">
+                    <a-tag :color="text === '紧急' ? 'red' : (text === '高' ? 'orange' : 'blue')">
+                        {{text}}
+                    </a-tag>
+                </span>
+                <span slot="action" slot-scope="record">
+                    <a-button type="link" size="small" @click="handleReview(record)">
+                        {{ record.status === '待检验' ? '开始检验' : '不合格处理' }}
+                    </a-button>
+                </span>
+            </a-table>
+        </div>
+
+        <!-- 需求3原型：不合格品评审弹窗 -->
+        <a-modal v-model="reviewVisible" title="不合格品处置评审 (评审编号: MRB-20250124)" width="700px" @ok="submitReview">
+            <a-alert message="该批次为急料（交期临近），建议优先考虑挑选或特采。" type="warning" show-icon style="margin-bottom: 15px;"></a-alert>
+            <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                <a-form-item label="处理方式">
+                    <a-radio-group v-model="reviewForm.method">
+                        <a-radio value="special">特采 (让步接收)</a-radio>
+                        <a-radio value="return">退货</a-radio>
+                        <a-radio value="sort">挑选使用</a-radio>
+                    </a-radio-group>
+                </a-form-item>
+                <a-form-item label="检验员意见">
+                    <a-textarea v-model="reviewForm.inspectorOpinion" placeholder="输入初步判定原因及建议" :rows="2" />
+                </a-form-item>
+                <a-divider>评审流程记录</a-divider>
+                <a-timeline>
+                    <a-timeline-item color="green">
+                        <p>检验员提交评审 - 2025-01-24 10:00</p>
+                    </a-timeline-item>
+                    <a-timeline-item color="gray">
+                        <p>品质主管审批 (待处理)</p>
+                    </a-timeline-item>
+                    <a-timeline-item color="gray">
+                        <p>采购确认/ERP回写 (待处理)</p>
+                    </a-timeline-item>
+                </a-timeline>
+            </a-form>
+        </a-modal>
+
+        <!-- 需求4原型：供应商质量排名 -->
+        <div class="section-card">
+            <h2>需求 4：供应商来料质量排名榜单</h2>
+            <div style="background: #fafafa; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                <a-space>
+                    <span>材料类别：</span>
+                    <a-select default-value="electronic" style="width: 150px">
+                        <a-select-option value="electronic">电子件</a-select-option>
+                        <a-select-option value="metal">金属件</a-select-option>
+                        <a-select-option value="consumable">耗材</a-select-option>
+                    </a-select>
+                    <span>统计周期：</span>
+                    <a-range-picker />
+                    <a-button type="primary" icon="search">统计分析</a-button>
+                    <a-button icon="download">导出Excel</a-button>
+                </a-space>
+            </div>
+
+            <a-row :gutter="20">
+                <a-col :span="12">
+                    <div style="font-weight: bold; margin-bottom: 15px;">供应商不良率 TOP 5 (需重点管控)</div>
+                    <div v-for="(item, index) in supplierRanking" :key="index" class="ranking-card">
+                        <span :class="['ranking-num', index < 3 ? 'top'+(index+1) : '']">{{index + 1}}</span>
+                        <span style="width: 150px; display: inline-block;">{{item.name}}</span>
+                        <div style="display: inline-block; width: 200px; vertical-align: middle; margin: 0 10px;">
+                            <a-progress :percent="item.rate" size="small" :status="item.rate > 2 ? 'exception' : 'active'" />
+                        </div>
+                        <span style="float: right; color: #999;">不良率: {{item.rate}}%</span>
+                    </div>
+                </a-col>
+                <a-col :span="12">
+                    <div style="font-weight: bold; margin-bottom: 15px;">质量配置规则</div>
+                    <a-card size="small">
+                        <a-form layout="vertical">
+                            <a-form-item label="自动标记为“急料”的规则">
+                                <a-input-number style="width: 100%" :min="1" :default-value="3" />
+                                <span style="font-size: 12px; color: #999;">(客户订单交期 <= X 天)</span>
+                            </a-form-item>
+                            <a-form-item label="榜单展示过滤阈值 (不良率 >= %)">
+                                <a-input-number style="width: 100%" :min="0" :step="0.1" :default-value="0.5" />
+                            </a-form-item>
+                            <a-button block type="dashed">同步配置到电子看板</a-button>
+                        </a-form>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    kanbanTab: 'waiting',
+                    reviewVisible: false,
+                    kanbanColumns: [
+                        { title: '优先级', dataIndex: 'priority', key: 'priority', scopedSlots: { customRender: 'priority' }, width: 100 },
+                        { title: '供应商', dataIndex: 'supplier', key: 'supplier' },
+                        { title: '物料编码', dataIndex: 'code', key: 'code' },
+                        { title: '物料名称', dataIndex: 'name', key: 'name' },
+                        { title: '到货时间', dataIndex: 'time', key: 'time' },
+                        { title: '状态', dataIndex: 'status', key: 'status' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' }, width: 120 }
+                    ],
+                    kanbanData: [
+                        { id: 1, priority: '紧急', supplier: '厦门XX电子', code: 'E-001', name: 'IC芯片', time: '2025-01-24 08:30', status: '待检验' },
+                        { id: 2, priority: '紧急', supplier: '松霖科技', code: 'M-102', name: '金属支架', time: '2025-01-24 09:15', status: '待检验' },
+                        { id: 3, priority: '高', supplier: '中芯国际', code: 'W-99', name: '晶圆', time: '2025-01-23 16:00', status: '不合格处理' },
+                        { id: 4, priority: '普通', supplier: '顺丰包装', code: 'P-05', name: '瓦楞纸箱', time: '2025-01-24 11:00', status: '待检验' }
+                    ],
+                    reviewForm: {
+                        method: 'special',
+                        inspectorOpinion: '尺寸超差0.02mm，但不影响后续结构组装，建议特采。'
+                    },
+                    supplierRanking: [
+                        { name: '供应商A (电子类)', rate: 3.5 },
+                        { name: '供应商B (塑胶类)', rate: 2.1 },
+                        { name: '供应商C (金属类)', rate: 1.8 },
+                        { name: '供应商D (耗材类)', rate: 0.9 },
+                        { name: '供应商E (包装类)', rate: 0.4 }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                handleReview(record) {
+                    if (record.status === '待检验') {
+                        this.$message.info('跳转至检验界面执行检验...');
+                    } else {
+                        this.reviewVisible = true;
+                    }
+                },
+                submitReview() {
+                    this.$message.success('评审意见已提交，流程已流转至品质主管审批');
+                    this.reviewVisible = false;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

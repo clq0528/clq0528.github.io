@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资料查询集成中心 - 需求 1, 2 & 3</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 400px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* 库存看板专用样式 */
+        .inventory-stat-card { background: #001529; color: #fff; padding: 16px; border-radius: 4px; text-align: center; border: 1px solid #1890ff; }
+        .inventory-stat-card .value { font-size: 24px; font-weight: bold; color: #1890ff; display: block; }
+        .inventory-stat-card .label { font-size: 12px; opacity: 0.7; }
+        .refresh-timer { font-size: 12px; color: #8c8c8c; margin-top: 10px; text-align: right; }
+
+        /* 质量图表模拟 */
+        .quality-dashboard { background: #fdfdfd; border: 1px solid #eee; padding: 20px; border-radius: 4px; }
+        .mock-pie { width: 120px; height: 120px; border-radius: 50%; background: conic-gradient(#1890ff 0% 70%, #ff4d4f 70% 85%, #faad14 85% 100%); margin: 0 auto; }
+        
+        .mermaid svg { max-width: 100% !important; }
+        .bom-tree-node { font-weight: 500; color: #001529; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 业务流程图 (横向) -->
+        <div class="section-card">
+            <h2>3.4.5 资料查询集成服务 - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef blueNode fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef navyNode fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        User[用户/PAD端扫描条码] --> Search[多源查询引擎 R1]
+                        
+                        subgraph "R1: 技术资料查询"
+                            Search --> BOM[多层 BOM 结构展示]
+                            Search --> Doc[技术标准/图纸 PDF 预览]
+                        end
+
+                        subgraph "R2: 库存与出货"
+                            Search --> WMS[WMS 库存实时同步]
+                            WMS --> Live[WIP/在途/成品动态看板]
+                        end
+
+                        subgraph "R3: 质量大数据"
+                            Search --> Quality[多维度交叉分析报表]
+                            Quality --> Visual[柱/线/饼图可视化]
+                        end
+
+                        BOM & Live & Visual --> Export[Excel 导出/一键分享]
+
+                        class User,Search,BOM,Doc,WMS,Live,Quality,Visual,Export blueNode;
+                        class Live,Visual navyNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 1：技术资料查询中心 -->
+        <div class="section-card">
+            <h2>需求 1：BOM、技术标准及图纸查询 (PC/PAD)</h2>
+            <div style="margin-bottom: 20px;">
+                <a-input-search 
+                    placeholder="输入 SKU、工单号或扫描产品条码" 
+                    enter-button="调阅全案资料" 
+                    size="large" 
+                    style="width: 500px"
+                    @search="onQuery"
+                />
+                <a-button icon="share-alt" style="margin-left: 10px;">分享至企业微信</a-button>
+            </div>
+
+            <a-row :gutter="24" v-if="queried">
+                <a-col :span="14">
+                    <a-card title="多层级 BOM 结构表" size="small">
+                        <template slot="extra">
+                            <a-button size="small" type="link" icon="file-excel">导出 Excel</a-button>
+                        </template>
+                        <a-table :columns="bomColumns" :data-source="bomData" row-key="key" bordered size="small" :pagination="false">
+                            <template slot="material" slot-scope="text">
+                                <span class="bom-tree-node">{{text}}</span>
+                            </template>
+                        </a-table>
+                    </a-card>
+                </a-col>
+                <a-col :span="10">
+                    <a-card title="关联技术标准与图纸" size="small">
+                        <a-list item-layout="horizontal" :data-source="technicalDocs">
+                            <a-list-item slot="renderItem" slot-scope="item">
+                                <a-list-item-meta :description="item.desc">
+                                    <a slot="title">{{item.title}}</a>
+                                    <a-avatar slot="avatar" :src="item.icon" shape="square" />
+                                </a-list-item-meta>
+                                <div slot="actions">
+                                    <a-button size="small" type="primary" ghost icon="eye" @click="$message.info('正在打开PDF预览器...')">预览</a-button>
+                                    <a-button size="small" icon="download" style="margin-left: 5px;"></a-button>
+                                </div>
+                            </a-list-item>
+                        </a-list>
+                    </a-card>
+                </a-col>
+            </a-row>
+            <a-empty v-else description="请输入或扫描条码以获取资料" />
+        </div>
+
+        <!-- 需求 2：实时库存看板 -->
+        <div class="section-card">
+            <h2>需求 2：WMS 实时库存及出货追踪</h2>
+            <div style="background: #fafafa; padding: 20px; border-radius: 4px;">
+                <a-row :gutter="16">
+                    <a-col :span="4">
+                        <div class="inventory-stat-card">
+                            <span class="label">在制品 (WIP)</span>
+                            <span class="value">4,280</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="4">
+                        <div class="inventory-stat-card">
+                            <span class="label">半成品库存</span>
+                            <span class="value">12,500</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="4">
+                        <div class="inventory-stat-card">
+                            <span class="label">成品待出货</span>
+                            <span class="value">850</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="4">
+                        <div class="inventory-stat-card">
+                            <span class="label">在途物流数</span>
+                            <span class="value">1,200</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="4">
+                        <div class="inventory-stat-card" style="border-color: #ff4d4f;">
+                            <span class="label">退货待检</span>
+                            <span class="value" style="color: #ff4d4f;">15</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="4" style="display: flex; flex-direction: column; justify-content: center;">
+                        <a-button type="primary" icon="reload" block @click="refreshInventory">立即刷新</a-button>
+                        <div class="refresh-timer">15分钟自动刷新 | 下次: 12:45</div>
+                    </a-col>
+                </a-row>
+
+                <div style="margin-top: 24px;">
+                    <a-form layout="inline" size="small" style="margin-bottom: 15px;">
+                        <a-form-item label="工序筛选"><a-select style="width: 120px" placeholder="全部"><a-select-option value="1">组装</a-select-option></a-select></a-form-item>
+                        <a-form-item label="存储位置"><a-input placeholder="库位编码" /></a-form-item>
+                        <a-button type="link" icon="file-excel">导出当前明细</a-button>
+                    </a-form>
+                    <a-table :columns="inventoryColumns" :data-source="inventoryData" size="middle" bordered></a-table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 3：多维度质量分析中心 -->
+        <div class="section-card">
+            <h2>需求 3：多维度质量数据报表分析</h2>
+            <div style="background: #001529; padding: 15px; border-radius: 4px 4px 0 0; display: flex; justify-content: space-between; align-items: center;">
+                <a-space>
+                    <a-select default-value="template1" style="width: 200px" dropdown-style="z-index: 1000">
+                        <a-select-option value="template1">常用：月度车间不良率报表</a-select-option>
+                        <a-select-option value="template2">常用：品类合格率周报</a-select-option>
+                    </a-select>
+                    <a-button ghost size="small" icon="save">另存为模板</a-button>
+                </a-space>
+                <a-range-picker size="small" />
+            </div>
+            
+            <div class="quality-dashboard">
+                <a-row :gutter="24">
+                    <a-col :span="6">
+                        <a-card title="各品类不良分布 (饼图)" size="small">
+                            <div class="mock-pie"></div>
+                            <div style="margin-top: 15px; font-size: 12px;">
+                                <a-badge color="#1890ff" text="电子件 (70%)" /><br/>
+                                <a-badge color="#ff4d4f" text="五金件 (15%)" /><br/>
+                                <a-badge color="#faad14" text="塑胶件 (15%)" />
+                            </div>
+                        </a-card>
+                    </a-col>
+                    <a-col :span="12">
+                        <a-card title="合格率趋势分析 (折线图)" size="small">
+                            <div style="height: 180px; width: 100%; border-bottom: 2px solid #001529; position: relative;">
+                                <svg width="100%" height="100%">
+                                    <polyline points="10,150 100,120 200,130 300,80 400,100 500,50" fill="none" stroke="#1890ff" stroke-width="3" />
+                                    <circle cx="10" cy="150" r="4" fill="#1890ff" /><circle cx="500" cy="50" r="4" fill="#1890ff" />
+                                </svg>
+                                <div style="position: absolute; bottom: -20px; width: 100%; display: flex; justify-content: space-between; font-size: 10px;">
+                                    <span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span>
+                                </div>
+                            </div>
+                        </a-card>
+                    </a-col>
+                    <a-col :span="6">
+                        <a-card title="组合查询条件" size="small">
+                            <a-form layout="vertical">
+                                <a-form-item label="线别"><a-select placeholder="请选择线别" size="small"><a-select-option value="L1">L1线</a-select-option></a-select></a-form-item>
+                                <a-form-item label="不良类别"><a-select placeholder="外观/性能" size="small" /></a-form-item>
+                                <a-button type="primary" block size="small">执行交叉查询</a-button>
+                            </a-form>
+                        </a-card>
+                    </a-col>
+                </a-row>
+
+                <a-divider orientation="left">数据明细表</a-divider>
+                <a-table :columns="qualityColumns" :data-source="qualityData" size="small" bordered></a-table>
+                <div style="margin-top: 15px; text-align: right;">
+                    <a-button-group>
+                        <a-button icon="printer">打印报表</a-button>
+                        <a-button type="primary" icon="download">导出完整数据包</a-button>
+                    </a-button-group>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    queried: false,
+                    // 需求1
+                    bomColumns: [
+                        { title: '物料名称', dataIndex: 'material', key: 'material', scopedSlots: { customRender: 'material' } },
+                        { title: '物料编码', dataIndex: 'code', key: 'code' },
+                        { title: '单位用量', dataIndex: 'qty', key: 'qty' },
+                        { title: '替代料信息', dataIndex: 'sub', key: 'sub' }
+                    ],
+                    bomData: [
+                        { key: '1', material: '智能控制器总成', code: 'SKU-001', qty: '1', sub: '-', children: [
+                            { key: '1-1', material: '主控PCBA', code: 'MAT-882', qty: '1', sub: 'MAT-882B' },
+                            { key: '1-2', material: '外壳套件', code: 'MAT-102', qty: '1', sub: '-' },
+                            { key: '1-3', material: '螺丝 M3*8', code: 'MAT-P05', qty: '4', sub: 'P05-G' }
+                        ]}
+                    ],
+                    technicalDocs: [
+                        { title: '检验标准指导书 (V3.2).pdf', desc: '包含关键尺寸公差及外观判定标准', icon: 'https://img.icons8.com/color/48/000000/pdf.png' },
+                        { title: '装配工艺参数要求.docx', desc: '扭力设定值: 0.8Nm ± 0.1', icon: 'https://img.icons8.com/color/48/000000/word.png' },
+                        { title: '结构 3D 图纸 - 侧板.pdf', desc: '最新修订日期: 2024-12-20', icon: 'https://img.icons8.com/color/48/000000/pdf.png' }
+                    ],
+                    // 需求2
+                    inventoryColumns: [
+                        { title: '物料/产品', dataIndex: 'name' },
+                        { title: '批次号', dataIndex: 'batch' },
+                        { title: '库存位置', dataIndex: 'loc' },
+                        { title: '实时数量', dataIndex: 'qty' },
+                        { title: '物流/在途单号', dataIndex: 'track' }
+                    ],
+                    inventoryData: [
+                        { id: 1, name: '控制器-A1', batch: '20250124-01', loc: '成品A仓-01架', qty: '500', track: 'SF142293812' },
+                        { id: 2, name: '主板 PCBA', batch: '241220', loc: 'WIP-组装线', qty: '120', track: '-' }
+                    ],
+                    // 需求3
+                    qualityColumns: [
+                        { title: '车间/线别', dataIndex: 'line' },
+                        { title: '检验总数', dataIndex: 'total' },
+                        { title: '合格数', dataIndex: 'pass' },
+                        { title: '不良数', dataIndex: 'fail' },
+                        { title: '良率 (%)', dataIndex: 'rate' }
+                    ],
+                    qualityData: [
+                        { line: '一车间-L1', total: 1200, pass: 1185, fail: 15, rate: '98.75' },
+                        { line: '二车间-L2', total: 800, pass: 795, fail: 5, rate: '99.37' }
+                    ]
+                }
+            },
+            methods: {
+                onQuery() {
+                    this.$message.loading('正在多源检索资料...', 1).then(() => {
+                        this.queried = true;
+                        this.$notification.success({
+                            message: '检索成功',
+                            description: '已关联 BOM、技术标准、WMS库存及历史质量数据。'
+                        });
+                    });
+                },
+                refreshInventory() {
+                    this.$message.success('WMS 库存数据已同步至最新状态');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

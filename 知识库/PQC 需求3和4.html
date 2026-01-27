@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PQC 业务系统 - 需求 3 & 4</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #1890ff; }
+        .chart-container { width: 100%; min-height: 350px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 20px; color: #001529; font-weight: bold; }
+        
+        /* 防呆锁定动效 */
+        .lock-container { text-align: center; padding: 40px; background: #fff1f0; border: 2px dashed #ff4d4f; border-radius: 8px; transition: all 0.3s; }
+        .unlock-container { text-align: center; padding: 40px; background: #f6ffed; border: 2px solid #52c41a; border-radius: 8px; }
+        .lock-icon { font-size: 64px; color: #ff4d4f; margin-bottom: 16px; animation: shake 0.5s infinite; }
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+        
+        /* 报表驾驶舱样式 */
+        .dashboard-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 4px; padding: 16px; margin-bottom: 16px; height: 320px; }
+        .chart-mock { width: 100%; height: 220px; display: flex; align-items: flex-end; justify-content: space-around; padding-top: 20px; }
+        .bar { background: #1890ff; width: 30px; border-radius: 4px 4px 0 0; position: relative; transition: height 1s; }
+        .bar:hover { background: #40a9ff; }
+        .bar-label { position: absolute; top: -25px; width: 100%; text-align: center; font-size: 12px; }
+        .axis-label { font-size: 11px; color: #888; margin-top: 8px; transform: rotate(-30deg); display: inline-block; width: 40px; white-space: nowrap; }
+        
+        /* SPC 控制图模拟 */
+        .spc-line { width: 100%; height: 2px; background: #f5222d; position: absolute; z-index: 1; }
+        .spc-point { width: 8px; height: 8px; background: #1890ff; border-radius: 50%; position: absolute; z-index: 2; border: 1px solid #fff; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求3 & 4 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>PQC 制程防呆与质量分析 - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[工单开工/换线] --> B{首件判定?}
+                        B -- 合格 --> C[系统自动解锁 FQC/OQC]
+                        B -- 待定/NG --> D[触发全局防呆锁定 R3]
+                        D -- 异常申请 --> E[管理员权限放行 R3]
+                        E -- 逻辑解锁 --> C
+                        C --> F[生产过程巡检数据采集]
+                        F --> G[实时数据库存根]
+                        G --> H[SPC 自动建模/帕累托分析 R4]
+                        H --> I[可视化看板/PDF报表 R4]
+
+                        subgraph "防呆控制核心"
+                            D
+                            E
+                        end
+
+                        class A,E,F,I business;
+                        class C,G,H system;
+                        class B,D alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求3：首件防呆逻辑演示 -->
+        <div class="section-card">
+            <h2>需求 3：首件检查防呆控制中心 (Poka-yoke)</h2>
+            <a-row :gutter="24">
+                <a-col :span="12">
+                    <a-card title="当前工单状态监控" size="small">
+                        <a-descriptions :column="1" bordered size="small">
+                            <a-descriptions-item label="生产工单">MO-20250124-889</a-descriptions-item>
+                            <a-descriptions-item label="产品机种">智能控制器 V3.0</a-descriptions-item>
+                            <a-descriptions-item label="首件判定">
+                                <a-tag :color="faiStatus === 'PASS' ? 'green' : 'red'">
+                                    {{ faiStatus === 'PASS' ? '首件合格' : (faiStatus === 'PENDING' ? '待首件检验' : '首件不合格') }}
+                                </a-tag>
+                            </a-descriptions-item>
+                        </a-descriptions>
+                        <div style="margin-top: 20px;">
+                            <a-button-group block>
+                                <a-button type="primary" @click="simulateFAI('PASS')">模拟首件通过</a-button>
+                                <a-button type="danger" @click="simulateFAI('FAIL')">模拟首件失败</a-button>
+                                <a-button @click="simulateFAI('PENDING')">重置工单</a-button>
+                            </a-button-group>
+                        </div>
+                    </a-card>
+                </a-col>
+                <a-col :span="12">
+                    <!-- 动态防呆层 -->
+                    <div v-if="faiStatus !== 'PASS' && !adminReleased" class="lock-container">
+                        <a-icon type="lock" class="lock-icon" />
+                        <h3 style="color: #cf1322;">FQC/OQC 业务锁定中</h3>
+                        <p>原因：{{ faiStatus === 'PENDING' ? '首件检查尚未执行' : '首件检验判定为 NG' }}</p>
+                        <a-button type="primary" ghost @click="showReleaseModal = true">
+                            <a-icon type="unlock" /> 管理员权限放行
+                        </a-button>
+                    </div>
+                    <div v-else class="unlock-container">
+                        <a-icon type="check-circle" theme="filled" style="font-size: 64px; color: #52c41a; margin-bottom: 16px;" />
+                        <h3 style="color: #389e0d;">后续工序已解锁</h3>
+                        <p v-if="adminReleased">解锁来源：管理员手动特许放行 (记录已存证)</p>
+                        <p v-else>解锁来源：首件检验合格 (FAI-00982)</p>
+                        <a-button type="link" icon="search">查看解锁记录与工单绑定</a-button>
+                    </div>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求4：质量大数据分析驾驶舱 -->
+        <div class="section-card">
+            <h2>需求 4：PQC 质量统计分析驾驶舱</h2>
+            <div style="margin-bottom: 20px;">
+                <a-space>
+                    <a-range-picker />
+                    <a-select default-value="all" style="width: 160px">
+                        <a-select-option value="all">全机种数据汇总</a-select-option>
+                        <a-select-option value="v3">智能控制器 V3.0</a-select-option>
+                    </a-select>
+                    <a-button type="primary" icon="search">生成实时报表</a-button>
+                    <a-button icon="file-excel">导出 Excel 明细</a-button>
+                    <a-button icon="file-pdf" type="danger">打印 SPC 分析报告</a-button>
+                </a-space>
+            </div>
+
+            <a-row :gutter="16">
+                <!-- 帕累托图 -->
+                <a-col :span="8">
+                    <div class="dashboard-card">
+                        <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px;">失效原因帕累托图 (不良项分布)</div>
+                        <div class="chart-mock">
+                            <div v-for="(item, index) in paretoData" :key="index" class="bar" :style="{height: item.value + '%'}">
+                                <div class="bar-label">{{item.value}}%</div>
+                                <span class="axis-label">{{item.name}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </a-col>
+                <!-- SPC 控制图模拟 -->
+                <a-col :span="8">
+                    <div class="dashboard-card">
+                        <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px;">尺寸数据 SPC 控制图 (Xbar-R)</div>
+                        <div class="chart-mock" style="position: relative; align-items: center; border: 1px solid #f0f0f0; background: #fff;">
+                            <div class="spc-line" style="top: 30%;"></div><!-- UCL -->
+                            <div class="spc-line" style="top: 50%; background: #52c41a; border-style: dashed;"></div><!-- CL -->
+                            <div class="spc-line" style="top: 70%;"></div><!-- LCL -->
+                            <div v-for="(p, i) in spcPoints" :key="i" class="spc-point" :style="{left: (i*15+10)+'%', top: p + '%'}"></div>
+                        </div>
+                        <div style="font-size: 11px; margin-top: 10px; color: #f5222d;">* 备注：批次 012403 触发西格玛判定告警</div>
+                    </div>
+                </a-col>
+                <!-- 不良率周趋势 -->
+                <a-col :span="8">
+                    <div class="dashboard-card">
+                        <div style="font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 8px;">周度不良率趋势 (%)</div>
+                        <div class="chart-mock" style="padding-bottom: 20px;">
+                            <div v-for="(h, i) in trendData" :key="i" class="bar" :style="{height: h + '%', background: '#fa8c16'}">
+                                <div class="bar-label">{{(h/10).toFixed(1)}}%</div>
+                                <span class="axis-label">W{{i+1}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <!-- 统计数据明细表 -->
+            <a-table :columns="reportColumns" :data-source="reportData" size="middle" bordered row-key="id">
+                <template slot="status" slot-scope="text">
+                    <a-badge :status="text === '合格' ? 'success' : 'error'" :text="text" />
+                </template>
+                <template slot="photo" slot-scope="record">
+                    <a-button type="link" icon="picture" @click="$message.info('调取导电位测试照片：' + record.id + '.jpg')">查看照片</a-button>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 管理员放行弹窗 -->
+        <a-modal v-model="showReleaseModal" title="PQC 异常特许放行申请" @ok="handleReleaseSubmit">
+            <a-alert message="此操作将被计入质量审计日志，且与当前工单永久绑定。" type="warning" show-icon style="margin-bottom: 15px;"></a-alert>
+            <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                <a-form-item label="当前工单">
+                    <a-input value="MO-20250124-889" disabled />
+                </a-form-item>
+                <a-form-item label="放行权限人" required>
+                    <a-select placeholder="请选择具备放行权限的主管">
+                        <a-select-option value="admin1">品质总监 - 张三</a-select-option>
+                        <a-select-option value="admin2">生产经理 - 李四</a-select-option>
+                    </a-select>
+                </a-form-item>
+                <a-form-item label="放行理由" required>
+                    <a-textarea v-model="releaseReason" placeholder="请输入紧急订单放行理由 (如：首件委外测试中，产线先行试跑)" :rows="4" />
+                </a-form-item>
+                <a-form-item label="审批密码">
+                    <a-input-password placeholder="请输入动态核准码" />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求3相关
+                    faiStatus: 'PENDING',
+                    adminReleased: false,
+                    showReleaseModal: false,
+                    releaseReason: '',
+                    
+                    // 需求4图表模拟数据
+                    paretoData: [
+                        { name: '划伤', value: 45 },
+                        { name: '变形', value: 25 },
+                        { name: '偏移', value: 15 },
+                        { name: '脏污', value: 10 },
+                        { name: '其他', value: 5 }
+                    ],
+                    spcPoints: [52, 48, 55, 42, 65, 49, 35, 50], // 模拟波动百分比
+                    trendData: [20, 35, 15, 45, 25, 30],
+                    
+                    // 报表数据
+                    reportColumns: [
+                        { title: '工单号', dataIndex: 'mo', key: 'mo' },
+                        { title: '产品名称', dataIndex: 'product', key: 'product' },
+                        { title: '返工工时(h)', dataIndex: 'hours', key: 'hours' },
+                        { title: '不良项', dataIndex: 'defect', key: 'defect' },
+                        { title: '不良率', dataIndex: 'rate', key: 'rate' },
+                        { title: '检验照片', key: 'photo', scopedSlots: { customRender: 'photo' } },
+                        { title: '最终状态', dataIndex: 'status', key: 'status', scopedSlots: { customRender: 'status' } }
+                    ],
+                    reportData: [
+                        { id: 1, mo: 'MO-20250124-001', product: '智能控制器', hours: 2.5, defect: '尺寸偏移', rate: '0.5%', status: '合格' },
+                        { id: 2, mo: 'MO-20250124-002', product: '传感器模块', hours: 0, defect: '无', rate: '0.0%', status: '合格' },
+                        { id: 3, mo: 'MO-20250124-003', product: '电源底座', hours: 12, defect: '表面划伤', rate: '3.2%', status: '待评审' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => { mermaid.init(undefined, '.mermaid'); });
+            },
+            methods: {
+                simulateFAI(status) {
+                    this.faiStatus = status;
+                    this.adminReleased = false;
+                    this.$message.info('工单状态已切换为：' + status);
+                },
+                handleReleaseSubmit() {
+                    if(!this.releaseReason) {
+                        this.$message.warning('请录入放行理由');
+                        return;
+                    }
+                    this.adminReleased = true;
+                    this.showReleaseModal = false;
+                    this.$notification.success({
+                        message: '特许放行成功',
+                        description: '已手动解除后续工序锁定，相关操作已存证。'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

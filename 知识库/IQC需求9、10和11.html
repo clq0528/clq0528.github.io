@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 业务原型 - 需求 9 & 10 & 11 (核心进阶版)</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-top: 4px solid #1890ff; }
+        .chart-container { width: 100%; height: 500px; border: 1px solid #e8e8e8; border-radius: 8px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { padding-left: 12px; margin-bottom: 24px; color: #001529; font-weight: 600; display: flex; align-items: center; }
+        h2::before { content: ""; position: absolute; left: 20px; width: 4px; height: 20px; background: #1890ff; border-radius: 2px; }
+        
+        /* 需求9：临界值提醒样式 */
+        .warning-near-limit { background-color: #fff7e6 !important; border-left: 4px solid #faad14 !important; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #1890ff; }
+        .stat-label { font-size: 12px; color: #8c8c8c; }
+        
+        /* 需求10：报表样式 */
+        .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #e6f7ff; padding: 15px; border-radius: 8px; }
+        .threshold-alert { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(245, 34, 45, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(245, 34, 45, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 34, 45, 0); } }
+
+        /* 需求11：联动样式 */
+        .wms-badge { background: #52c41a; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; }
+        .system-bridge { display: flex; align-items: center; justify-content: center; background: #f0f2f5; padding: 20px; border-radius: 50px; margin: 20px 0; border: 2px dashed #d9d9d9; }
+        
+        /* 新增：三个流程图的横向布局 */
+        .flowchart-container { display: flex; flex-direction: column; gap: 30px; }
+        .flowchart-item { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 流程图汇总 - 拆分为三个独立div -->
+        <div class="section-card">
+            <h2>核心业务逻辑 (需求 9-11)</h2>
+            <div class="flowchart-container">
+                <!-- 需求9流程图 -->
+                <div class="flowchart-item">
+                    <div class="chart-container">
+                        <div class="mermaid">
+graph LR
+    classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+    classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+    classDef diamond fill:#13c2c2,stroke:#006d75,color:#fff,stroke-width:2px,width:120,height:60;
+
+    %% 需求9逻辑
+    R9_Input[测量数据录入] --> R9_Judge{临界值判定}
+    R9_Judge -- "偏差 > 80%" --> R9_Alert[标橙预警/弹窗提醒]
+    R9_Judge --> R9_Calc[PPK/CPK 自动计算]
+    R9_Calc --> R9_PDF[导出统计报告 PDF]
+
+    class R9_Input,R9_Calc,R9_PDF business;
+    class R9_Alert system;
+    class R9_Judge diamond;
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 需求10流程图 -->
+                <div class="flowchart-item">
+                    <div class="chart-container">
+                        <div class="mermaid">
+graph LR
+    classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+    classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+    classDef diamond fill:#13c2c2,stroke:#006d75,color:#fff,stroke-width:2px,width:120,height:60;
+
+    %% 需求10逻辑
+    R10_Stat[月度数据自动汇总] --> R10_Report[生成趋势图/良率榜]
+    R10_Report --> R10_Threshold{不良率 > 1%?}
+    R10_Threshold -- Yes --> R10_Msg[微信推送告警]
+    R10_Msg --> R10_Action[录入改善措施]
+    R10_Action --> R10_Report
+
+    class R10_Stat,R10_Report,R10_Action business;
+    class R10_Msg system;
+    class R10_Threshold diamond;
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 需求11流程图 -->
+                <div class="flowchart-item">
+                    <div class="chart-container">
+                        <div class="mermaid">
+graph LR
+    classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+    classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+    classDef diamond fill:#13c2c2,stroke:#006d75,color:#fff,stroke-width:2px,width:120,height:60;
+
+    %% 需求11逻辑
+    WMS_Task[WMS 入库申请单] -- 自动同步 --> QMS_Mission[QMS 待检任务]
+    QMS_Mission --> QMS_Finish[检验完成]
+    QMS_Finish -- 判定回传 --> WMS_Action{WMS 自动化操作}
+    WMS_Action -- 合格 --> WMS_Up[自动上架]
+    WMS_Action -- 不合格 --> WMS_Isolation[移至待处理区/锁定]
+
+    class WMS_Task,QMS_Mission,QMS_Finish,WMS_Up,WMS_Isolation business;
+    class WMS_Action diamond;
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求9：SPC 统计分析原型 -->
+        <div class="section-card">
+            <h2>需求 9：尺寸测量 SPC 分析及 CPK 统计</h2>
+            <a-row :gutter="24">
+                <a-col :span="16">
+                    <div style="margin-bottom: 16px;">
+                        <a-space>
+                            <a-tag color="blue">当前批次: BAT-20250124-001</a-tag>
+                            <a-tag color="purple">物料: 2.7寸屏外框</a-tag>
+                            <a-tag color="cyan">标准值: 50.00 ± 0.05</a-tag>
+                        </a-space>
+                        <a-button type="primary" icon="file-pdf" style="float: right;">导出 PDF 统计报告</a-button>
+                    </div>
+                    <a-table :columns="spcColumns" :data-source="spcData" row-key="id" size="small" bordered :pagination="false" :row-class-name="getSpcRowClass">
+                        <template slot="status" slot-scope="text, record">
+                            <a-badge v-if="record.isNearLimit" status="warning" text="临界(>80%)" />
+                            <a-badge v-else status="success" text="正常" />
+                        </template>
+                    </a-table>
+                </a-col>
+                <a-col :span="8">
+                    <a-card title="过程能力指数 (能力分析)" size="small">
+                        <a-row :gutter="[0, 16]">
+                            <a-col :span="12">
+                                <div class="stat-label">样本量 (N)</div>
+                                <div class="stat-value">50</div>
+                            </a-col>
+                            <a-col :span="12">
+                                <div class="stat-label">均值 (X-bar)</div>
+                                <div class="stat-value">50.012</div>
+                            </a-col>
+                            <a-col :span="12">
+                                <div class="stat-label">标准差 (σ)</div>
+                                <div class="stat-value">0.008</div>
+                            </a-col>
+                            <a-col :span="12">
+                                <div class="stat-label">CPK 指数</div>
+                                <div class="stat-value" style="color: #52c41a;">1.58</div>
+                            </a-col>
+                        </a-row>
+                        <a-divider />
+                        <div style="background: #f5f5f5; height: 120px; border-radius: 4px; display: flex; align-items: flex-end; justify-content: space-around; padding: 10px;">
+                            <!-- 模拟正态分布柱状图 -->
+                            <div v-for="h in [20,45,80,100,75,40,15]" :style="{height: h+'%', width: '10%', background: '#1890ff', opacity: 0.6}"></div>
+                        </div>
+                        <div style="text-align: center; font-size: 12px; margin-top: 5px;">尺寸分布正态性预览</div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求10：月度报表与 PDCA -->
+        <div class="section-card">
+            <h2>需求 10：材料质量月度分析及改善 (PDCA)</h2>
+            <div class="report-header">
+                <div>
+                    <span style="font-weight: bold; font-size: 16px;">2025年01月 供应商质量概览</span>
+                    <a-divider type="vertical" />
+                    <span>统计周期: 2025-01-01 ~ 2025-01-31</span>
+                </div>
+                <a-space>
+                    <a-select default-value="all" style="width: 120px">
+                        <a-select-option value="all">全部分类</a-select-option>
+                        <a-select-option value="electronic">电子类</a-select-option>
+                    </a-select>
+                    <a-button icon="download">导出 Excel</a-button>
+                </a-space>
+            </div>
+
+            <a-row :gutter="24">
+                <a-col :span="16">
+                    <a-table :columns="monthReportColumns" :data-source="monthReportData" row-key="id" bordered>
+                        <template slot="defectRate" slot-scope="text">
+                            <span :style="{color: parseFloat(text) >= 1 ? '#f5222d' : '#52c41a', fontWeight: 'bold'}">
+                                {{text}}%
+                                <a-icon v-if="parseFloat(text) >= 1" type="warning" class="threshold-alert" style="margin-left: 5px;" />
+                            </span>
+                        </template>
+                        <template slot="action" slot-scope="record">
+                            <a-button v-if="parseFloat(record.defectRate) >= 1" type="danger" ghost size="small" @click="handleImprove(record)">录入改善</a-button>
+                            <a-button v-else type="link" size="small">查看明细</a-button>
+                        </template>
+                    </a-table>
+                </a-col>
+                <a-col :span="8">
+                    <a-card title="月度不良率趋势" size="small">
+                        <div style="height: 200px; display: flex; align-items: flex-end; gap: 15px; padding: 20px 10px; border-bottom: 1px solid #ddd;">
+                            <div v-for="(h, i) in [0.4, 0.6, 1.2, 0.5, 0.8]" :key="i" :style="{height: (h*100)+'%', flex: 1, background: h>=1 ? '#f5222d':'#1890ff', position: 'relative'}">
+                                <span style="position: absolute; top: -20px; width: 100%; text-align: center; font-size: 10px;">{{h}}%</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-around; font-size: 12px; margin-top: 8px;">
+                            <span>9月</span><span>10月</span><span>11月</span><span>12月</span><span>01月</span>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+
+            <!-- 改善措施弹窗 -->
+            <a-modal v-model="improveVisible" title="质量异常改善录入 (CAPA)" @ok="improveVisible = false">
+                <a-alert message="异常警报: 该物料不良率连续两月超过阈值(1%)，请务必录入纠正措施。" type="error" style="margin-bottom: 15px;" show-icon></a-alert>
+                <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+                    <a-form-item label="责任供应商">
+                        <a-input value="苏州XXX电子有限公司" disabled />
+                    </a-form-item>
+                    <a-form-item label="原因分析">
+                        <a-select mode="multiple" placeholder="请选择原因">
+                            <a-select-option value="1">供应商制程不稳定</a-select-option>
+                            <a-select-option value="2">来料防护不足</a-select-option>
+                            <a-select-option value="3">检验标准冲突</a-select-option>
+                        </a-select>
+                    </a-form-item>
+                    <a-form-item label="改善措施">
+                        <a-textarea placeholder="如: 约谈供应商、加严检验频率、修改SOP等" :rows="4" />
+                    </a-form-item>
+                </a-form>
+            </a-modal>
+        </div>
+
+        <!-- 需求11：QMS & WMS 对接 -->
+        <div class="section-card">
+            <h2>需求 11：IQC 与 WMS 深度联动穿透</h2>
+            <div class="system-bridge">
+                <div style="text-align: center;">
+                    <a-avatar :size="64" icon="database" style="background-color: #52c41a" />
+                    <div style="margin-top: 10px; font-weight: bold;">WMS 仓储系统</div>
+                </div>
+                <div style="flex: 1; margin: 0 40px; text-align: center;">
+                    <a-icon type="swap" style="font-size: 32px; color: #1890ff;" />
+                    <div style="color: #999; font-size: 12px;">实时接口通讯 (Restful API)</div>
+                </div>
+                <div style="text-align: center;">
+                    <a-avatar :size="64" icon="safety-certificate" style="background-color: #1890ff" />
+                    <div style="margin-top: 10px; font-weight: bold;">QMS 质量系统</div>
+                </div>
+            </div>
+
+            <a-table :columns="wmsColumns" :data-source="wmsData" row-key="id" bordered>
+                <template slot="source" slot-scope="text">
+                    <span class="wms-badge">来自 WMS: {{text}}</span>
+                </template>
+                <template slot="result" slot-scope="text">
+                    <a-tag :color="text === '合格' ? 'green' : (text === '特采' ? 'orange' : 'red')">{{text}}</a-tag>
+                </template>
+                <template slot="wmsStatus" slot-scope="text, record">
+                    <a-steps size="small" :current="record.step" style="width: 300px;">
+                        <a-step title="到货单" />
+                        <a-step title="检验中" />
+                        <a-step :title="record.result === '合格' ? '上架完成' : '隔离完成'" />
+                    </a-steps>
+                </template>
+                <template slot="action" slot-scope="record">
+                    <a-button-group>
+                        <a-button size="small" @click="viewInventory(record)">库存透视</a-button>
+                        <a-button size="small" icon="link" @click="$message.success('已跳转至WMS对应库位图')">库位图</a-button>
+                    </a-button-group>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- WMS 库存穿透抽屉 -->
+        <a-drawer title="WMS 库存双向穿透视图" placement="right" :visible="drawerVisible" width="450px" @close="drawerVisible = false">
+            <a-descriptions title="物料当前库存分布" :column="1" bordered size="small">
+                <a-descriptions-item label="WMS 总量">15,000 pcs</a-descriptions-item>
+                <a-descriptions-item label="待检仓 (隔离区)">2,500 pcs</a-descriptions-item>
+                <a-descriptions-item label="可用仓 (A区)">12,000 pcs</a-descriptions-item>
+                <a-descriptions-item label="不合格区 (锁定)">500 pcs</a-descriptions-item>
+            </a-descriptions>
+            <a-divider>入库单溯源</a-divider>
+            <a-list item-layout="horizontal" :data-source="wmsHistory">
+                <a-list-item slot="renderItem" slot-scope="item">
+                    <a-list-item-meta :description="'入库日期: ' + item.date">
+                        <span slot="title">库位: {{item.loc}} | 数量: {{item.qty}}</span>
+                    </a-list-item-meta>
+                    <a-tag color="blue">点击查看检验报告</a-tag>
+                </a-list-item>
+            </a-list>
+        </a-drawer>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求9数据
+                    spcColumns: [
+                        { title: '测量序号', dataIndex: 'no', width: 80 },
+                        { title: '实测数据 (mm)', dataIndex: 'val' },
+                        { title: '偏差 (mm)', dataIndex: 'dev' },
+                        { title: '状态判定', key: 'status', scopedSlots: { customRender: 'status' } }
+                    ],
+                    spcData: [
+                        { id: 1, no: '01', val: '50.042', dev: '+0.042', isNearLimit: true },
+                        { id: 2, no: '02', val: '50.012', dev: '+0.012', isNearLimit: false },
+                        { id: 3, no: '03', val: '49.965', dev: '-0.035', isNearLimit: true },
+                        { id: 4, no: '04', val: '50.005', dev: '+0.005', isNearLimit: false },
+                        { id: 5, no: '05', val: '50.008', dev: '+0.008', isNearLimit: false }
+                    ],
+                    // 需求10数据
+                    improveVisible: false,
+                    monthReportColumns: [
+                        { title: '物料编码/名称', dataIndex: 'material' },
+                        { title: '总批次', dataIndex: 'total' },
+                        { title: '合格率', dataIndex: 'passRate' },
+                        { title: '不良率 (%)', dataIndex: 'defectRate', scopedSlots: { customRender: 'defectRate' } },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    monthReportData: [
+                        { id: 1, material: 'RES-01 电阻器', total: 120, passRate: '98.5%', defectRate: '1.50' },
+                        { id: 2, material: 'LCM-02 液晶模组', total: 45, passRate: '99.8%', defectRate: '0.20' },
+                        { id: 3, material: 'FPC-05 软板', total: 88, passRate: '98.8%', defectRate: '1.20' }
+                    ],
+                    // 需求11数据
+                    drawerVisible: false,
+                    wmsColumns: [
+                        { title: 'WMS入库单号', dataIndex: 'source', scopedSlots: { customRender: 'source' } },
+                        { title: '物料/批次', dataIndex: 'material' },
+                        { title: 'QMS 结果', dataIndex: 'result', scopedSlots: { customRender: 'result' } },
+                        { title: 'WMS 业务联动状态', key: 'wmsStatus', scopedSlots: { customRender: 'wmsStatus' }, width: 350 },
+                        { title: '跨系统操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    wmsData: [
+                        { id: 1, source: 'WMS-20250124-001', material: '芯片-BAT001', result: '合格', step: 2 },
+                        { id: 2, source: 'WMS-20250124-002', material: '外壳-BAT005', result: '不合格', step: 2 }
+                    ],
+                    wmsHistory: [
+                        { loc: '隔离区-Z01', qty: '2,500', date: '2025-01-24' },
+                        { loc: 'A区-A12-05', qty: '5,000', date: '2025-01-22' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => { mermaid.init(undefined, '.mermaid'); });
+            },
+            methods: {
+                getSpcRowClass(record) {
+                    return record.isNearLimit ? 'warning-near-limit' : '';
+                },
+                handleImprove(record) {
+                    this.improveVisible = true;
+                },
+                viewInventory(record) {
+                    this.drawerVisible = true;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

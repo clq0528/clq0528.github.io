@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>质量异常自动化管控原型 - 需求 4, 5 & 6</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 450px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* 停线状态高亮样式 */
+        .line-stop-active { background: #fff1f0; border: 2px solid #f5222d; padding: 20px; border-radius: 8px; animation: blink 2s infinite; }
+        @keyframes blink { 0% { border-color: #f5222d; } 50% { border-color: transparent; } 100% { border-color: #f5222d; } }
+        
+        /* 预警等级色块 */
+        .badge-escalation { background: #722ed1; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+        
+        /* 监控数据流样式 */
+        .monitor-feed { background: #001529; color: #52c41a; padding: 10px; font-family: 'Courier New', Courier, monospace; font-size: 12px; border-radius: 4px; height: 120px; overflow-y: auto; }
+        
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>异常自动化预警与停线管控 - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef stopNode fill:#f5222d,stroke:#a8071a,color:#fff;
+                        classDef autoNode fill:#52c41a,stroke:#237804,color:#fff;
+
+                        Source[设备接口/检验数据 R5] --> Logic{自动匹配预警模板 R4}
+                        Logic -- "重大异常" --> Stop[触发停线逻辑 R4]
+                        Logic -- "通知责任人" --> Msg[企微/邮件/短信提醒 R6]
+                        
+                        Stop --> Lock[锁定工序/禁止产出报工]
+                        Lock --> Remedy[录入改善对策及审批]
+                        Remedy --> Release[审批通过/恢复生产]
+
+                        Msg --> Timer{处理超时? R6}
+                        Timer -- "> 2小时未闭环" --> Upgrade[触发预警升级/通知总监]
+                        
+                        Source --> DB[(统一异常数据库 R5)]
+                        DB --> Report[生成异常报表/核算返工工时 R5]
+
+                        class Source,Msg,Remedy,Report business;
+                        class Logic,Timer system;
+                        class Stop,Lock stopNode;
+                        class Upgrade,DB autoNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 4：预警与停线模板工作台 -->
+        <div class="section-card">
+            <h2>需求 4：异常预警与停线控制台</h2>
+            <a-row :gutter="24">
+                <a-col :span="16">
+                    <div style="margin-bottom: 15px; font-weight: bold;">[模板维护] 预警与停线联动规则</div>
+                    <a-table :columns="tplColumns" :data-source="tplData" bordered size="small" :pagination="false">
+                        <template slot="actions" slot-scope="text">
+                            <a-tag v-for="tag in text" :key="tag" color="blue" style="margin-bottom: 2px;">{{tag}}</a-tag>
+                        </template>
+                        <template slot="stopType" slot-scope="text">
+                            <a-tag v-if="text" color="red">{{text}}</a-tag>
+                            <span v-else>-</span>
+                        </template>
+                    </a-table>
+                </a-col>
+                <a-col :span="8">
+                    <!-- 停线模拟演示 -->
+                    <div :class="{'line-stop-active': isStopActive, 'section-card': !isStopActive}" style="min-height: 250px; border-top:none;">
+                        <div style="text-align: center;">
+                            <a-icon v-if="isStopActive" type="stop" style="font-size: 48px; color: #f5222d; margin-bottom: 15px;" />
+                            <a-icon v-else type="check-circle" theme="filled" style="font-size: 48px; color: #52c41a; margin-bottom: 15px;" />
+                            <h3>{{isStopActive ? 'L1线 已触发紧急停线' : '产线运行状态：正常'}}</h3>
+                            <p v-if="isStopActive" style="font-size: 13px;">触发原因：重大异常通知单 #ANOM-20260124-001<br/>锁定范围：[L1-组装工序] 禁止报工产出</p>
+                            <div style="margin-top: 20px;">
+                                <a-button v-if="isStopActive" type="primary" @click="showStopRemedy = true">录入处理措施并申请复线</a-button>
+                                <a-button v-else type="danger" @click="simulateStop">模拟触发重大停线</a-button>
+                            </div>
+                        </div>
+                    </div>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 5：多源数据对接与返工工时报表 -->
+        <div class="section-card">
+            <h2>需求 5：异常数据整合与返工报表中心</h2>
+            <a-row :gutter="24">
+                <a-col :span="8">
+                    <div style="margin-bottom: 10px; font-weight: bold;">实时设备监控流 (EIP 接口对接)</div>
+                    <div class="monitor-feed">
+                        [17:15:01] 正在轮询 L1-Reflow-01 温度参数...<br/>
+                        [17:15:22] <span style="color:#faad14">[WARN]</span> 温区3采样值: 265℃ (上限 260℃)<br/>
+                        [17:15:25] 数据已同步至 QMS 异常数据库...<br/>
+                        [17:15:30] 自动匹配规则 [重大温控异常]...<br/>
+                        [17:15:32] <span style="color:#f5222d">[ALARM]</span> 已发送短信预警至生产经理...
+                    </div>
+                </a-col>
+                <a-col :span="16">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="font-weight: bold;">综合异常信息报表 (含返工工时核算)</span>
+                        <a-button-group size="small">
+                            <a-button type="primary" icon="file-excel">导出当前报表</a-button>
+                            <a-button icon="printer">打印</a-button>
+                        </a-button-group>
+                    </div>
+                    <a-table :columns="reportColumns" :data-source="reportData" bordered size="small">
+                        <template slot="level" slot-scope="text">
+                            <a-tag :color="text === '重大' ? 'red' : (text === '重要' ? 'orange' : 'blue')">{{text}}</a-tag>
+                        </template>
+                        <template slot="hours" slot-scope="text">
+                            <b style="color: #1890ff;">{{text}} h</b>
+                        </template>
+                    </a-table>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 6：责任人提醒与自动升级监控 -->
+        <div class="section-card">
+            <h2>需求 6：责任人通知矩阵与提醒升级日志</h2>
+            <a-row :gutter="24">
+                <a-col :span="10">
+                    <div style="margin-bottom: 10px; font-weight: bold;">责任人配置矩阵</div>
+                    <a-descriptions bordered size="small" :column="1">
+                        <a-descriptions-item label="一般异常责任人">检验员 (企微)</a-descriptions-item>
+                        <a-descriptions-item label="重要异常责任人">品质主管 + 生产经理 (邮件+企微)</a-descriptions-item>
+                        <a-descriptions-item label="重大异常责任人">生产品质副总 (短信+电话+看板)</a-descriptions-item>
+                        <a-descriptions-item label="升级策略">逾期 2h 未闭环 ➔ 自动通知生产总监</a-descriptions-item>
+                    </a-descriptions>
+                </a-col>
+                <a-col :span="14">
+                    <div style="margin-bottom: 10px; font-weight: bold;">提醒与升级全程留痕日志</div>
+                    <a-table :columns="logColumns" :data-source="logData" bordered size="small" :pagination="false">
+                        <template slot="status" slot-scope="text">
+                            <span v-if="text === '已读'" style="color:#52c41a"><a-icon type="check" /> {{text}}</span>
+                            <span v-else style="color:#bfbfbf">{{text}}</span>
+                        </template>
+                        <template slot="escalation" slot-scope="text">
+                            <span v-if="text" class="badge-escalation">已触发升级通知</span>
+                        </template>
+                    </a-table>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 停线恢复申请弹窗 -->
+        <a-modal v-model="showStopRemedy" title="停线恢复申请 (重大异常处理)" @ok="confirmRelease">
+            <a-alert message="停线锁定中：必须录入改善措施并获准审批后方可恢复生产权限。" type="error" show-icon style="margin-bottom: 15px;" />
+            <a-form layout="vertical">
+                <a-form-item label="处理措施 (必填)" required>
+                    <a-textarea placeholder="例如：已更换故障温控传感器，经复测温区温度已降至255℃，符合工艺要求。" :rows="3" />
+                </a-form-item>
+                <a-form-item label="审批人 (生产总监/经理)">
+                    <a-select default-value="manager">
+                        <a-select-option value="manager">生产经理 - 李四 (在线)</a-select-option>
+                    </a-select>
+                </a-form-item>
+            </a-form>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    isStopActive: false,
+                    showStopRemedy: false,
+                    // 需求4数据
+                    tplColumns: [
+                        { title: '预警项', dataIndex: 'item' },
+                        { title: '判定标准', dataIndex: 'std' },
+                        { title: '异常等级', dataIndex: 'level' },
+                        { title: '通知方式', dataIndex: 'actions', scopedSlots: { customRender: 'actions' } },
+                        { title: '强制停线', dataIndex: 'stopType', scopedSlots: { customRender: 'stopType' } }
+                    ],
+                    tplData: [
+                        { item: '设备温控超标', std: '偏差 > 10%', level: '重大', actions: ['企微', '短信', '看板'], stopType: '单工序停线' },
+                        { item: '物料外观不良', std: '月发生 ≥ 5次', level: '重要', actions: ['邮件', '企微'], stopType: '' },
+                        { item: '测试良率异常', std: '不良率 ≥ 5%', level: '重大', actions: ['短信', '电话'], stopType: '产线全停' }
+                    ],
+                    // 需求5数据
+                    reportColumns: [
+                        { title: '涉及批次', dataIndex: 'batch' },
+                        { title: '异常等级', dataIndex: 'level', scopedSlots: { customRender: 'level' }, width: 80 },
+                        { title: '异常项目', dataIndex: 'item' },
+                        { title: '核算返工工时', dataIndex: 'hours', scopedSlots: { customRender: 'hours' } },
+                        { title: '处理结果', dataIndex: 'res' }
+                    ],
+                    reportData: [
+                        { batch: 'BAT202601', level: '重大', item: '贴片偏移', hours: '12.5', res: '全数返修完成' },
+                        { batch: 'BAT202605', level: '重要', item: '设备温度异常', hours: '2.0', res: '传感器调校' },
+                        { batch: 'BAT202609', level: '一般', item: '包装轻微压损', hours: '0.5', res: '更换外箱' }
+                    ],
+                    // 需求6数据
+                    logColumns: [
+                        { title: '接收人', dataIndex: 'receiver' },
+                        { title: '发送时间', dataIndex: 'time' },
+                        { title: '通道', dataIndex: 'channel' },
+                        { title: '状态', dataIndex: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '自动升级提醒', dataIndex: 'escalation', scopedSlots: { customRender: 'escalation' } }
+                    ],
+                    logData: [
+                        { receiver: '品质主管-王五', time: '14:00:05', channel: '企微+邮件', status: '已读', escalation: false },
+                        { receiver: '生产经理-李四', time: '14:00:10', channel: '短信', status: '已读', escalation: false },
+                        { receiver: '生产总监-赵六', time: '16:00:15', channel: '语音电话', status: '未读', escalation: true }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                simulateStop() {
+                    this.isStopActive = true;
+                    this.$notification.error({
+                        message: '系统强制停线通知',
+                        description: '监测到重大温控异常，已自动锁定 [L1-组装工序] 产出权限，并向经理发送短信预警。',
+                        duration: 0
+                    });
+                },
+                confirmRelease() {
+                    this.showStopRemedy = false;
+                    this.isStopActive = false;
+                    this.$notification.close('系统强制停线通知');
+                    this.$message.success('改善措施审批通过，产线报工权限已恢复。');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

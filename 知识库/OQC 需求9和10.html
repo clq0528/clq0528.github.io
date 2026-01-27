@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OQC 数字化交付原型 - 需求 9 & 10</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 400px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; position: relative; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* 发货报告预览样式 */
+        .report-paper { background: #fff; padding: 40px; border: 1px solid #d9d9d9; width: 100%; max-width: 800px; margin: 0 auto; min-height: 600px; box-shadow: 0 0 15px rgba(0,0,0,0.05); color: #333; position: relative; }
+        .report-logo { position: absolute; top: 20px; right: 40px; font-size: 24px; font-weight: bold; color: #001529; border: 2px solid #001529; padding: 5px 15px; }
+        .editable-field { border-bottom: 1px dashed #1890ff; cursor: pointer; color: #1890ff; padding: 0 5px; }
+        
+        /* 照片墙样式 */
+        .photo-card { border-radius: 4px; overflow: hidden; border: 1px solid #e8e8e8; transition: all 0.3s; margin-bottom: 16px; }
+        .photo-card:hover { transform: translateY(-5px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .photo-img { height: 160px; width: 100%; background: #e8e8e8; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .photo-info { padding: 10px; background: #fff; border-top: 1px solid #f0f0f0; }
+        
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求 9 流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>需求 9：发货报告自动生成及审批发送 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef autoNode fill:#52c41a,stroke:#237804,color:#fff;
+
+                        Start[匹配发货报告模板] --> Fetch[自动调取生产/良率记录]
+                        Fetch --> Edit[手动调整数据/录入理由 R9]
+                        Edit --> SalesApp[销售主管一审]
+                        SalesApp -- 驳回 --> Edit
+                        SalesApp -- 通过 --> QualApp[品质经理终审 R9]
+                        QualApp -- 通过 --> AutoSend[自动发送至客户/物流 R9]
+                        AutoSend --> Log[记录已读/发送时间戳]
+
+                        class Start,Fetch,Edit,SalesApp,QualApp business;
+                        class AutoSend,Log autoNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 9：数字化报告生成与审批 -->
+        <div class="section-card">
+            <h2>发货报告 (COA/COC) 数字化签发中心</h2>
+            <a-row :gutter="24">
+                <a-col :span="16">
+                    <div style="margin-bottom: 10px;">
+                        <a-alert message="预览模式：蓝色下划线字段支持手动修改，修改将触发合规性存证。" type="info" show-icon />
+                    </div>
+                    <!-- 模拟报告页面 -->
+                    <div class="report-paper">
+                        <div class="report-logo">MES-CORP</div>
+                        <h1 style="text-align: center; margin-top: 20px;">出货质量证明书 (COC)</h1>
+                        <p style="text-align: right;">报告编号：{{reportNo}}</p>
+                        
+                        <a-descriptions bordered size="small" :column="2" style="margin-top: 20px;">
+                            <a-descriptions-item label="客户名称">Apple Inc.</a-descriptions-item>
+                            <a-descriptions-item label="出货批次">BAT20250124-05</a-descriptions-item>
+                            <a-descriptions-item label="产品机种">智能控制器 V3.0</a-descriptions-item>
+                            <a-descriptions-item label="发货数量"><span class="editable-field" @click="editField('qty')">5,000 PCS</span></a-descriptions-item>
+                        </a-descriptions>
+
+                        <div style="margin-top: 20px;">
+                            <h3>质量数据概览 (系统自动调取)</h3>
+                            <a-table :columns="reportTableCols" :data-source="reportTableData" size="small" :pagination="false" bordered></a-table>
+                        </div>
+
+                        <div style="margin-top: 30px;">
+                            <p>结论：经 OQC 抽检及 FQC 全检，本批次产品符合交付标准，准予出货。</p>
+                        </div>
+
+                        <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+                            <div>
+                                <p>销售审批：<a-tag v-if="approved" color="green">已核准</a-tag><span v-else style="color:#999">待签章</span></p>
+                                <p style="font-size:12px;color:#999">2025-01-24 15:30</p>
+                            </div>
+                            <div>
+                                <p>品质经理审批：<a-tag v-if="managerApproved" color="green">已核准</a-tag><span v-else style="color:#999">待签章</span></p>
+                                <p style="font-size:12px;color:#999">电子签章 ID: QC-88219</p>
+                            </div>
+                        </div>
+                    </div>
+                </a-col>
+                <a-col :span="8">
+                    <a-card title="审批及分发工作流" size="small">
+                        <a-steps direction="vertical" size="small" :current="approveStep">
+                            <a-step title="报告生成" description="系统自动汇编生产数据" />
+                            <a-step title="销售主管核准">
+                                <span slot="description" v-if="approveStep === 1">
+                                    <a-button type="primary" size="small" @click="approveStep = 2; approved = true">核准</a-button>
+                                </span>
+                            </a-step>
+                            <a-step title="品质经理签章">
+                                <span slot="description" v-if="approveStep === 2">
+                                    <a-button type="primary" size="small" @click="approveStep = 3; managerApproved = true">签发报告</a-button>
+                                </span>
+                            </a-step>
+                            <a-step title="自动分发客户" description="接收人: quality@apple.com" />
+                        </a-steps>
+                        <a-divider />
+                        <div v-if="approveStep === 3">
+                            <a-button type="primary" block icon="mail">手动重新发送报告</a-button>
+                            <a-button block style="margin-top: 10px;" icon="history">查看修改留痕记录</a-button>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 10 流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>需求 10：出厂照片分类存储及查询 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef cloud fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        In[现场拍照拍照] --> Upload[分类上传 R10]
+                        Upload --> Bind[自动关联批次/工单号]
+                        Bind --> Cloud[云服务器分类存储 R10]
+                        Cloud --> Search[多维条件检索 R10]
+                        Search --> Preview[在线预览/下载 R10]
+                        Cloud -. 定时任务 .-> Backup[异地灾备]
+
+                        class In,Upload,Bind,Search,Preview business;
+                        class Cloud,Backup cloud;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 10：出厂影像存档管理 -->
+        <div class="section-card">
+            <h2>出厂影像资料管理中心 (视觉存证)</h2>
+            <div style="background: #fafafa; padding: 20px; border-radius: 4px; margin-bottom: 20px;">
+                <a-form layout="inline">
+                    <a-form-item label="关联信息">
+                        <a-input v-model="searchKey" placeholder="工单号/批次号" style="width: 250px" />
+                    </a-form-item>
+                    <a-form-item label="照片分类">
+                        <a-select default-value="all" style="width: 150px">
+                            <a-select-option value="all">全部分类</a-select-option>
+                            <a-select-option value="外观">外观检验照片</a-select-option>
+                            <a-select-option value="包装">包装完成照片</a-select-option>
+                            <a-select-option value="装载">出货装载照片</a-select-option>
+                        </a-select>
+                    </a-form-item>
+                    <a-button type="primary" icon="search" @click="handleSearch">检索</a-button>
+                    <a-button style="margin-left: 8px;" type="dashed" icon="cloud-upload" @click="showUpload = true">上传照片</a-button>
+                </a-form>
+            </div>
+
+            <a-row :gutter="16">
+                <a-col :span="6" v-for="img in imageList" :key="img.id">
+                    <div class="photo-card">
+                        <div class="photo-img">
+                            <a-icon type="picture" style="font-size: 40px; color: #bfbfbf;" />
+                            <!-- 实际场景此处为 img 标签 -->
+                            <div style="position: absolute; color: #fff; background: rgba(0,0,0,0.5); bottom: 0; width: 100%; text-align: center; font-size: 10px;">
+                                点击预览大图
+                            </div>
+                        </div>
+                        <div class="photo-info">
+                            <div style="font-weight: bold; font-size: 13px;">{{img.type}}</div>
+                            <div style="font-size: 11px; color: #8c8c8c;">关联批次：{{img.batch}}</div>
+                            <div style="font-size: 11px; color: #8c8c8c; margin-top: 5px;">
+                                <a-icon type="user" /> {{img.user}} | {{img.time}}
+                            </div>
+                            <a-divider style="margin: 8px 0;" />
+                            <a-button type="link" size="small" icon="download">下载照片</a-button>
+                        </div>
+                    </div>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 修改理由弹窗 (R9) -->
+        <a-modal v-model="showEditModal" title="合规性修改存证" @ok="saveField">
+            <a-form layout="vertical">
+                <a-form-item label="当前值" extra="原始数据自动调取自生产记录">
+                    <a-input v-model="originalVal" disabled />
+                </a-form-item>
+                <a-form-item label="修改为" required>
+                    <a-input v-model="newVal" />
+                </a-form-item>
+                <a-form-item label="修改理由" required>
+                    <a-textarea v-model="editReason" placeholder="必须录入修改理由（如：根据物流实际称重校正）" />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+
+        <!-- 上传照片弹窗 (R10) -->
+        <a-modal v-model="showUpload" title="出厂存证照片上传" @ok="showUpload = false">
+            <a-form layout="vertical">
+                <a-form-item label="照片分类" required>
+                    <a-radio-group button-style="solid">
+                        <a-radio-button value="1">外观检验</a-radio-button>
+                        <a-radio-button value="2">包装完成</a-radio-button>
+                        <a-radio-button value="3">出货装载</a-radio-button>
+                    </a-radio-group>
+                </a-form-item>
+                <a-form-item label="关联工单/批次" required>
+                    <a-input value="MO-882193 / BAT250124-05" disabled />
+                </a-form-item>
+                <a-upload-dragger name="file" action="#">
+                    <p class="ant-upload-drag-icon"><a-icon type="inbox" /></p>
+                    <p class="ant-upload-text">点击或拖拽文件到此区域上传</p>
+                    <p class="ant-upload-hint">支持批量上传，照片将自动存储至云服务器备份。</p>
+                </a-upload-dragger>
+                <a-form-item label="备注说明" style="margin-top: 15px;">
+                    <a-input placeholder="如：包装检验合格 - 20250124" />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求 9 数据
+                    reportNo: 'COC-20250124-001',
+                    approveStep: 1,
+                    approved: false,
+                    managerApproved: false,
+                    showEditModal: false,
+                    originalVal: '4,980 PCS',
+                    newVal: '5,000 PCS',
+                    editReason: '',
+                    reportTableCols: [
+                        { title: '检验项目', dataIndex: 'item' },
+                        { title: '测试标准', dataIndex: 'std' },
+                        { title: '实测良率', dataIndex: 'yield' },
+                        { title: '返工次数', dataIndex: 'rework' },
+                        { title: '判定', dataIndex: 'res' }
+                    ],
+                    reportTableData: [
+                        { id: 1, item: '关键性能测试', std: '99.5%合格', yield: '99.8%', rework: '0', res: 'PASS' },
+                        { id: 2, item: '外观完整度', std: 'AQL 0.4', yield: '100%', rework: '1', res: 'PASS' }
+                    ],
+                    
+                    // 需求 10 数据
+                    searchKey: 'BAT20250124-05',
+                    showUpload: false,
+                    imageList: [
+                        { id: 1, type: '外观检验照片', batch: 'BAT20250124-05', user: '张三', time: '2025-01-24 10:00' },
+                        { id: 2, type: '包装完成照片', batch: 'BAT20250124-05', user: '李四', time: '2025-01-24 14:00' },
+                        { id: 3, type: '出货装载照片', batch: 'BAT20250124-05', user: '王五', time: '2025-01-24 16:30' },
+                        { id: 4, type: '标签及封条特写', batch: 'BAT20250124-05', user: '王五', time: '2025-01-24 16:35' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                editField(type) {
+                    this.showEditModal = true;
+                },
+                saveField() {
+                    this.showEditModal = false;
+                    this.$message.success('合规性变更已生效，修改日志已关联至报告。');
+                },
+                handleSearch() {
+                    this.$message.loading('正在云服务器检索影像资料...', 1);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

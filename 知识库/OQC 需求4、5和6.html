@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OQC 数字化追溯与分析原型 - 需求 4, 5 & 6</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 380px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* 统计驾驶舱样式 */
+        .qc-dashboard-stat { background: #001529; color: #fff; padding: 20px; border-radius: 4px; text-align: center; }
+        .qc-dashboard-stat .value { font-size: 28px; font-weight: bold; color: #1890ff; }
+        .qc-dashboard-stat .label { font-size: 13px; margin-top: 4px; opacity: 0.8; }
+
+        /* 模拟图表 */
+        .chart-placeholder { width: 100%; height: 260px; background: #fff; border: 1px dashed #d9d9d9; display: flex; align-items: flex-end; justify-content: space-around; padding: 30px 10px 10px 10px; position: relative; }
+        .bar-item { background: #003a8c; width: 25px; border-radius: 2px 2px 0 0; position: relative; transition: height 0.3s; }
+        .bar-item:hover { background: #1890ff; }
+        .bar-text { position: absolute; top: -20px; width: 100%; text-align: center; font-size: 10px; color: #666; }
+        
+        /* 追溯档案样式 */
+        .trace-timeline-card { background: #f9f9f9; padding: 16px; border-radius: 4px; margin-bottom: 12px; border: 1px solid #e8e8e8; }
+        .trace-tag { margin-bottom: 4px; display: inline-block; }
+        .data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 12px; }
+        .data-item { color: #595959; }
+        .data-label { color: #8c8c8c; margin-right: 5px; }
+
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求 4 & 5 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>需求 4 & 5：OQC 记录报表与制程质量分析 (IPQC) - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef report fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        Data[OQC 记录多维检索] --> Report[报表汇总导出 R4]
+                        Data --> IPQC[整合 PQC/FQC 数据 R4]
+                        IPQC --> PDF[导出 IPQC 分析报告 PDF]
+                        Data --> Stats[不良率/返工工时统计 R5]
+                        Stats --> Pareto[失效原因帕累托图 R5]
+                        Stats --> SPC[SPC 控制图/趋势分析 R5]
+                        Pareto & SPC --> Visual[视觉化汇报材料导出 PNG]
+
+                        class Data,Report,IPQC,PDF,Stats,Pareto,SPC,Visual business;
+                        class PDF,Visual report;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 4 & 5：质量大数据分析中心 -->
+        <div class="section-card">
+            <h2>OQC 质量数据驾驶舱 & IPQC 分析中心</h2>
+            <a-row :gutter="16" style="margin-bottom: 24px;">
+                <a-col :span="6">
+                    <div class="qc-dashboard-stat">
+                        <div class="value">0.42%</div>
+                        <div class="label">OQC 出货不良率</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="qc-dashboard-stat">
+                        <div class="value">98.9%</div>
+                        <div class="label">IPQC 综合合格率</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="qc-dashboard-stat">
+                        <div class="value">158h</div>
+                        <div class="label">月度累计返工总工时</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="qc-dashboard-stat">
+                        <div class="value">99.98%</div>
+                        <div class="label">客户质量达标率</div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <a-tabs default-active-key="1">
+                <a-tab-pane key="1" tab="不良项帕累托分析 (Pareto)">
+                    <div style="background: #fafafa; padding: 20px; border-radius: 4px;">
+                        <a-row :gutter="24">
+                            <a-col :span="16">
+                                <div class="chart-placeholder">
+                                    <div class="bar-item" style="height: 180px;"><span class="bar-text">外观划伤</span></div>
+                                    <div class="bar-item" style="height: 120px;"><span class="bar-text">按键失灵</span></div>
+                                    <div class="bar-item" style="height: 60px;"><span class="bar-text">丝印模糊</span></div>
+                                    <div class="bar-item" style="height: 40px;"><span class="bar-text">包装破损</span></div>
+                                    <div class="bar-item" style="height: 20px;"><span class="bar-text">其他</span></div>
+                                    <svg style="position:absolute; width:100%; height:100%; top:0; left:0;">
+                                        <polyline points="40,80 140,140 240,200 340,220 440,240" fill="none" stroke="#ff4d4f" stroke-width="2" />
+                                    </svg>
+                                </div>
+                            </a-col>
+                            <a-col :span="8">
+                                <a-card size="small" title="分析结论">
+                                    <p style="font-size: 12px; color: #666;">前三项不良占据总数的 82%，需针对“外观划伤”进行 IPQC 制程重点整改。</p>
+                                    <a-button type="primary" block icon="file-pdf">导出制程质量证明文件 (PDF)</a-button>
+                                </a-card>
+                            </a-col>
+                        </a-row>
+                    </div>
+                </a-tab-pane>
+                <a-tab-pane key="2" tab="SPC 控制与趋势图">
+                    <div class="chart-placeholder">
+                        <svg width="100%" height="100%">
+                            <line x1="5%" y1="20%" x2="95%" y2="20%" stroke="#ff4d4f" stroke-dasharray="5,5" />
+                            <line x1="5%" y1="50%" x2="95%" y2="50%" stroke="#52c41a" />
+                            <line x1="5%" y1="80%" x2="95%" y2="80%" stroke="#ff4d4f" stroke-dasharray="5,5" />
+                            <polyline points="100,100 200,120 300,90 400,150 500,130 600,110 700,140" fill="none" stroke="#1890ff" stroke-width="2" />
+                        </svg>
+                        <div style="position:absolute; bottom:10px; right:10px;">
+                            <a-button size="small" icon="picture">导出 PNG 素材</a-button>
+                        </div>
+                    </div>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+
+        <!-- 需求 6 流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>需求 6：产品全流程数字化档案查询 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef search fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        Scan[输入产品 ID/条码] --> Engine[追溯引擎检索]
+                        Engine --> Mat[1.原材料批次/供应商]
+                        Engine --> Op[2.人员工号/加工机台]
+                        Engine --> Test[3.各工序测试记录汇总]
+                        Engine --> Fix[4.维修历史/项]
+                        Engine --> Ship[5.出货日期/物流方式]
+                        Mat & Op & Test & Fix & Ship --> Doc[自动生成产品全流程档案 PDF]
+
+                        class Scan search;
+                        class Engine,Mat,Op,Test,Fix,Ship,Doc business;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 6：产品数字化档案中心 -->
+        <div class="section-card">
+            <h2>产品全生命周期档案中心 (Traceability Tower)</h2>
+            <div style="margin-bottom: 24px; text-align: center;">
+                <a-input-search
+                    placeholder="输入产品序列号 (SN) 或 批次号"
+                    enter-button="调阅全流程档案"
+                    size="large"
+                    v-model="traceId"
+                    @search="onTrace"
+                    style="width: 500px"
+                />
+            </div>
+
+            <div v-if="hasTraceData">
+                <div style="text-align: right; margin-bottom: 15px;">
+                    <a-button type="primary" icon="file-pdf">下载完整溯源档案 (PDF)</a-button>
+                </div>
+                
+                <a-timeline>
+                    <!-- 原材料 -->
+                    <a-timeline-item color="blue">
+                        <a-icon slot="dot" type="deployment-unit" style="font-size: 16px" />
+                        <div class="trace-timeline-card">
+                            <a-tag color="blue" class="trace-tag">原材料阶段</a-tag>
+                            <div class="data-grid">
+                                <div class="data-item"><span class="data-label">主板供应商:</span>厦门松霖科技</div>
+                                <div class="data-item"><span class="data-label">进料批次:</span>IQC-20251101-01</div>
+                                <div class="data-item"><span class="data-label">检验结果:</span>合格</div>
+                            </div>
+                        </div>
+                    </a-timeline-item>
+                    
+                    <!-- 生产过程 -->
+                    <a-timeline-item color="green">
+                        <a-icon slot="dot" type="setting" style="font-size: 16px" />
+                        <div class="trace-timeline-card">
+                            <a-tag color="green" class="trace-tag">生产制造阶段</a-tag>
+                            <div class="data-grid">
+                                <div class="data-item"><span class="data-label">产线人员:</span>张三 (ID:9527)</div>
+                                <div class="data-item"><span class="data-label">加工机台:</span>CNC-A02</div>
+                                <div class="data-item"><span class="data-label">完成时间:</span>2025-11-24 10:30</div>
+                            </div>
+                        </div>
+                    </a-timeline-item>
+
+                    <!-- 测试记录 -->
+                    <a-timeline-item color="purple">
+                        <a-icon slot="dot" type="check-square" style="font-size: 16px" />
+                        <div class="trace-timeline-card">
+                            <a-tag color="purple" class="trace-tag">质量检验阶段 (PQC/FQC/OQC)</a-tag>
+                            <a-table :columns="traceColumns" :data-source="traceTestRecords" size="small" :pagination="false" bordered></a-table>
+                        </div>
+                    </a-timeline-item>
+
+                    <!-- 维修记录 -->
+                    <a-timeline-item color="orange">
+                        <a-icon slot="dot" type="tool" style="font-size: 16px" />
+                        <div class="trace-timeline-card">
+                            <a-tag color="orange" class="trace-tag">异常维修阶段</a-tag>
+                            <div class="data-item"><span class="data-label">维修项:</span>焊点补焊</div>
+                            <div class="data-item"><span class="data-label">维修时间:</span>2025-11-24 14:00</div>
+                        </div>
+                    </a-timeline-item>
+
+                    <!-- 出货 -->
+                    <a-timeline-item color="red">
+                        <a-icon slot="dot" type="car" style="font-size: 16px" />
+                        <div class="trace-timeline-card" style="border-left: 4px solid #f5222d;">
+                            <a-tag color="red" class="trace-tag">成品出货阶段</a-tag>
+                            <div class="data-grid">
+                                <div class="data-item"><span class="data-label">出货日期:</span>2025-01-24</div>
+                                <div class="data-item"><span class="data-label">客户名称:</span>Apple Inc.</div>
+                                <div class="data-item"><span class="data-label">物流方式:</span>顺丰航空</div>
+                            </div>
+                        </div>
+                    </a-timeline-item>
+                </a-timeline>
+            </div>
+            
+            <a-empty v-else description="请输入产品 ID 以调阅数字化溯源档案"></a-empty>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    traceId: '',
+                    hasTraceData: false,
+                    traceColumns: [
+                        { title: '检验阶段', dataIndex: 'stage' },
+                        { title: '测试项', dataIndex: 'item' },
+                        { title: '实测数据', dataIndex: 'value' },
+                        { title: '结果', dataIndex: 'res' }
+                    ],
+                    traceTestRecords: [
+                        { stage: 'PQC 过程', item: '扭力测试', value: '1.2Nm', res: 'PASS' },
+                        { stage: 'FQC 终检', item: '导通性能', value: 'OK', res: 'PASS' },
+                        { stage: 'OQC 出货', item: '外观/包装', value: 'OK', res: 'PASS' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                onTrace() {
+                    if(!this.traceId) return;
+                    this.$message.loading('正在从 MES/WMS/QMS 检索全流程数据...', 1.5).then(() => {
+                        this.hasTraceData = true;
+                        this.$notification.success({
+                            message: '检索成功',
+                            description: `产品 SN: ${this.traceId} 的档案已由 5 个业务系统实时汇编完成。`
+                        });
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

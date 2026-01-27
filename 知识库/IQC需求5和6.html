@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 业务原型 - 需求 5 & 6</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+        }
+        .chart-container { 
+            width: 100%; 
+            height: 450px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            position: relative; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 4px solid #1890ff; 
+            padding-left: 10px; 
+            margin-bottom: 20px; 
+            color: #1890ff;
+        }
+        .mermaid { 
+            display: flex; 
+            justify-content: center; 
+        }
+        /* 凭证打印样式预览 */
+        .voucher-preview {
+            border: 2px solid #333;
+            padding: 20px;
+            background: #fff;
+            color: #000;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .voucher-header {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 2px solid #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+        }
+        .voucher-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        /* 状态标记 */
+        .overdue-tag {
+            color: #f5222d;
+            background: #fff1f0;
+            border: 1px solid #ffa39e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 需求5流程图 -->
+        <div class="section-card">
+            <h2>需求5：自动生成检验清单和凭证单据 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        A[物料/到货信息] --> B[关联物料主数据/检验方案]
+                        B --> C[自动生成个性化检验清单]
+                        C --> D1[下发至移动端: 指导人工检验]
+                        C --> D2[EIP 接口下发: 自动设备检测]
+                        D1 & D2 --> E[记录检验原始数据]
+                        E --> F[自动判定并生成检验凭证]
+                        F --> G[同步存储 batchNo/检验员/日期]
+
+                        class A,D1,D2,E,F,G business;
+                        class B,C system;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求6流程图 -->
+        <div class="section-card">
+            <h2>需求6：超期物料复检及看板查询 - 流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[扫描有效期数据] --> B[识别超期批次]
+                        B --> C[生成复检看板任务-待复检]
+                        C --> D[批量打印复检单]
+                        D --> E[执行复检]
+                        E --> F{判定合格?}
+                        F -- 是 --> G[更新有效期]
+                        F -- 否 --> H[库存锁定/报废]
+                        G --> I[看板状态更新为已复检]
+
+                        class A,C,D,E,G,I business;
+                        class B,F system;
+                        class H alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求5原型：检验清单与凭证 -->
+        <div class="section-card">
+            <h2>需求 5：自动生成检验清单与凭证单据</h2>
+            <a-tabs default-active-key="1">
+                <a-tab-pane key="1" tab="个性化检验清单 (执行指导)">
+                    <div style="margin-bottom: 16px;">
+                        <a-button type="primary" icon="printer">打印清单</a-button>
+                        <a-button icon="api" style="margin-left: 8px;">发送至自动测量设备</a-button>
+                    </div>
+                    <a-table :columns="checklistColumns" :data-source="checklistData" row-key="id" bordered size="small" :pagination="false">
+                        <template slot="method" slot-scope="text">
+                            <a-tag color="cyan">{{text}}</a-tag>
+                        </template>
+                    </a-table>
+                </a-tab-pane>
+                <a-tab-pane key="2" tab="检验凭证预览 (打印版)">
+                    <div class="voucher-preview">
+                        <div class="voucher-header">物料进货检验凭证 (IQC VOUCHER)</div>
+                        <div class="voucher-row">
+                            <span>批次号: BAT-20250124-001</span>
+                            <span>日期: 2025-01-24</span>
+                        </div>
+                        <div class="voucher-row">
+                            <span>物料: 电容触摸屏 2.7寸</span>
+                            <span>供应商: 厦门松霖科技</span>
+                        </div>
+                        <a-divider style="margin: 10px 0; border-color: #333;"></a-divider>
+                        <table style="width: 100%; border-collapse: collapse;" border="1">
+                            <tr style="text-align: center;">
+                                <th>检验项目</th>
+                                <th>抽样数</th>
+                                <th>合格数</th>
+                                <th>判定</th>
+                            </tr>
+                            <tr v-for="item in checklistData" :key="item.id" style="text-align: center;">
+                                <td>{{item.project}}</td>
+                                <td>{{item.sample}}</td>
+                                <td>{{item.sample}}</td>
+                                <td>OK</td>
+                            </tr>
+                        </table>
+                        <div class="voucher-row" style="margin-top: 20px;">
+                            <span>检验员: 张三</span>
+                            <span>审核人: 李四</span>
+                            <span style="font-weight: bold; border: 2px solid #f5222d; padding: 5px; color: #f5222d;">检验合格章</span>
+                        </div>
+                    </div>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+
+        <!-- 需求6原型：超期物料复检看板 -->
+        <div class="section-card">
+            <h2>需求 6：超期物料复检看板</h2>
+            <div style="background: #fafafa; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                <a-row :gutter="16">
+                    <a-col :span="6">
+                        <a-select placeholder="选择仓库" style="width: 100%" v-model="filter.wh">
+                            <a-select-option value="A">电子原材仓</a-select-option>
+                            <a-select-option value="B">成品总仓</a-select-option>
+                        </a-select>
+                    </a-col>
+                    <a-col :span="6">
+                        <a-input placeholder="物料编码/批次号" v-model="filter.keyword" />
+                    </a-col>
+                    <a-col :span="12">
+                        <a-button type="primary" @click="searchRecheck">查询</a-button>
+                        <a-button type="danger" icon="plus-circle" style="margin-left: 8px;" @click="batchCreateRecheck">批量生成复检单</a-button>
+                        <a-button icon="printer" style="margin-left: 8px;">打印复检单</a-button>
+                    </a-col>
+                </a-row>
+            </div>
+
+            <a-table :columns="recheckColumns" :data-source="recheckData" row-key="id" bordered>
+                <template slot="overdue" slot-scope="text">
+                    <span class="overdue-tag">已超期 {{text}} 天</span>
+                </template>
+                <template slot="status" slot-scope="text">
+                    <a-badge :status="text === '待复检' ? 'error' : 'success'" :text="text" />
+                </template>
+                <template slot="action" slot-scope="record">
+                    <a-button type="link" size="small" v-if="record.status === '待复检'">去检验</a-button>
+                    <a-button type="link" size="small" v-else>查看结果</a-button>
+                </template>
+            </a-table>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求5数据
+                    checklistColumns: [
+                        { title: '项目', dataIndex: 'project', key: 'project' },
+                        { title: '检验内容/标准', dataIndex: 'standard', key: 'standard' },
+                        { title: '抽样方案', dataIndex: 'sample', key: 'sample' },
+                        { title: '测量方式', dataIndex: 'method', key: 'method', scopedSlots: { customRender: 'method' } }
+                    ],
+                    checklistData: [
+                        { id: 1, project: '表面质量', standard: '表面无脏污、无刮伤', sample: '50pcs', method: '人工视觉' },
+                        { id: 2, project: '长度/宽度', standard: '120mm ± 0.02', sample: '5pcs', method: '全自动二次元' },
+                        { id: 3, project: '阻值测试', standard: '10kΩ ± 5%', sample: '10pcs', method: '万用表接口' }
+                    ],
+                    // 需求6数据
+                    filter: { wh: undefined, keyword: '' },
+                    recheckColumns: [
+                        { title: '仓库/库位', dataIndex: 'location', key: 'location' },
+                        { title: '物料编码', dataIndex: 'code', key: 'code' },
+                        { title: '批次号', dataIndex: 'batch', key: 'batch' },
+                        { title: '有效期至', dataIndex: 'expiry', key: 'expiry' },
+                        { title: '状态', dataIndex: 'overdue', key: 'overdue', scopedSlots: { customRender: 'overdue' } },
+                        { title: '业务状态', dataIndex: 'status', key: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    recheckData: [
+                        { id: 1, location: '原材仓-A12', code: 'RES-001', batch: 'BAT2401', expiry: '2025-01-20', overdue: '4', status: '待复检' },
+                        { id: 2, location: '原材仓-B05', code: 'CAP-102', batch: 'BAT2405', expiry: '2025-01-15', overdue: '9', status: '待复检' },
+                        { id: 3, location: '成品仓-C01', code: 'LCM-202', batch: 'BAT2312', expiry: '2025-01-23', overdue: '1', status: '已复检' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                searchRecheck() {
+                    this.$message.success('已筛选复检数据');
+                },
+                batchCreateRecheck() {
+                    this.$confirm({
+                        title: '确认生成复检单',
+                        content: '系统将为勾选的 2 个超期批次生成 IQC 复检工单，是否继续？',
+                        onOk: () => {
+                            this.$message.success('复检单创建成功，已下发至检验端');
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

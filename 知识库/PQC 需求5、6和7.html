@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PQC 业务原型 - 需求 5 & 6 & 7</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f4f7f9; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-top: 4px solid #1890ff; }
+        .chart-container { width: 100%; min-height: 350px; border: 1px solid #e8e8e8; border-radius: 8px; background: #fafafa; overflow: auto; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: 600; }
+        
+        /* 移动端模拟器样式 */
+        .mobile-emulator { width: 375px; height: 700px; border: 12px solid #333; border-radius: 40px; margin: 0 auto; overflow: hidden; background: #fff; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .mobile-header { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: #fff; padding: 40px 15px 15px 15px; text-align: center; font-weight: bold; font-size: 16px; }
+        .mobile-body { height: calc(700px - 85px); overflow-y: auto; padding: 15px; background: #f0f2f5; }
+
+        /* 看板/卡片样式 */
+        .metric-card { background: #fff; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #1890ff; }
+        .yield-warning { border-left-color: #f5222d; background: #fff1f0; animation: flash 2s infinite; }
+        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+        /* 点检锁定样式 */
+        .lock-overlay { position: absolute; top: 85px; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.92); z-index: 99; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+        .fishbone-mock { background: #fafafa; padding: 20px; border: 1px dashed #ccc; border-radius: 8px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 横向业务流程图 -->
+        <div class="section-card">
+            <h2>PQC 高级管控流程 (需求 5, 6, 7) - 业务流程图</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef system fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+                        classDef alertNode fill:#ff4d4f,stroke:#a8071a,color:#fff;
+
+                        A[工单+机种匹配] --> B[自动带出抽检模板 R5]
+                        B --> C[实时良率抓取监控]
+                        C --> D{良率达标?}
+                        D -- 否 --> E[邮件推送/异常警告 R6]
+                        E --> F[分析/改善措施 R6]
+                        F --> G[知识库归档留存]
+                        D -- 是 --> H[产线正常生产]
+                        
+                        I[定时任务节点] --> J[点检提醒推送 R7]
+                        J --> K{按时点检?}
+                        K -- 否 --> L[锁定工序/禁止产出 R7]
+                        K -- 是 --> M[自动解锁/恢复生产 R7]
+                        L -- 录入合格结果 --> M
+
+                        class A,F,G,H,M business;
+                        class B,C,I,J system;
+                        class D,E,K,L alertNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 5 & 6：抽检管理与良率联动预警 -->
+        <div class="section-card">
+            <h2>需求 5 & 6：抽检计划标准化与良率异常监控 PDCA</h2>
+            <a-row :gutter="24">
+                <!-- 左侧：抽检模板展示 -->
+                <a-col :span="10">
+                    <div style="margin-bottom: 15px; font-weight: bold;">[R5] 自动带出的抽检计划模板</div>
+                    <a-card size="small" :title="'当前机种: ' + activeModel" icon="profile">
+                        <a-descriptions :column="1" size="small" bordered>
+                            <a-descriptions-item label="抽样方案">单次抽样 (GB/T 2828.1)</a-descriptions-item>
+                            <a-descriptions-item label="AQL 接收标准">致命:0 / 严重:0.4 / 轻微:1.0</a-descriptions-item>
+                            <a-descriptions-item label="版本号">V2.3 (审批人: 品质经理)</a-descriptions-item>
+                        </a-descriptions>
+                        <a-table :columns="templateColumns" :data-source="templateData" size="small" :pagination="false" style="margin-top: 10px;"></a-table>
+                    </a-card>
+                </a-col>
+
+                <!-- 右侧：良率监控与异常处理 -->
+                <a-col :span="14">
+                    <div style="margin-bottom: 15px; font-weight: bold;">[R6] 实时良率预警与改善跟踪</div>
+                    <div :class="['metric-card', realTimeYield < targetYield ? 'yield-warning' : '']">
+                        <a-row type="flex" align="middle">
+                            <a-col :span="16">
+                                <div style="font-size: 14px; color: #666;">量产阶段目标良率: {{targetYield}}%</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #f5222d;">当前实时良率: {{realTimeYield}}%</div>
+                            </a-col>
+                            <a-col :span="8" style="text-align: right;">
+                                <a-button type="danger" icon="warning" @click="showCAPA = true">发起异常改善 (CAPA)</a-button>
+                            </a-col>
+                        </a-row>
+                    </div>
+
+                    <a-table :columns="improvementColumns" :data-source="improvementData" size="small" bordered>
+                        <template slot="status" slot-scope="text">
+                            <a-badge :status="text === '进行中' ? 'processing' : 'success'" :text="text" />
+                        </template>
+                    </a-table>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 7：移动端点检预警与工序锁定 -->
+        <div class="section-card">
+            <h2>需求 7：点检任务预警与生产防呆锁定 (移动端原型)</h2>
+            <a-row :gutter="40">
+                <a-col :span="12">
+                    <div class="mobile-emulator">
+                        <div class="mobile-header">PQC 现场执行工作台</div>
+                        
+                        <!-- 需求 7: 锁定层 -->
+                        <div v-if="isLocked" class="lock-overlay">
+                            <a-icon type="lock" style="font-size: 64px; color: #f5222d; margin-bottom: 20px;" />
+                            <h3 style="color: #f5222d;">工序已锁定</h3>
+                            <p>原因：[开工初检] 任务未按时完成<br/>系统已自动禁止产出报工数据录入</p>
+                            <a-button type="primary" size="large" style="margin-top: 20px;" @click="showCheckTask">立即执行点检</a-button>
+                        </div>
+
+                        <div class="mobile-body">
+                            <div style="margin-bottom: 15px; color:#000">
+                                <a-alert message="待办任务：每2小时清洁点检 (14:00节点)" type="warning" show-icon style="font-size: 12px; color: #000;"></a-alert>
+                            </div>
+
+                            <a-card title="工序点检录入" size="small" v-if="currentCheck">
+                                <div v-for="(item, index) in checkItems" :key="index" style="margin-bottom: 15px;">
+                                    <div style="font-size: 13px; font-weight: bold; margin-bottom: 5px;">{{item.label}}</div>
+                                    <div v-if="item.type === 'input'">
+                                        <a-input-group compact>
+                                            <a-input v-model="item.val" style="width: 70%;" placeholder="输入实测值" />
+                                            <a-button style="width: 30%;">{{item.unit}}</a-button>
+                                        </a-input-group>
+                                        <div style="font-size: 11px; color: #999;">标准：{{item.std}}</div>
+                                    </div>
+                                    <div v-else>
+                                        <a-radio-group v-model="item.val">
+                                            <a-radio value="OK">符合</a-radio>
+                                            <a-radio value="NG">不符合</a-radio>
+                                        </a-radio-group>
+                                    </div>
+                                </div>
+                                <a-button type="primary" block @click="submitCheck">提交并解锁生产</a-button>
+                            </a-card>
+
+                            <a-empty v-else style="font-size: 12px; color: #000;" description="暂无紧急点检任务"></a-empty>
+                        </div>
+                    </div>
+                </a-col>
+
+                <a-col :span="12">
+                    <a-card title="点检规则与预警记录 (看板)" size="small">
+                        <a-timeline>
+                            <a-timeline-item color="green">08:00 作业准备点检：合格 (张三)</a-timeline-item>
+                            <a-timeline-item color="green">08:30 开工初检：合格 (张三)</a-timeline-item>
+                            <a-timeline-item color="red">
+                                10:30 点检预警触发：环境清洁点检逾期
+                                <div style="font-size: 12px; color: #999;">系统自动执行 [L1-组装工序] 生产锁定</div>
+                            </a-timeline-item>
+                            <a-timeline-item :color="isLocked ? 'gray' : 'green'">
+                                {{ isLocked ? '等待点检结果录入...' : '11:05 点检合格，系统自动解锁' }}
+                            </a-timeline-item>
+                        </a-timeline>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 6：改善对策 (CAPA) 弹窗 -->
+        <a-modal v-model="showCAPA" title="良率异常改善对策录入 (PDCA)" width="800px">
+            <a-row :gutter="16">
+                <a-col :span="24" style="margin-bottom: 20px;">
+                    <div class="fishbone-mock">
+                        <a-icon type="dot-chart" style="font-size: 24px; color: #1890ff;" />
+                        <div>[此处模拟鱼骨图分析模板]</div>
+                        <div style="font-size: 12px; color: #999;">点击各分支(人机料法环)录入根本原因</div>
+                    </div>
+                </a-col>
+                <a-col :span="12">
+                    <a-form layout="vertical">
+                        <a-form-item label="根本原因分析">
+                            <a-textarea placeholder="通过鱼骨图分析，确定为人员技能矩阵不匹配" :rows="3" />
+                        </a-form-item>
+                        <a-form-item label="改善对策">
+                            <a-textarea placeholder="针对该工位员工进行二次岗前培训及考核" :rows="3" />
+                        </a-form-item>
+                    </a-form>
+                </a-col>
+                <a-col :span="12">
+                    <a-form layout="vertical">
+                        <a-form-item label="计划完成时间">
+                            <a-date-picker style="width: 100%;" />
+                        </a-form-item>
+                        <a-form-item label="验证标准">
+                            <a-input placeholder="连续三批次良率恢复至 99% 以上" />
+                        </a-form-item>
+                    </a-form>
+                </a-col>
+            </a-row>
+            <div slot="footer">
+                <a-button @click="showCAPA = false">存入品质知识库</a-button>
+                <a-button type="primary" @click="showCAPA = false">提交并通知责任人</a-button>
+            </div>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 需求 5
+                    activeModel: 'SMART-PHONE-A1',
+                    templateColumns: [
+                        { title: '检验项目', dataIndex: 'item' },
+                        { title: '检验标准', dataIndex: 'std' },
+                        { title: '样本数', dataIndex: 'sample' }
+                    ],
+                    templateData: [
+                        { id: 1, item: '外观划伤', std: '表面无大于0.1mm划痕', sample: '32 pcs' },
+                        { id: 2, item: '按键手感', std: '回弹清脆，无卡滞', sample: '13 pcs' },
+                        { id: 3, item: '屏幕漏光', std: '黑暗环境下无明显漏光', sample: '全检' }
+                    ],
+                    // 需求 6
+                    targetYield: 99.5,
+                    realTimeYield: 97.2,
+                    showCAPA: false,
+                    improvementColumns: [
+                        { title: '改善任务', dataIndex: 'task' },
+                        { title: '责任人', dataIndex: 'owner' },
+                        { title: '状态', dataIndex: 'status', scopedSlots: { customRender: 'status' } }
+                    ],
+                    improvementData: [
+                        { id: 1, task: '线体静电环测试', owner: '王工', status: '进行中' },
+                        { id: 2, task: '工装夹具精度校准', owner: '李工', status: '已完成' }
+                    ],
+                    // 需求 7
+                    isLocked: true,
+                    currentCheck: false,
+                    checkItems: [
+                        { label: '炉温设定', type: 'input', std: '260±5', unit: '℃', val: '' },
+                        { label: '传送速度', type: 'input', std: '0.8±0.05', unit: 'm/min', val: '' },
+                        { label: '工装夹具状态', type: 'radio', std: '安装牢固', val: 'OK' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => { mermaid.init(undefined, '.mermaid'); });
+                // 模拟一个巡检提醒通知
+                setTimeout(() => {
+                    this.$notification.warning({
+                        message: '点检逾期提醒',
+                        description: 'L1线[环境清洁点检]已逾期，生产权限已自动锁定，请立即处理。',
+                        duration: 0
+                    });
+                }, 2000);
+            },
+            methods: {
+                showCheckTask() {
+                    this.currentCheck = true;
+                },
+                submitCheck() {
+                    this.$message.success('点检任务提交成功，结果判定：合格');
+                    this.isLocked = false;
+                    this.currentCheck = false;
+                    this.$notification.close('点检逾期提醒');
+                    this.$notification.success({
+                        message: '系统解锁',
+                        description: '点检完成，生产报工权限已恢复。'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

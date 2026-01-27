@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPC 统计过程控制原型 - 需求 1, 2 & 3</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #001529; }
+        .chart-container { width: 100%; min-height: 400px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; position: relative; padding: 20px; }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* SPC 控制图模拟样式 */
+        .spc-plot-area { background: #fff; border: 1px solid #e8e8e8; padding: 20px; position: relative; height: 320px; }
+        .spc-line-ucl { position: absolute; width: 90%; height: 2px; border-top: 2px dashed #ff4d4f; left: 5%; }
+        .spc-line-lcl { position: absolute; width: 90%; height: 2px; border-top: 2px dashed #ff4d4f; left: 5%; }
+        .spc-line-cl { position: absolute; width: 90%; height: 2px; border-top: 1px solid #52c41a; left: 5%; }
+        .spc-label { position: absolute; right: 0; font-size: 11px; font-weight: bold; }
+        
+        .dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #1890ff; z-index: 5; transform: translate(-50%, -50%); cursor: pointer; }
+        .dot-error { background: #f5222d; box-shadow: 0 0 8px #f5222d; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        /* 规则勾选列表样式 */
+        .rule-item { padding: 8px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+        .rule-item:hover { background: #f9f9f9; }
+        .rule-desc { font-size: 12px; color: #666; margin-left: 10px; }
+
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 业务流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>SPC 控制图构建与自动预警 - 业务流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff,stroke-width:2px;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff,stroke-width:2px;
+
+                        Config[控制图搭建:物料/设备/类型 R1] --> Rules[自定义判异规则勾选 R2]
+                        Rules --> Sampling[预设抽样频率设置 R3]
+                        Sampling --> Collect[实时数据采集:自动/手工 R3]
+                        Collect --> Calc[系统自动计算统计值:均值/极差 R3]
+                        Calc --> Plot[更新控制图可视化]
+                        Plot --> Judge{自动判异 R3}
+                        Judge -- "触发规则" --> Alert[红点标记/发送预警通知 R3]
+                        Judge -- "受控" --> Next[持续监控]
+                        Alert --> Log[异常点信息存根/版本留存 R2]
+
+                        class Config,Rules,Sampling,Collect,Calc,Plot,Alert,Log business;
+                        class Judge decision;
+                </div>
+            </div>
+        </div>
+
+        <!-- 需求 1 & 2：控制图搭建与规则维护 -->
+        <div class="section-card">
+            <h2>需求 1 & 2：SPC 控制图搭建与自定义判异规则维护</h2>
+            <a-row :gutter="24">
+                <a-col :span="10">
+                    <a-card title="控制图核心配置 (模板维护)" size="small">
+                        <a-form layout="vertical">
+                            <a-form-item label="图表名称"><a-input value="机加工段 关键外径 Xbar-R图" /></a-form-item>
+                            <a-row :gutter="8">
+                                <a-col :span="12">
+                                    <a-form-item label="图表类型">
+                                        <a-select default-value="Xbar-R">
+                                            <a-select-option value="Xbar-R">均值-极差图 (Xbar-R)</a-select-option>
+                                            <a-select-option value="Xbar-S">均值-标准差图 (Xbar-S)</a-select-option>
+                                            <a-select-option value="P">不合格品率图 (P)</a-select-option>
+                                        </a-select>
+                                    </a-form-item>
+                                </a-col>
+                                <a-col :span="12">
+                                    <a-form-item label="数据来源">
+                                        <a-select default-value="auto">
+                                            <a-select-option value="auto">检验设备接口自动采集</a-select-option>
+                                            <a-select-option value="manual">手工录入</a-select-option>
+                                        </a-select>
+                                    </a-form-item>
+                                </a-col>
+                            </a-row>
+                            <a-divider style="margin: 10px 0;">控制限设定 (UCL/CL/LCL)</a-divider>
+                            <a-radio-group default-value="autoCalc" size="small" style="margin-bottom: 15px;">
+                                <a-radio-button value="manual">手动设置</a-radio-button>
+                                <a-radio-button value="autoCalc">基于历史数据自动计算</a-radio-button>
+                            </a-radio-group>
+                            <a-row :gutter="8">
+                                <a-col :span="8"><a-input-number placeholder="UCL" style="width:100%" :value="50.05" /></a-col>
+                                <a-col :span="8"><a-input-number placeholder="CL" style="width:100%" :value="50.00" /></a-col>
+                                <a-col :span="8"><a-input-number placeholder="LCL" style="width:100%" :value="49.95" /></a-col>
+                            </a-row>
+                        </a-form>
+                        <div style="margin-top: 15px;">
+                            <a-button type="primary" block icon="save">保存控制图模板</a-button>
+                        </div>
+                    </a-card>
+                </a-col>
+                <a-col :span="14">
+                    <a-card title="八大判异规则勾选 (版本: v2.4)" size="small">
+                        <div v-for="rule in spcRules" :key="rule.id" class="rule-item">
+                            <div>
+                                <a-checkbox v-model="rule.enabled">
+                                    <b>规则 {{rule.id}}:</b> {{rule.name}}
+                                </a-checkbox>
+                                <div class="rule-desc">{{rule.desc}}</div>
+                            </div>
+                            <a-tag v-if="rule.enabled" color="green">已启用</a-tag>
+                        </div>
+                        <div style="margin-top: 16px; text-align: right;">
+                            <a-button icon="experiment" @click="testRules">规则测试 (模拟数据)</a-button>
+                            <a-button icon="history" style="margin-left: 8px;">查看历史版本</a-button>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求 3：实时监控与自动判异 -->
+        <div class="section-card">
+            <h2>需求 3：SPC 实时监控及自动识别判异看板</h2>
+            <a-row :gutter="16">
+                <a-col :span="18">
+                    <div class="spc-plot-area">
+                        <div style="margin-bottom: 10px; font-weight: bold; color: #1890ff;">
+                            <a-icon type="line-chart" /> X-bar 均值控制图 (实时刷新)
+                        </div>
+                        <!-- 绘制控制线 -->
+                        <div class="spc-line-ucl" style="top: 20%;">
+                            <span class="spc-label" style="color: #ff4d4f;">UCL: 50.05</span>
+                        </div>
+                        <div class="spc-line-cl" style="top: 50%;">
+                            <span class="spc-label" style="color: #52c41a;">CL: 50.00</span>
+                        </div>
+                        <div class="spc-line-lcl" style="top: 80%;">
+                            <span class="spc-label" style="color: #ff4d4f;">LCL: 49.95</span>
+                        </div>
+                        
+                        <!-- 模拟连线 -->
+                        <svg width="100%" height="100%" style="position: absolute; top:0; left:0; z-index: 1;">
+                            <polyline points="50,160 150,140 250,180 350,60 450,160 550,140 650,250" fill="none" stroke="#1890ff" stroke-width="2" />
+                        </svg>
+
+                        <!-- 模拟数据点 -->
+                        <div class="dot" style="left: 50px; top: 160px;" title="Sample 1: 50.00"></div>
+                        <div class="dot" style="left: 150px; top: 140px;" title="Sample 2: 50.01"></div>
+                        <div class="dot" style="left: 250px; top: 180px;" title="Sample 3: 49.98"></div>
+                        <div class="dot dot-error" style="left: 350px; top: 60px;" @click="showAnomaly(1)"></div>
+                        <div class="dot" style="left: 450px; top: 160px;" title="Sample 5: 50.00"></div>
+                        <div class="dot" style="left: 550px; top: 140px;" title="Sample 6: 50.01"></div>
+                        <div class="dot dot-error" style="left: 650px; top: 250px;" @click="showAnomaly(2)"></div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <a-card title="实时统计摘要" size="small">
+                        <a-statistic title="当前抽样频率" value="每30分钟/次" value-style="font-size: 14px; color: #1890ff" />
+                        <a-divider style="margin: 10px 0;" />
+                        <a-statistic title="平均值 (Mean)" :precision="3" :value="50.012" />
+                        <a-statistic title="极差 (Range)" :precision="3" :value="0.045" style="margin-top: 10px;" />
+                        <a-divider style="margin: 10px 0;" />
+                        <div style="color: #f5222d; font-weight: bold;">
+                            <a-icon type="notification" /> 监测到 2 个异常点！
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+
+            <a-table :columns="logColumns" :data-source="logData" bordered size="small" style="margin-top: 20px;" title="实时判异异常记录列表">
+                <template slot="status">
+                    <a-tag color="red">判定异常</a-tag>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 异常点详情 Modal -->
+        <a-modal v-model="modalVisible" title="判异异常点详细信息" footer="">
+            <a-descriptions bordered :column="1" size="small">
+                <a-descriptions-item label="样本编号">SMP-20260124-004</a-descriptions-item>
+                <a-descriptions-item label="采集时间">2026-01-24 14:30:05</a-descriptions-item>
+                <a-descriptions-item label="实测均值"><span style="color:red; font-weight:bold">50.065</span></a-descriptions-item>
+                <a-descriptions-item label="触发规则">规则 1：1个点落在3倍标准差控制限之外</a-descriptions-item>
+                <a-descriptions-item label="偏离情况">超出 UCL 限值 0.015 mm</a-descriptions-item>
+            </a-descriptions>
+            <div style="margin-top: 15px;">
+                <a-button type="primary" block>发起异常处理 (CAPA)</a-button>
+            </div>
+        </a-modal>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    modalVisible: false,
+                    spcRules: [
+                        { id: 1, name: '超出控制线', desc: '1个点落在3倍标准差控制限之外', enabled: true },
+                        { id: 2, name: '一侧连续点', desc: '连续 9 个点在中心线的同一侧', enabled: true },
+                        { id: 3, name: '连续上升或下降', desc: '连续 6 个点持续上升或持续下降', enabled: false },
+                        { id: 4, name: '交替上下', desc: '连续 14 个点交互上下波动', enabled: false }
+                    ],
+                    logColumns: [
+                        { title: '时间戳', dataIndex: 'time' },
+                        { title: '样本编号', dataIndex: 'id' },
+                        { title: '统计值', dataIndex: 'val' },
+                        { title: '触发规则', dataIndex: 'rule' },
+                        { title: '状态', key: 'status', scopedSlots: { customRender: 'status' } }
+                    ],
+                    logData: [
+                        { id: 'SMP-004', time: '14:30:05', val: '50.065', rule: '规则 1' },
+                        { id: 'SMP-007', time: '16:00:12', val: '49.942', rule: '规则 1' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                showAnomaly(id) {
+                    this.modalVisible = true;
+                },
+                testRules() {
+                    this.$message.loading('正在输入模拟序列验证规则有效性...', 1.5).then(() => {
+                        this.$notification.success({
+                            message: '测试通过',
+                            description: '模拟序列成功触发了规则1和规则2，判异引擎逻辑正常。'
+                        });
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
