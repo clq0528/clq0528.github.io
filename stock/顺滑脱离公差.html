@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>板块起势 CPK 分析与打板量化模拟</title>
+    <!-- 引入资源 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <style>
+        body { 
+            background: #0b0e11; 
+            color: #d1d4dc; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            padding: 20px;
+            margin: 0;
+        }
+        .container { 
+            width: 95%; 
+            max-width: 1200px; 
+            margin: 0 auto;
+        }
+        .section-title { 
+            border-left: 4px solid #1890ff; 
+            padding-left: 15px; 
+            margin: 30px 0 20px; 
+            font-size: 20px; 
+            font-weight: bold; 
+        }
+        .logic-card { 
+            background: #161a1e; 
+            border: 1px solid #363c4e; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+        }
+        .highlight-red { color: #f23645; font-weight: bold; }
+        .highlight-green { color: #089981; font-weight: bold; }
+        .chart-container { 
+            display: flex; 
+            gap: 20px; 
+            height: 400px; 
+            margin-bottom: 20px;
+        }
+        #priceChart { 
+            flex: 2; 
+            background: #1e222d; 
+            border-radius: 8px; 
+            padding: 15px;
+        }
+        #gaussianChart { 
+            flex: 1; 
+            background: #1e222d; 
+            border-radius: 8px; 
+            padding: 15px;
+        }
+        .controls { 
+            text-align: center; 
+            margin: 20px 0; 
+        }
+        .info-panel { 
+            display: flex; 
+            justify-content: space-between; 
+            background: #1e2227; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 15px;
+            font-family: monospace;
+        }
+        .metric { color: #00fa9a; }
+        .highlight { color: #ff4d4d; font-weight: bold; }
+        .ant-card { background: #1e222d !important; border-color: #363c4e !important; }
+        .ant-card-head-title { color: #d1d4dc !important; }
+        .ant-table { background: #1e222d !important; color: #d1d4dc !important; }
+        .tag-buy { background: rgba(242, 54, 69, 0.2); color: #f23645; border: 1px solid #f23645; }
+        .logic-box {
+            background: rgba(0, 123, 255, 0.1);
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #adcfff;
+            border-radius: 4px;
+        }
+        h1 { text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>板块起势：从"高斯收敛"到"均值突破"</h1>
+
+            <!-- 核心逻辑说明注入 -->
+            <div class="logic-box">
+                <strong>核心逻辑：</strong> 
+                一个优秀的板块起势，在形态学上必定符合：
+                <span class="highlight">布林带极度收口（低 σ）</span> + 
+                <span class="highlight">筹码单峰密集（高斯分布尖锐）</span> + 
+                <span class="highlight">放量突破公差上限（均值漂移确认）</span>。
+            </div>
+
+            <div class="info-panel">
+                <div>状态: <span id="status" class="metric">等待识别...</span></div>
+                <div>波动率(σ): <span id="sigmaVal" class="metric">--</span></div>
+                <div>CPK 潜力: <span id="cpkVal" class="metric">--</span></div>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+                <canvas id="gaussianChart"></canvas>
+            </div>
+
+            <div class="controls">
+                <a-button type="primary" size="large" @click="startSimulation">启动 MSA 过程分析 & 均值突破模拟</a-button>
+            </div>
+
+            <!-- 核心结论区 -->
+            <div class="section-title">5. 核心结论：如何用 CPK 思路避免追高？</div>
+            <div class="logic-card">
+                <a-row :gutter="16">
+                    <a-col :span="8">
+                        <p><strong>1. 寻找"过程能力过剩"的板块：</strong></p>
+                        <p style="font-size: 13px; color: #848e9c;">当一个板块的筹码分布（高斯曲线）极度狭窄且高耸（$\sigma$ 极小），而价格还在 LSL 和 USL（箱体支撑压力）之间徘徊时，这就是 CPK 极高的"预备期"。</p>
+                    </a-col>
+                    <a-col :span="8">
+                        <p><strong>2. 追高风险的本质是 $\sigma$ 的爆发：</strong></p>
+                        <p style="font-size: 13px; color: #848e9c;">追高通常发生在均值 $\mu$ 已经剧烈位移，且分布变得极其"扁平"（波动率巨大）的时候。此时过程已经失去控制，不再符合"重复性"。</p>
+                    </a-col>
+                    <a-col :span="8">
+                        <p><strong>3. 确定性：</strong></p>
+                        <p style="font-size: 13px; color: #848e9c;">你需要的不是预测未来，而是寻找那个"由于筹码极度收敛而导致的低熵状态"。在物理学和质量管理中，低熵/高 CPK 意味着接下来的动作具有极高的<strong>可预测性</strong>。</p>
+                    </a-col>
+                </a-row>
+                <div style="margin-top: 15px; border-top: 1px dashed #363c4e; padding-top: 15px; text-align: center;">
+                    <p><strong>形态学公式：</strong> <span class="highlight-green">布林带极度收口 (低 $\sigma$)</span> + <span class="highlight-green">筹码单峰密集 (高斯分布尖锐)</span> + <span class="highlight-red">放量突破公差上限 (均值漂移确认)</span></p>
+                </div>
+            </div>
+
+            <!-- 打板策略分析模块 -->
+            <div class="section-title">打板实战模拟：筹码真空区 vs 中军趋势</div>
+            <a-row :gutter="20">
+                <a-col :span="16">
+                    <a-card title="板块内个股筛选（动态监控）">
+                        <a-table :columns="columns" :data-source="stockList" :pagination="false" size="small">
+                            <span slot="type" slot-scope="text">
+                                <a-tag :color="text === '中军' ? 'blue' : 'volcano'">{{text}}</a-tag>
+                            </span>
+                            <span slot="chips" slot-scope="text">
+                                <a-progress :percent="text" size="small" :status="text > 80 ? 'active' : 'normal'" />
+                            </span>
+                            <span slot="action" slot-scope="record">
+                                <a-button type="link" @click="analyzeStock(record)">打板潜力分析</a-button>
+                            </span>
+                        </a-table>
+                    </a-card>
+                </a-col>
+                <a-col :span="8">
+                    <a-card title="打板核心逻辑（避坑指南）">
+                        <a-timeline>
+                            <a-timeline-item color="green">
+                                <strong>中军定方向：</strong> 中军股票（大盘股）必须处于"退二进三"的稳健上升通道，确立板块 CPK 的稳定性。
+                            </a-timeline-item>
+                            <a-timeline-item color="red">
+                                <strong>筹码空隙（打板关键）：</strong> 寻找上方"筹码真空区"。如果上方无套牢峰，股价能实现"无阻力跳涨"。
+                            </a-timeline-item>
+                            <a-timeline-item color="blue">
+                                <strong>重复性再现：</strong> 连板票需要分时图极度流畅（高重复性），一旦换手 $\sigma$ 过大，说明过程失控。
+                            </a-timeline-item>
+                        </a-timeline>
+                        <div v-if="analysisResult" style="margin-top: 20px; padding: 10px; background: rgba(24, 144, 255, 0.1); border: 1px solid #1890ff;">
+                            <p>分析结论：{{analysisResult}}</p>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    priceChart: null,
+                    gaussianChart: null,
+                    analysisResult: '点击个股进行分析...',
+                    columns: [
+                        { title: '股票名称', dataIndex: 'name', key: 'name' },
+                        { title: '类型', dataIndex: 'type', key: 'type', scopedSlots: { customRender: 'type' } },
+                        { title: '筹码集中度', dataIndex: 'chips', key: 'chips', scopedSlots: { customRender: 'chips' } },
+                        { title: '上方压力(空隙)', dataIndex: 'gap', key: 'gap' },
+                        { title: '状态', dataIndex: 'status', key: 'status' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    stockList: [
+                        { key: '1', name: 'XX工业(中军)', type: '中军', chips: 92, gap: '小', status: '退二进三' },
+                        { key: '2', name: 'YY科技(先锋)', type: '前锋', chips: 95, gap: '真空区大', status: '跳涨起势' },
+                        { key: '3', name: 'ZZ能源', type: '前锋', chips: 60, gap: '密集成交区', status: '震荡' },
+                    ],
+                    // 初始参数
+                    dataPoints: 60,
+                    prices: Array(60).fill(50),
+                    labels: Array(60).fill(0).map((_, i) => i),
+                    simFrame: { p: 50, s: 2.5 }, // p: 均值, s: 标准差
+                    timeline: null
+                }
+            },
+            mounted() {
+                this.initCharts();
+            },
+            methods: {
+                initCharts() {
+                    const ctxPrice = document.getElementById('priceChart').getContext('2d');
+                    const ctxGauss = document.getElementById('gaussianChart').getContext('2d');
+                    
+                    // 价格图表配置
+                    this.priceChart = new Chart(ctxPrice, {
+                        type: 'line',
+                        data: {
+                            labels: this.labels,
+                            datasets: [
+                                { label: '现价', data: this.prices, borderColor: '#00fa9a', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.2 },
+                                { label: 'USL (压力)', data: Array(this.dataPoints).fill(56), borderColor: '#ff4d4d', borderDash: [5,5], pointRadius: 0 },
+                                { label: 'LSL (支撑)', data: Array(this.dataPoints).fill(44), borderColor: '#ff4d4d', borderDash: [5,5], pointRadius: 0 }
+                            ]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            scales: { 
+                                y: { min: 20, max: 120 } 
+                            }, 
+                            animation: false 
+                        }
+                    });
+
+                    // 高斯分布图表配置
+                    this.gaussianChart = new Chart(ctxGauss, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: '筹码分布(纵向价格轴)',
+                                data: this.getGaussian(50, 2.5),
+                                showLine: true,
+                                borderColor: '#007bff',
+                                backgroundColor: 'rgba(0, 123, 255, 0.3)',
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { 
+                                x: { display: false }, 
+                                y: { min: 20, max: 120, display: false } 
+                            },
+                            animation: false
+                        }
+                    });
+                },
+                
+                // 高斯分布生成函数 (筹码峰)
+                getGaussian(mean, stdDev) {
+                    let points = [];
+                    for (let i = 20; i <= 120; i += 1) {
+                        const prob = (1 / (stdDev * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((i - mean) / stdDev, 2));
+                        points.push({x: prob, y: i}); 
+                    }
+                    return points;
+                },
+                
+                // GSAP 模拟逻辑
+                startSimulation() {
+                    if (this.timeline) {
+                        this.timeline.kill();
+                    }
+                    
+                    // 重置状态
+                    this.prices = Array(this.dataPoints).fill(50);
+                    this.simFrame = { p: 50, s: 2.5 };
+                    this.priceChart.data.datasets[0].data = this.prices;
+                    this.priceChart.update();
+                    
+                    this.gaussianChart.data.datasets[0].data = this.getGaussian(50, 2.5);
+                    this.gaussianChart.update();
+                    
+                    document.getElementById('status').innerText = "等待识别...";
+                    document.getElementById('sigmaVal').innerText = "--";
+                    document.getElementById('cpkVal').innerText = "--";
+                    document.getElementById('status').style.color = "#00fa9a";
+                    
+                    this.timeline = gsap.timeline();
+                    
+                    // 阶段 1: 极度收敛 (低 Sigma)
+                    this.timeline.to(this.simFrame, {
+                        duration: 2,
+                        onStart: () => {
+                            document.getElementById('status').innerText = "检测到低 σ 收口 (CPK 蓄势中)";
+                            document.getElementById('cpkVal').innerText = "1.67 (优)";
+                        },
+                        onUpdate: () => {
+                            let jitter = (Math.random() - 0.5) * 1.5;
+                            this.prices.push(50 + jitter);
+                            this.prices.shift();
+                            this.priceChart.data.datasets[0].data = this.prices;
+                            this.priceChart.update();
+                            document.getElementById('sigmaVal').innerText = "0.82 (收缩)";
+                        }
+                    });
+
+                    // 阶段 2: 均值漂移 (放量突破 USL)
+                    this.timeline.to(this.simFrame, {
+                        p: 95,
+                        s: 8,
+                        duration: 4,
+                        ease: "power2.in",
+                        onStart: () => {
+                            document.getElementById('status').innerText = "均值漂移：突破公差上限！";
+                            document.getElementById('status').style.color = "#ff4d4d";
+                            document.getElementById('cpkVal').innerText = "0.42 (失控/起势)";
+                        },
+                        onUpdate: () => {
+                            let trend = this.simFrame.p + (Math.random() - 0.5) * 6;
+                            this.prices.push(trend);
+                            this.prices.shift();
+                            this.priceChart.data.datasets[0].data = this.prices;
+                            this.priceChart.update();
+
+                            // 筹码峰开始随着价格上移并变矮胖（代表波动增加）
+                            this.gaussianChart.data.datasets[0].data = this.getGaussian(trend, this.simFrame.s);
+                            this.gaussianChart.update();
+                            
+                            document.getElementById('sigmaVal').innerText = (this.simFrame.s + Math.random()).toFixed(2);
+                        }
+                    });
+                },
+                
+                analyzeStock(record) {
+                    if (record.type === '前锋' && record.gap === '真空区大') {
+                        this.analysisResult = `检测到【${record.name}】具备典型的筹码空隙！由于中军走势稳健，该股在放量瞬间即具备打板潜力。`;
+                    } else if (record.type === '中军') {
+                        this.analysisResult = `【${record.name}】作为中军，提供的是确定性。它不适合打板，适合作为板块起势的锚点。`;
+                    } else {
+                        this.analysisResult = `【${record.name}】筹码不集中（低CPK），上方阻力大，打板极易炸板。`;
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
