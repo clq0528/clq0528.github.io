@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>质量事故 OCAP 全流程管控中心</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #f5222d; }
+        .chart-container { width: 100%; min-height: 450px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fafafa; overflow: auto; position: relative; padding: 20px; }
+        h2 { border-left: 5px solid #f5222d; padding-left: 15px; margin-bottom: 25px; color: #001529; font-weight: bold; }
+        
+        /* OCAP 特色样式 */
+        .stage-tag { font-weight: bold; padding: 4px 12px; border-radius: 4px; }
+        .stage-trigger { background: #fff1f0; color: #f5222d; border: 1px solid #ffa39e; }
+        .stage-analysis { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+        .stage-verify { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+
+        .role-table .ant-table-thead > tr > th { background: #001529 !important; color: #fff !important; }
+        .step-active { color: #f5222d; font-weight: bold; }
+
+        .dashboard-stat { background: #fff1f0; border: 1px solid #ffa39e; padding: 20px; border-radius: 4px; text-align: center; }
+        .dashboard-stat .value { font-size: 32px; font-weight: bold; color: #cf1322; }
+
+        .mermaid svg { max-width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 1. OCAP 全流程图 (横向布局) -->
+        <div class="section-card">
+            <h2>质量事故处理 OCAP 业务全流程</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef trigger fill:#fff1f0,stroke:#f5222d,color:#f5222d,stroke-width:2px;
+                        classDef containment fill:#fff7e6,stroke:#fa8c16,color:#fa8c16,stroke-width:2px;
+                        classDef analysis fill:#e6f7ff,stroke:#1890ff,color:#1890ff,stroke-width:2px;
+                        classDef verify fill:#f6ffed,stroke:#52c41a,color:#52c41a,stroke-width:2px;
+                        classDef endNode fill:#595959,stroke:#333,color:#fff;
+
+                        Start((信号触发)) --> T1[1.发现异常并上报]
+                        T1 --> C1[2.紧急停线与遏制隔离]
+                        
+                        subgraph "调查与决策阶段"
+                            C1 --> P1[3.组建调查小组 QE/PE/生产]
+                            P1 --> A1{4.根本原因分析 5Why/鱼骨图}
+                            A1 --> D1[5.制定纠正预防方案并审批]
+                        end
+
+                        subgraph "执行与复产阶段"
+                            D1 --> S1[6.执行整改与在线验证]
+                            S1 --> V1{7.复工验收是否通过?}
+                            V1 -- 否 --> D1
+                            V1 -- 是 --> R1[8.记录归档与流程闭环]
+                        end
+
+                        R1 --> End((结案))
+
+                        class Start,T1 trigger;
+                        class C1 containment;
+                        class P1,A1,D1 analysis;
+                        class S1,V1,R1 verify;
+                        class End endNode;
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 品质部门角色职责矩阵 -->
+        <div class="section-card" style="border-top-color: #001529;">
+            <h2>品质业务部门参与及职责矩阵 (RASCI)</h2>
+            <a-table class="role-table" :columns="roleColumns" :data-source="roleData" bordered :pagination="false" size="small">
+                <template slot="involve" slot-scope="tags">
+                    <a-tag v-for="tag in tags" :key="tag" :color="tag === 'QE' ? 'red' : 'blue'">{{tag}}</a-tag>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 3. OCAP 事故实时监控台 -->
+        <div class="section-card">
+            <h2>OCAP 事故实时处理台 (单项追踪)</h2>
+            <a-row :gutter="16" style="margin-bottom: 24px;">
+                <a-col :span="6">
+                    <div class="dashboard-stat">
+                        <div class="value">02</div>
+                        <div class="label">当前处于停线状态</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat" style="background:#e6f7ff; border-color:#91d5ff;">
+                        <div class="value" style="color:#1890ff">1.5h</div>
+                        <div class="label" style="color:#1890ff">平均遏制响应耗时</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat" style="background:#f6ffed; border-color:#b7eb8f;">
+                        <div class="value" style="color:#52c41a">92%</div>
+                        <div class="label" style="color:#52c41a">改进措施验证通过率</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="dashboard-stat" style="background:#fff7e6; border-color:#ffe58f;">
+                        <div class="value" style="color:#fa8c16">05</div>
+                        <div class="label" style="color:#fa8c16">待审批改进方案</div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <a-tabs default-active-key="1">
+                <a-tab-pane key="1" tab="进行中的 OCAP 任务">
+                    <a-table :columns="taskColumns" :data-source="taskData" bordered size="middle">
+                        <template slot="status" slot-scope="text">
+                            <span :class="text === '遏制中' ? 'step-active' : ''">
+                                <a-badge :status="text === '遏制中' ? 'error' : 'processing'" :text="text" />
+                            </span>
+                        </template>
+                        <template slot="action" slot-scope="record">
+                            <a-button type="link" size="small" @click="handleDetail(record)">录入原因分析</a-button>
+                            <a-divider type="vertical" />
+                            <a-button type="link" size="small" style="color:#52c41a">发起复工验收</a-button>
+                        </template>
+                    </a-table>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    roleColumns: [
+                        { title: '业务环节', dataIndex: 'step', key: 'step', width: 200 },
+                        { title: '品质参与部门', dataIndex: 'qcInvolve', key: 'qcInvolve', scopedSlots: { customRender: 'involve' } },
+                        { title: '协同部门', dataIndex: 'coop', key: 'coop' },
+                        { title: '核心输出物', dataIndex: 'output', key: 'output' }
+                    ],
+                    roleData: [
+                        { step: '1. 发现与上报', qcInvolve: ['PQC', 'IQC'], coop: '生产现场/在线监控', output: '异常单 (NC Report)' },
+                        { step: '2. 遏制与隔离', qcInvolve: ['PQC'], coop: '仓库/生产', output: '停线通知单/待处理标识' },
+                        { step: '4. 原因分析', qcInvolve: ['QE (核心)'], coop: '工艺(PE)/研发', output: '鱼骨图/8D 报告第 3 阶段' },
+                        { step: '6. 执行整改与验证', qcInvolve: ['PQC', 'FQC'], coop: '生产现场', output: '首检记录/验证报告' },
+                        { step: '7. 复工验收', qcInvolve: ['品质主管', 'SQE'], coop: '监理/客户代表', output: '复工令/验收报告' }
+                    ],
+                    taskColumns: [
+                        { title: '事故编号', dataIndex: 'no' },
+                        { title: '发生地点', dataIndex: 'location' },
+                        { title: '严重程度', dataIndex: 'level' },
+                        { title: '当前阶段', dataIndex: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '责任QE', dataIndex: 'qe' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    taskData: [
+                        { no: 'OCAP-20260128-001', location: '组装L1线', level: '重大', status: '遏制中', qe: '王工' },
+                        { no: 'OCAP-20260127-005', location: '机加工车间', level: '一般', status: '分析中', qe: '李工' },
+                        { no: 'OCAP-20260125-012', location: '原材料仓库', level: '严重', status: '方案审批', qe: '张工' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            },
+            methods: {
+                handleDetail(record) {
+                    this.$notification.open({
+                        message: '开始分析任务',
+                        description: `正在进入事故 ${record.no} 的 5Why 分析模块...`,
+                        icon: `<a-icon type="search" style="color: #108ee9" />`,
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
