@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-检验自动化统计流 - 质量科学原型</title>
+    
+    <!-- 引入资源 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, sans-serif; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        /* 逻辑卡片样式 */
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+            border-top: 4px solid #001529;
+        }
+
+        /* 顶部逻辑说明框 */
+        .logic-desc-panel {
+            background: linear-gradient(to right, #e6f7ff, #ffffff);
+            border-left: 4px solid #1890ff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .logic-title { color: #001529; font-weight: bold; font-size: 18px; margin-bottom: 10px; }
+        .logic-content { color: #595959; line-height: 1.8; font-size: 14px; }
+        .logic-step-tag { background: #1890ff; color: #fff; padding: 2px 8px; border-radius: 12px; margin-right: 8px; font-size: 12px; }
+
+        /* 图表容器 */
+        .flow-container { 
+            background: #fafafa; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            padding: 20px; 
+            overflow: auto;
+            text-align: center;
+        }
+
+        /* 交互仪表盘 */
+        .stat-card { text-align: center; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 1px solid #f0f0f0; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #1890ff; }
+        .stat-label { font-size: 12px; color: #8c8c8c; }
+
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; color: #001529; font-weight: bold; margin-bottom: 20px;}
+        
+        .mermaid svg { max-width: 100% !important; height: auto; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        
+        <!-- 逻辑说明区 -->
+        <div class="section-card">
+            <div class="logic-desc-panel">
+                <div class="logic-title"><a-icon type="reconciliation" /> 统计决策逻辑：单样本 T-检验 (One-Sample T-Test)</div>
+                <div class="logic-content">
+                    <p><span class="logic-step-tag">Step 1</span> <strong>数据门控：</strong> 并不是所有身高数据都能直接进行 T-检验。系统首先通过 <em>Shapiro-Wilk</em> 检验数据的正态性。若 $p < 0.05$（非正态），则流程自动切换至 <em>Wilcoxon</em> 非参数检验。</p>
+                    <p><span class="logic-step-tag">Step 2</span> <strong>显著性判定：</strong> 计算 $t$ 统计量与相应的 $p$ 值。当 $p < 0.05$ 时，我们有 95% 的信心拒绝“无差异”的假设，确认当前样本均值显著偏离基准。</p>
+                    <p><span class="logic-step-tag">Step 3</span> <strong>量化影响：</strong> 仅仅有显著性是不够的。系统会引入 <em>Cohen's d</em> 效应量，评估这种差异在现实世界的实际意义（小、中、大效应）。</p>
+                </div>
+            </div>
+
+            <!-- 流程图展示 -->
+            <h2>T-检验自动化统计全生命周期流程图</h2>
+            <div class="flow-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef data fill:#e6f7ff,stroke:#1890ff,color:#000;
+                        classDef proc fill:#f6ffed,stroke:#52c41a,color:#000;
+                        classDef alert fill:#fff1f0,stroke:#f5222d,color:#000;
+
+                        Start[身高原始数据采集 N=100] --> Clean[数据清洗与异常值识别]
+                        Clean --> NormCheck{正态性 Shapiro-Wilk 检验}
+                        
+                        NormCheck -- "p > 0.05 (符合)" --> TTest[单样本 t 检验执行]
+                        NormCheck -- "p < 0.05 (偏态)" --> NonPara[非参数 Wilcoxon 检验]
+                        
+                        TTest --> PVal{p < 0.05 ?}
+                        PVal -- 是 --> Effect[计算 Cohen's d 效应量]
+                        PVal -- 否 --> AcceptH0[接受零假设: 无显著差异]
+                        
+                        Effect --> Compare[2025 官方标准 Benchmarking]
+                        Compare --> Report[自动化 APA 风格报告生成]
+                        
+                        class Start,Clean data;
+                        class TTest,Effect,Compare proc;
+                        class NonPara,AcceptH0 alert;
+                </div>
+            </div>
+        </div>
+
+        <!-- 统计推断实时交互面板 -->
+        <div class="section-card">
+            <h2>T-Test 实时推断仪表盘 (实时计算模拟)</h2>
+            
+            <a-row :gutter="16">
+                <a-col :span="6">
+                    <div class="stat-card">
+                        <div class="stat-label">样本量 (Size)</div>
+                        <div class="stat-value">100</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="stat-card">
+                        <div class="stat-label">T-统计量 (t-Value)</div>
+                        <div class="stat-value">3.26</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="stat-card">
+                        <div class="stat-label">显著性 (p-Value)</div>
+                        <div class="stat-value" style="color: #f5222d;">0.002</div>
+                    </div>
+                </a-col>
+                <a-col :span="6">
+                    <div class="stat-card">
+                        <div class="stat-label">效应量 (d-Value)</div>
+                        <div class="stat-value" style="color: #faad14;">0.30</div>
+                    </div>
+                </a-col>
+            </a-row>
+
+            <a-divider orientation="left">统计决策分析</a-divider>
+
+            <a-row :gutter="24">
+                <a-col :span="12">
+                    <a-card title="概率分布与 P-Value 覆盖区" size="small">
+                        <canvas id="tDistChart" style="height: 250px;"></canvas>
+                    </a-card>
+                </a-col>
+                <a-col :span="12">
+                    <a-steps direction="vertical" size="small" :current="3">
+                        <a-step title="正态性检测" description="Shapiro-Wilk W=0.98, p=0.67 (通过)" />
+                        <a-step title="差异性检验" description="当前样本均值 139.6cm 显著高于基准 138.0cm" />
+                        <a-step title="效应量评估" description="Cohen's d = 0.30 (小效应)，建议关注但不需过度解读" />
+                        <a-step title="结果导出" description="系统已自动生成 APA 统计报告" />
+                    </a-steps>
+                </a-col>
+            </a-row>
+
+            <div style="margin-top: 24px; text-align: right;">
+                <a-button icon="file-search">查看清洗日志</a-button>
+                <a-button type="primary" icon="printer" style="margin-left: 8px;">导出 APA 报告</a-button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#e6f7ff',
+                primaryTextColor: '#000',
+                primaryBorderColor: '#1890ff',
+                lineColor: '#8c8c8c',
+                secondaryColor: '#f6ffed',
+                tertiaryColor: '#fff1f0'
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            mounted() {
+                this.renderTDistChart();
+            },
+            methods: {
+                renderTDistChart() {
+                    const ctx = document.getElementById('tDistChart').getContext('2d');
+                    // 生成 t 分布曲线模拟数据
+                    const labels = [];
+                    const data = [];
+                    for (let x = -4; x <= 4; x += 0.1) {
+                        labels.push(x.toFixed(1));
+                        // 简化的正态分布函数模拟 t 分布
+                        const y = (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * x * x);
+                        data.push(y);
+                    }
+
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'T 分布密度曲线',
+                                data: data,
+                                borderColor: '#1890ff',
+                                fill: true,
+                                backgroundColor: 'rgba(24, 144, 255, 0.1)',
+                                tension: 0.4,
+                                pointRadius: 0
+                            },
+                            {
+                                label: '显著性区域 (Critical Region)',
+                                data: labels.map((l, i) => parseFloat(l) > 1.96 ? data[i] : null),
+                                backgroundColor: 'rgba(245, 34, 45, 0.4)',
+                                fill: true,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { display: false },
+                                x: { ticks: { maxTicksLimit: 10 } }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
