@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2025 少年身高统计分析系统 - 统计科学原型</title>
+    
+    <!-- 引入 Mermaid 用于业务流图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <!-- 引入 Chart.js 和 GSAP -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        body { background-color: #f4f7f9; margin: 0; padding: 20px; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+        .stats-container { max-width: 1300px; margin: 0 auto; }
+        
+        /* 继承 FQC 原型样式 */
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 12px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.05); 
+            border-top: 4px solid #1890ff;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 20px; 
+            color: #001529;
+            font-weight: bold;
+        }
+
+        /* 逻辑说明样式 */
+        .logic-box {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            color: #003a8c;
+            line-height: 1.6;
+        }
+        .logic-box strong { color: #1890ff; }
+
+        /* 统计看板样式 */
+        .stat-value { font-size: 28px; font-weight: bold; color: #1890ff; }
+        .stat-label { font-size: 13px; color: #8c8c8c; }
+        
+        .chart-wrapper { height: 350px; position: relative; }
+        
+        /* Mermaid 样式微调 */
+        .mermaid { background: #fafafa; border-radius: 8px; padding: 20px; border: 1px solid #eee; }
+
+        .tag-logic { margin-bottom: 8px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div id="app" class="stats-container">
+        
+        <!-- 需求 4：统计业务全生命周期流程 -->
+        <div class="section-card">
+            <h2>需求4：统计分析自动化生成 - 核心业务流程</h2>
+            <div class="logic-box">
+                <a-tag color="blue" class="tag-logic">业务逻辑</a-tag>
+                本流程模拟了从<strong>原始身高数据采集</strong>到<strong>自动化报告产出</strong>的科学闭环。系统首先进行数据质量监控（正态性与异常值），随后执行参数化检验，最后将统计学显著性（p值）与临床实际意义（效应量）进行对撞输出。
+            </div>
+            <div class="mermaid">
+                graph LR
+                classDef data fill:#e6f7ff,stroke:#1890ff,color:#000;
+                classDef proc fill:#f6ffed,stroke:#52c41a,color:#000;
+                classDef alert fill:#fff1f0,stroke:#f5222d,color:#000;
+
+                Start[身高原始数据采集 N=100] --> Clean[数据清洗与异常值识别]
+                Clean --> NormCheck{正态性 Shapiro-Wilk 检验}
+                
+                NormCheck -- p > 0.05 --> TTest[单样本 t 检验执行]
+                NormCheck -- p < 0.05 --> NonPara[非参数 Wilcoxon 检验]
+                
+                TTest --> PVal{p < 0.05 ?}
+                PVal -- 是 --> Effect[计算 Cohen's d 效应量]
+                PVal -- 否 --> AcceptH0[接受零假设: 无显著差异]
+                
+                Effect --> Compare[2025 官方标准 Benchmarking]
+                Compare --> Report[自动化 APA 风格报告生成]
+                
+                class Start,Clean data;
+                class TTest,Effect,Compare proc;
+                class NonPara,AcceptH0 alert;
+            </div>
+        </div>
+
+        <!-- 需求 5：数据模板与统计驾驶舱 -->
+        <div class="section-card">
+            <h2>需求5：统计模板维护与实时假设检验驾驶舱</h2>
+            
+            <a-tabs default-active-key="1">
+                <!-- 统计推断看板 -->
+                <a-tab-pane key="1" tab="统计推断驾驶舱">
+                    <div class="logic-box">
+                        <a-icon type="info-circle" /> 
+                        <strong>递进逻辑：</strong> 描述性统计确立“现状” -> 假设检验确认“差异性” -> 效应量衡量“重要性” -> 置信区间锁定“精度”。
+                    </div>
+
+                    <a-row :gutter="16">
+                        <a-col :span="6">
+                            <a-card size="small">
+                                <div class="stat-label">样本均值 (Mean)</div>
+                                <div class="stat-value" id="val-mean">139.63 <small>cm</small></div>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="6">
+                            <a-card size="small">
+                                <div class="stat-label">显著性水平 (P-Value)</div>
+                                <div class="stat-value" style="color: #f5222d;">0.002**</div>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="6">
+                            <a-card size="small">
+                                <div class="stat-label">效应量 (Cohen's d)</div>
+                                <div class="stat-value" style="color: #faad14;">0.30</div>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="6">
+                            <a-card size="small">
+                                <div class="stat-label">95% CI 下限/上限</div>
+                                <div class="stat-value" style="color: #52c41a;">138.6 - 140.6</div>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+
+                    <a-row :gutter="24" style="margin-top: 24px;">
+                        <a-col :span="14">
+                            <a-card title="身高分布与正态拟合曲线" size="small">
+                                <div class="chart-wrapper">
+                                    <canvas id="distChart"></canvas>
+                                </div>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="10">
+                            <a-card title="假设检验结论评估" size="small">
+                                <a-descriptions bordered column="1" size="small">
+                                    <a-descriptions-item label="零假设 H0">平均身高 = 138.0cm</a-descriptions-item>
+                                    <a-descriptions-item label="统计决策">
+                                        <a-tag color="red">拒绝 H0</a-tag>
+                                    </a-descriptions-item>
+                                    <a-descriptions-item label="差异方向">显著高于基准值</a-descriptions-item>
+                                    <a-descriptions-item label="实际意义评估">
+                                        <a-alert message="小效应 (Small Effect)" type="warning" show-icon description="虽然统计显著，但 0.57cm 的差异在临床生长评估中影响较小。" />
+                                    </a-descriptions-item>
+                                </a-descriptions>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                </a-tab-pane>
+
+                <!-- 抽检/分析模板管理 -->
+                <a-tab-pane key="2" tab="分析模板维护">
+                    <div class="logic-box">
+                        针对不同年龄段（7-18岁）的身高数据，系统预设了<strong>动态参数带出模板</strong>。维护人仅需定义该年龄段的 μ（均值）与 σ（标准差）基准，系统即可自动执行 Z-Score 转换。
+                    </div>
+                    <a-table :columns="columns" :data-source="templateData" size="small" bordered>
+                        <template slot="tags" slot-scope="tags">
+                            <a-tag v-for="tag in tags" :color="tag === '高精度' ? 'volcano' : 'blue'">{{tag}}</a-tag>
+                        </template>
+                        <template slot="action">
+                            <a-button type="link" icon="edit">编辑参数</a-button>
+                            <a-divider type="vertical" />
+                            <a-button type="link" icon="copy">复制模板</a-button>
+                        </template>
+                    </a-table>
+                    <div style="margin-top: 15px;">
+                        <a-button type="primary" icon="plus">新建年龄段分析模板</a-button>
+                    </div>
+                </a-tab-pane>
+                
+                <!-- APA 报告预览 -->
+                <a-tab-pane key="3" tab="APA 自动化报告预览">
+                    <div style="padding: 20px; background: #fff; border: 1px solid #d9d9d9; font-family: 'Times New Roman', serif;">
+                        <h3 style="text-align: center;">Statistical Analysis Report (2025)</h3>
+                        <p><strong>Results:</strong> A one-sample t-test was conducted to compare the heights of 10-year-old boys (N=100) in 2025 to a baseline of 138.0 cm.</p>
+                        <p>The analysis revealed that the mean height (M = 139.63, SD = 4.99) was significantly higher than the hypothesized value, <em>t</em>(99) = 3.26, <em>p</em> = .002. The 95% confidence interval for the mean was [138.64, 140.62].</p>
+                        <p><strong>Conclusion:</strong> Although statistically significant, the effect size (Cohen's <em>d</em> = 0.30) suggests a small practical impact.</p>
+                        <div style="text-align: right; margin-top: 30px;">
+                            <a-button type="dashed" icon="printer">打印完整 PDF 报告</a-button>
+                        </div>
+                    </div>
+                </a-tab-pane>
+            </a-tabs>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    columns: [
+                        { title: '模板名称', dataIndex: 'name' },
+                        { title: '适用年龄', dataIndex: 'age' },
+                        { title: '基准均值(μ)', dataIndex: 'mu' },
+                        { title: '标准差(σ)', dataIndex: 'sigma' },
+                        { title: '标签', dataIndex: 'tags', scopedSlots: { customRender: 'tags' } },
+                        { title: '最后维护', dataIndex: 'date' },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                    ],
+                    templateData: [
+                        { key: '1', name: '2025-10岁男孩身高标准', age: '10岁', mu: '140.2', sigma: '5.5', tags: ['高精度', '最新版'], date: '2025-01-20' },
+                        { key: '2', name: '2025-10岁女孩身高标准', age: '10岁', mu: '140.1', sigma: '5.8', tags: ['最新版'], date: '2025-01-22' },
+                        { key: '3', name: '2020-历史对比参考', age: '全年龄', mu: 'Variable', sigma: 'Variable', tags: ['存档'], date: '2020-12-30' }
+                    ]
+                }
+            },
+            mounted() {
+                this.renderChart();
+                this.animateStats();
+            },
+            methods: {
+                renderChart() {
+                    const ctx = document.getElementById('distChart').getContext('2d');
+                    // 模拟正态分布数据
+                    const labels = Array.from({length: 40}, (_, i) => 125 + i);
+                    const data = labels.map(x => {
+                        const mean = 139.63;
+                        const std = 4.99;
+                        return (1 / (std * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+                    });
+
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '身高概率密度分布',
+                                data: data,
+                                backgroundColor: 'rgba(24, 144, 255, 0.1)',
+                                borderColor: '#1890ff',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            }, {
+                                label: '假设基准值 (138.0)',
+                                data: labels.map(x => x === 138 ? 0.08 : null),
+                                borderColor: '#f5222d',
+                                borderDash: [5, 5],
+                                pointStyle: 'line',
+                                showLine: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true, display: false }
+                            },
+                            plugins: {
+                                legend: { position: 'bottom' }
+                            }
+                        }
+                    });
+                },
+                animateStats() {
+                    gsap.from(".stat-value", {
+                        textContent: 0,
+                        duration: 1.5,
+                        ease: "power2.out",
+                        snap: { textContent: 0.01 },
+                        stagger: 0.2
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

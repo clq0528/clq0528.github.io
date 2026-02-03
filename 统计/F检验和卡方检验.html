@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FQC 质量科学决策原型 - 高级统计推断</title>
+    
+    <!-- 引入资源 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, sans-serif; }
+        .section-card { 
+            background: #fff; padding: 24px; border-radius: 8px; 
+            margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #001529;
+        }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 20px; color: #001529; font-weight: bold; }
+        
+        /* 逻辑说明盒 */
+        .logic-panel {
+            background: #e6f7ff; border: 1px solid #91d5ff;
+            padding: 16px; border-radius: 4px; margin-bottom: 20px;
+        }
+        .logic-panel h4 { color: #003a8c; margin-bottom: 8px; font-weight: bold; }
+        .logic-panel p { margin-bottom: 4px; font-size: 13px; color: #444; }
+        .note-tag { color: #f5222d; font-weight: bold; }
+
+        /* 图表容器 */
+        .chart-container { 
+            width: 100%; border: 1px solid #d9d9d9; 
+            border-radius: 4px; background: #fafafa; padding: 20px; margin-bottom: 20px;
+        }
+
+        /* KPI 样式 */
+        .stat-card { background: #f9f9f9; padding: 12px; border: 1px solid #e8e8e8; border-radius: 4px; text-align: center; }
+        .stat-label { font-size: 12px; color: #8c8c8c; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #001529; }
+
+        /* 模拟图线 */
+        .viz-box { height: 80px; display: flex; align-items: center; justify-content: center; background: #fff; margin-top: 10px; border: 1px dashed #ddd; }
+        .wave { width: 80%; height: 2px; }
+        .wave.stable { background: #52c41a; }
+        .wave.unstable { background: #ff4d4f; border-top: 2px dashed #ff4d4f; background: none; }
+
+        .mermaid svg { max-width: 100% !important; height: auto; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        
+        <!-- 需求3：过程稳定性 (F-检验) -->
+        <div class="section-card">
+            <h2>需求3：生产过程稳定性分析 (F-检验)</h2>
+            
+            <div class="logic-panel">
+                <h4><a-icon type="dot-chart" /> 业务逻辑说明</h4>
+                <p><strong>应用场景：</strong> 当两个供应商（或两条线）的平均值相近时，需对比其“离散程度”。方差越大，说明过程越不可控。</p>
+                <p><strong>判定准则：</strong> 比较两组样本方差比。若 P-Value < 0.05，则拒绝齐性假设，判定其中一组存在显著波动风险。</p>
+                <p><span class="note-tag">注意事项：</span> F-检验对数据正态性极度敏感。如果数据偏态严重，请切换为 Levene 检验。</p>
+            </div>
+
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff;
+
+                        S1[采集源A样本方差 S1²] --> Ratio[计算方差比 F = S1²/S2²]
+                        S2[采集源B样本方差 S2²] --> Ratio
+                        Ratio --> Dist[查找F分布临界值]
+                        Dist --> Decision{P-Value < 0.05?}
+                        Decision -- 是 --> Alert[结论: 稳定性显著不一致]
+                        Decision -- 否 --> Smooth[结论: 过程波动一致/受控]
+
+                        class S1,S2,Ratio,Dist business;
+                        class Decision decision;
+                </div>
+            </div>
+
+            <a-row :gutter="16">
+                <a-col :span="8">
+                    <div class="stat-card">
+                        <div class="stat-label">供应商 A 标准差 (σ)</div>
+                        <div class="stat-value">0.15 mm</div>
+                        <div class="viz-box"><div class="wave stable"></div></div>
+                    </div>
+                </a-col>
+                <a-col :span="8">
+                    <div class="stat-card">
+                        <div class="stat-label">供应商 B 标准差 (σ)</div>
+                        <div class="stat-value">0.48 mm</div>
+                        <div class="viz-box"><div class="wave unstable"></div></div>
+                    </div>
+                </a-col>
+                <a-col :span="8">
+                    <a-card size="small" title="F-Test 判定">
+                        <div style="text-align:center">
+                            <span style="font-size:12px">P-Value:</span> 
+                            <span style="font-size:18px; color:#ff4d4f; font-weight:bold">0.0021</span>
+                            <br>
+                            <a-tag color="red">显著性波动差异</a-tag>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 需求4：缺陷分布拟合优度 (卡方检验) -->
+        <div class="section-card">
+            <h2>需求4：缺陷类型分布偏移识别 (卡方检验)</h2>
+            
+            <div class="logic-panel">
+                <h4><a-icon type="pie-chart" /> 业务逻辑说明</h4>
+                <p><strong>应用场景：</strong> 监控当前缺陷分布（如划伤、变形、脏污）是否偏离了历史沉淀的“经验比例”。</p>
+                <p><strong>判定准则：</strong> 计算观测值与预期值的偏差平方和。若统计量超标，说明生产环境发生了系统性变化。</p>
+                <p><span class="note-tag">注意事项：</span> 任何类别的预期频数（E）不能小于 5，否则统计效力会严重下降。</p>
+            </div>
+
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff;
+
+                        Obs[统计本月各类实际数 O] --> Compare[对比历史预期占比 E]
+                        Compare --> Chi[计算卡方统计量 χ²]
+                        Chi --> Prob[确定显著性概率 P]
+                        Prob --> Shift{P < 0.05?}
+                        Shift -- 是 --> Investigation[触发缺陷偏移预警/根本原因调查]
+                        Shift -- 否 --> Normal[分布正常/维持常规监控]
+
+                        class Obs,Compare,Chi,Prob business;
+                        class Shift decision;
+                </div>
+            </div>
+
+            <a-table :columns="chiColumns" :data-source="chiData" size="small" bordered :pagination="false">
+                <template slot="trend" slot-scope="text">
+                    <span v-if="text > 10" style="color:#ff4d4f"><a-icon type="rise" /> 显著偏移</span>
+                    <span v-else style="color:#8c8c8c"><a-icon type="minus" /> 正常</span>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 需求5：新材料等效性验证 (TOST 检验) -->
+        <div class="section-card">
+            <h2>需求5：变更等效性验证 (TOST 双单侧检验)</h2>
+            
+            <div class="logic-panel">
+                <h4><a-icon type="swap" /> 业务逻辑说明</h4>
+                <p><strong>应用场景：</strong> 更换廉价原料或新线时，证明新旧产品“一样好”。传统的 T-检验无法证明“没区别”，只能用等效性检验。</p>
+                <p><strong>判定准则：</strong> 预设一个等效边界值 (±θ)。如果新旧差异的 90% 置信区间完全落在边界内，则判定为等效。</p>
+                <p><span class="note-tag">注意事项：</span> 边界值 θ 需由 QE 工程师基于产品公差预先定义，不能在测试后随意修改。</p>
+            </div>
+
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        classDef business fill:#1890ff,stroke:#003a8c,color:#fff;
+                        classDef decision fill:#003a8c,stroke:#001529,color:#fff;
+
+                        Define[设定等效边界 ±θ] --> Test1[左单侧检验: 均值差 > -θ ?]
+                        Define --> Test2[右单侧检验: 均值差 < +θ ?]
+                        Test1 --> Logic[逻辑与运算]
+                        Test2 --> Logic
+                        Logic --> Final{两者皆显著?}
+                        Final -- 是 --> Pass[结论: 两者实质性等效/允许替代]
+                        Final -- 否 --> Fail[结论: 无法证明等效/拒绝变更]
+
+                        class Define,Test1,Test2,Logic business;
+                        class Final decision;
+                </div>
+            </div>
+
+            <div style="background:#fafafa; padding:15px; border:1px solid #eee">
+                <a-row :gutter="24" type="flex" align="middle">
+                    <a-col :span="12">
+                        <div style="height:120px; border:1px solid #d9d9d9; background:#fff; position:relative; padding:20px">
+                            <div style="text-align:center; font-size:12px; color:#999">等效性分布区间示意</div>
+                            <!-- 模拟等效边界线 -->
+                            <div style="position:absolute; left:20%; height:80px; width:1px; background:#ff4d4f; top:20px"></div>
+                            <div style="position:absolute; right:20%; height:80px; width:1px; background:#ff4d4f; top:20px"></div>
+                            <!-- 模拟置信区间 -->
+                            <div style="position:absolute; left:35%; right:35%; height:4px; background:#1890ff; top:60px"></div>
+                            <div style="position:absolute; left:35%; height:12px; width:2px; background:#1890ff; top:56px"></div>
+                            <div style="position:absolute; right:35%; height:12px; width:2px; background:#1890ff; top:56px"></div>
+                            <div style="position:absolute; left:18%; top:105px; font-size:10px; color:#ff4d4f">-θ (等效下限)</div>
+                            <div style="position:absolute; right:18%; top:105px; font-size:10px; color:#ff4d4f">+θ (等效上限)</div>
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <a-alert message="判定通过：置信区间完全落入等效边界" description="计算所得均值差为 0.02，且其 90% 置信区间 [0.01, 0.03] 未超出预设边界 ±0.05，结论为实质等效。" type="success" show-icon></a-alert>
+                    </a-col>
+                </a-row>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    chiColumns: [
+                        { title: '缺陷项', dataIndex: 'name' },
+                        { title: '历史占比 (预期%)', dataIndex: 'expPct' },
+                        { title: '本月实绩 (观测数)', dataIndex: 'obsVal' },
+                        { title: '卡方贡献值', dataIndex: 'chiVal' },
+                        { title: '偏移判定', dataIndex: 'chiVal', scopedSlots: { customRender: 'trend' } }
+                    ],
+                    chiData: [
+                        { key: '1', name: '表面划伤', expPct: '50%', obsVal: 45, chiVal: 1.2 },
+                        { key: '2', name: '注塑变形', expPct: '20%', obsVal: 38, chiVal: 16.4 },
+                        { key: '3', name: '尺寸超差', expPct: '30%', obsVal: 28, chiVal: 0.8 }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

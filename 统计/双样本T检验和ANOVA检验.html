@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FQC 质量对比分析原型 - 需求 6 & 7</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, sans-serif; }
+        .section-card { 
+            background: #fff; padding: 24px; border-radius: 8px; 
+            margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #001529;
+        }
+        .logic-box {
+            background: #e6f7ff; border: 1px solid #91d5ff;
+            padding: 15px; margin-bottom: 20px; border-radius: 4px;
+        }
+        .chart-container { 
+            width: 100%; min-height: 300px; border: 1px solid #d9d9d9; 
+            border-radius: 4px; background: #fafafa; padding: 20px;
+        }
+        h2 { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 20px; color: #001529; font-weight: bold; }
+        .stat-kpi { text-align: center; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #1890ff; }
+        .significant { color: #52c41a; font-weight: bold; } /* 显著 */
+        .not-significant { color: #f5222d; font-weight: bold; } /* 不显著 */
+        
+        /* 模拟箱线图 */
+        .box-plot-mock {
+            display: flex; justify-content: space-around; align-items: flex-end; height: 200px; border-bottom: 2px solid #333; padding-bottom: 10px;
+        }
+        .box-item { width: 40px; background: #1890ff; position: relative; opacity: 0.8; }
+        .box-line { position: absolute; width: 100%; height: 2px; background: #ff4d4f; top: 50%; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        
+        <!-- 需求6：双样本 T-检验 (新旧设备对比) -->
+        <div class="section-card">
+            <h2>需求6：双样本 T-检验 - 改进效果验证</h2>
+            
+            <div class="logic-box">
+                <strong>统计逻辑：</strong> 用于判定两组独立数据（如：旧设备 vs 新设备）的平均值是否存在显著差异。<br>
+                <strong>H0 (零假设):</strong> 新旧设备良率无差异 | <strong>H1 (备择假设):</strong> 新设备良率显著高于旧设备。
+            </div>
+
+            <div class="chart-container" style="margin-bottom: 20px;">
+                <div class="mermaid">
+                    graph LR
+                        A[选择对比维度: 良率/尺寸] --> B[抽取旧设备样本 N=50]
+                        A --> C[抽取新设备样本 N=50]
+                        B & C --> D{正态性 & 方差齐性检验}
+                        D -- 通过 --> E[执行独立样本 T-检验]
+                        E --> F{检查 P-Value}
+                        F -- P < 0.05 --> G[显著提升: 接受新工艺]
+                        F -- P >= 0.05 --> H[无显著差异: 维持现状]
+                </div>
+            </div>
+
+            <a-row :gutter="16">
+                <a-col :span="8">
+                    <a-card title="对比概览" size="small">
+                        <a-descriptions column="1" size="small">
+                            <a-descriptions-item label="旧设备均值">96.2%</a-descriptions-item>
+                            <a-descriptions-item label="新设备均值">98.5%</a-descriptions-item>
+                            <a-descriptions-item label="差异幅度">+2.3%</a-descriptions-item>
+                        </a-descriptions>
+                    </a-card>
+                </col>
+                <a-col :span="16">
+                    <a-card title="T-Test 分析结果" size="small">
+                        <a-row :gutter="16">
+                            <a-col :span="8" class="stat-kpi">
+                                <div class="stat-label">t 统计量</div>
+                                <div class="stat-value">2.45</div>
+                            </a-col>
+                            <a-col :span="8" class="stat-kpi">
+                                <div class="stat-label">P-Value (显著性)</div>
+                                <div class="stat-value significant">0.032</div>
+                            </a-col>
+                            <a-col :span="8" class="stat-kpi">
+                                <div class="stat-label">统计结论</div>
+                                <div style="margin-top:5px"><a-tag color="green">有显著差异</a-tag></div>
+                            </a-col>
+                        </a-row>
+                        <p style="margin-top: 15px; font-size: 12px; color: #666;">
+                            * P < 0.05，表明新设备在 95% 置信水平下确实优于旧设备，建议全面导入。
+                        </p>
+                    </a-card>
+                </col>
+            </a-row>
+        </div>
+
+        <!-- 需求7：单因素 ANOVA 方差分析 (多班次对比) -->
+        <div class="section-card">
+            <h2>需求7：ANOVA 方差分析 - 班次/线别波动评价</h2>
+            
+            <div class="logic-box">
+                <strong>统计逻辑：</strong> 用于判定三组或更多数据（如：早班、中班、晚班）之间是否存在系统性偏差。<br>
+                <strong>应用场景：</strong> 监控不同班次之间是否存在人为因素导致的质量波动。
+            </div>
+
+            <a-row :gutter="24">
+                <a-col :span="10">
+                    <div class="chart-container">
+                        <p style="text-align: center; font-weight: bold;">班次间尺寸分布 (Box Plot)</p>
+                        <div class="box-plot-mock">
+                            <div style="text-align:center">
+                                <div class="box-item" style="height: 120px;"><div class="box-line"></div></div>
+                                <span>早班</span>
+                            </div>
+                            <div style="text-align:center">
+                                <div class="box-item" style="height: 125px;"><div class="box-line"></div></div>
+                                <span>中班</span>
+                            </div>
+                            <div style="text-align:center">
+                                <div class="box-item" style="height: 150px;"><div class="box-line"></div></div>
+                                <span>晚班</span>
+                            </div>
+                        </div>
+                        <p style="font-size: 11px; color: #999; margin-top: 10px;">注：晚班波动幅度（箱体长度）及均值线明显偏离其他班次。</p>
+                    </div>
+                </a-col>
+                <a-col :span="14">
+                    <a-card title="方差分析表 (ANOVA Table)" size="small">
+                        <a-table :columns="anovaColumns" :data-source="anovaData" :pagination="false" bordered size="small">
+                        </a-table>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #fff7e6; border: 1px solid #ffd591;">
+                            <strong>分析判定：</strong>
+                            <span class="not-significant">P-Value (0.125) > 0.05</span><br>
+                            结论：目前三个班次之间的质量差异在统计学上<strong>不显著</strong>（属于随机误差）。
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+
+            <div class="chart-container" style="margin-top: 20px;">
+                <div class="mermaid">
+                    graph LR
+                        Input[输入: 班次A/B/C 检验数据] --> Var[计算组间方差 & 组内方差]
+                        Var --> FTest[计算 F 统计量]
+                        FTest --> PAns{P < 0.05 ?}
+                        PAns -- 是 --> PostHoc[执行事后两两对比 Post-hoc]
+                        PAns -- 否 --> Stability[结论: 过程稳定, 班次间无显著差异]
+                        PostHoc --> Suggest[结论: 班次C存在显著偏差, 需核查技能熟练度]
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    anovaColumns: [
+                        { title: '变异源', dataIndex: 'source', key: 'source' },
+                        { title: '自由度 (df)', dataIndex: 'df', key: 'df' },
+                        { title: '平方和 (SS)', dataIndex: 'ss', key: 'ss' },
+                        { title: '均方 (MS)', dataIndex: 'ms', key: 'ms' },
+                        { title: 'F 值', dataIndex: 'f', key: 'f' },
+                        { title: 'P-Value', dataIndex: 'p', key: 'p' },
+                    ],
+                    anovaData: [
+                        { key: '1', source: '组间 (班次)', df: 2, ss: '12.45', ms: '6.22', f: '2.14', p: '0.125' },
+                        { key: '2', source: '组内 (误差)', df: 147, ss: '428.30', ms: '2.91', f: '-', p: '-' },
+                        { key: '3', source: '总计', df: 149, ss: '440.75', ms: '-', f: '-', p: '-' }
+                    ]
+                }
+            }
+        });
+    </script>
+</body>
+</html>
