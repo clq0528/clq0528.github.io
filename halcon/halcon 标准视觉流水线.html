@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Halcon 标准视觉开发全流程交互实验室</title>
+    
+    <!-- 引入核心 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #001529; color: #fff; margin: 0; padding: 20px; font-family: -apple-system, sans-serif; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        /* 标题与描述 */
+        .header-box { text-align: center; margin-bottom: 30px; }
+        .logic-desc-card { background: #001c3d; padding: 15px; border-radius: 8px; border-left: 5px solid #52c41a; margin-bottom: 20px; }
+
+        /* 主画布布局 */
+        .main-layout { display: flex; gap: 20px; align-items: flex-start; }
+        
+        /* 仿真显示窗口 */
+        .display-window { 
+            flex: 2; background: #000; border: 2px solid #52c41a; position: relative; 
+            border-radius: 12px; height: 550px; display: flex; align-items: center; 
+            justify-content: center; overflow: hidden; box-shadow: 0 0 20px rgba(82, 196, 26, 0.2);
+        }
+
+        /* 状态进度条 */
+        .pipeline-steps {
+            position: absolute; top: 0; left: 0; width: 100%; height: 40px;
+            background: rgba(0,0,0,0.8); display: flex; align-items: center;
+            justify-content: space-around; font-size: 12px; border-bottom: 1px solid #333;
+        }
+        .step-node { opacity: 0.4; transition: all 0.3s; }
+        .step-node.active { opacity: 1; color: #52c41a; font-weight: bold; transform: scale(1.1); }
+
+        /* 结果标签层 */
+        .result-overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 80px; font-weight: 900; opacity: 0; pointer-events: none; z-index: 100;
+        }
+
+        /* 侧边逻辑面板 */
+        .side-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .monitor-card { background: #001c3d; padding: 15px; border-radius: 8px; border: 1px solid #333; }
+        .algo-code { font-family: 'Consolas', monospace; color: #a6e22e; background: #000; padding: 12px; border-radius: 4px; font-size: 13px; min-height: 100px; border: 1px solid #444; }
+
+        /* 底部解析网格 */
+        .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px; }
+        .info-card { background: rgba(82, 196, 26, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(82, 196, 26, 0.2); }
+        .info-card h4 { color: #52c41a; margin-bottom: 8px; font-size: 14px; }
+        .info-card p { font-size: 12px; color: #aaa; margin: 0; line-height: 1.5; }
+
+        canvas { border-radius: 4px; }
+        .mermaid-card { background: #fff; padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container">
+    <div class="header-box">
+        <h1 style="color: #fff; margin:0;">Halcon 标准视觉开发流水线 (Standard Pipeline)</h1>
+        <p style="color: #52c41a;">一套完整的机器视觉算法闭环逻辑</p>
+    </div>
+
+    <!-- 1. 逻辑流图 -->
+    <div class="mermaid-card">
+        <div class="mermaid">
+            graph LR
+                Acq[1.图像采集] --> Pre[2.预处理]
+                Pre --> ROI[3.ROI提取]
+                ROI --> Seg[4.分割/提取]
+                Seg --> Morph[5.形态学处理]
+                Morph --> Feat[6.特征分析]
+                Feat --> Result{7.结果判定}
+                Result -- OK --> Out[8.数据输出]
+                Result -- NG --> Alarm[8.异常报警]
+                
+                classDef blue fill:#e6f7ff,stroke:#1890ff;
+                classDef green fill:#f6ffed,stroke:#52c41a;
+                class Acq,Pre,ROI,Seg,Morph,Feat blue;
+                class Result,Out,Alarm green;
+        </div>
+    </div>
+
+    <div class="logic-desc-card">
+        <b>全流程逻辑：</b>工业检测并非单一算法，而是多个步骤的有机结合。通过 <code>reduce_domain</code> 缩小范围提高效率，通过 <code>opening/closing</code> 消除噪声，最终通过 <code>select_shape</code> 进行逻辑评判。
+    </div>
+
+    <div class="main-layout">
+        <!-- 2. 动画仿真窗口 -->
+        <div class="display-window" id="stage">
+            <!-- 步骤条指示器 -->
+            <div class="pipeline-steps">
+                <span v-for="(s, i) in steps" :key="i" :class="['step-node', {active: currentStep === i}]">
+                    {{i+1}}.{{s.name}}
+                </span>
+            </div>
+
+            <!-- 视觉辅助 -->
+            <div id="roiMask" style="position:absolute; border:2px dashed #faad14; display:none; pointer-events:none;"></div>
+            <div id="measurePoint" style="position:absolute; color:#ff4d4f; font-weight:bold; display:none;">
+                <div style="width:20px; height:20px; border:1px solid #ff4d4f; border-radius:50%; position:relative; left:-10px; top:-10px;"></div>
+                <span style="position:relative; top:-25px; left:5px;">Center (X, Y)</span>
+            </div>
+            
+            <!-- OK / NG 提示 -->
+            <div id="resLabelOK" class="result-overlay" style="color:#52c41a;">PASS</div>
+            <div id="resLabelNG" class="result-overlay" style="color:#ff4d4f;">FAIL</div>
+
+            <canvas id="mainCanvas"></canvas>
+        </div>
+
+        <!-- 3. 侧边控制与代码 -->
+        <div class="side-panel">
+            <div class="monitor-card">
+                <h3><a-icon type="code"></a-icon> Halcon 实时算子流</h3>
+                <div class="algo-code" id="codePanel">
+                    * 系统待机中...
+                </div>
+            </div>
+
+            <div class="monitor-card">
+                <h3><a-icon type="dashboard"></a-icon> 传感器/测量数据</h3>
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>检测耗时:</span> <span style="color:#52c41a;">{{processTime}} ms</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>测量面积:</span> <span style="color:#1890ff;">{{measuredArea}} px</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                    <span>最终判定:</span> <span :style="{color: isOK ? '#52c41a' : '#ff4d4f'}">{{isOK ? '合格' : '待检'}}</span>
+                </div>
+            </div>
+
+            <a-button type="primary" size="large" block @click="startFullPipeline" :loading="isRunning" icon="play-circle">
+                启动完整检测链 (RUN)
+            </a-button>
+            <a-button block @click="resetScene" icon="reload" style="margin-top:10px;">
+                重置系统状态
+            </a-button>
+        </div>
+    </div>
+
+    <!-- 4. 步骤详解 -->
+    <div class="info-grid">
+        <div class="info-card">
+            <h4>1-3. 准备阶段</h4>
+            <p>采集图像后进行滤波去噪。通过 <b>reduce_domain</b> 将处理范围限制在目标周围，减少 70% 以上的无效计算。</p>
+        </div>
+        <div class="info-card">
+            <h4>4-5. 提取与优化</h4>
+            <p>使用阈值分割提取目标。通过 <b>Morphology（形态学）</b> 进行开运算消除微小毛刺，确保测量区域的纯净。</p>
+        </div>
+        <div class="info-card">
+            <h4>6. 特征定量</h4>
+            <p>调用 <b>area_center</b> 等算子，将图形信息转化为面积、坐标、角度等具体的生产数据。</p>
+        </div>
+        <div class="info-card">
+            <h4>7-8. 决策输出</h4>
+            <p>根据预设公差带进行判定。输出 OK 信号触发机械手抓取，或输出 NG 信号触发气缸剔除并记录日志。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                isRunning: false,
+                currentStep: -1,
+                processTime: 0,
+                measuredArea: 0,
+                isOK: true,
+                steps: [
+                    { name: '图像采集', op: 'read_image (Image, "part.png")' },
+                    { name: '预处理', op: 'gauss_filter (Image, Blurred, 3)' },
+                    { name: 'ROI提取', op: 'gen_rectangle1 (ROI, 150, 200, 350, 450)\nreduce_domain (Blurred, ROI, ImageReduced)' },
+                    { name: '分割', op: 'threshold (ImageReduced, Region, 128, 255)' },
+                    { name: '形态学', op: 'opening_circle (Region, FinalRegion, 3.5)' },
+                    { name: '特征分析', op: 'area_center (FinalRegion, Area, Row, Col)' },
+                    { name: '判定', op: 'if (Area > 5000)\n  Result := "OK"\nelse\n  Result := "NG"' },
+                    { name: '数据输出', op: 'dev_display (FinalRegion)\nwrite_string (Window, "OK")' }
+                ],
+                ctx: null,
+                img: null
+            }
+        },
+        mounted() {
+            this.initCanvas();
+            mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+        },
+        methods: {
+            initCanvas() {
+                const canvas = document.getElementById('mainCanvas');
+                this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+                this.img = new Image();
+                this.img.crossOrigin = "Anonymous";
+                this.img.src = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80"; // 使用工业精密零件图
+                this.img.onload = () => {
+                    canvas.width = this.img.width;
+                    canvas.height = this.img.height;
+                    this.resetScene();
+                };
+            },
+
+            resetScene() {
+                this.currentStep = -1;
+                this.isRunning = false;
+                this.processTime = 0;
+                this.measuredArea = 0;
+                this.isOK = true;
+                gsap.killTweensOf("*");
+                gsap.set(".result-overlay", { opacity: 0, scale: 2 });
+                document.getElementById('roiMask').style.display = 'none';
+                document.getElementById('measurePoint').style.display = 'none';
+                document.getElementById('codePanel').innerText = "* 系统待机中...";
+                this.ctx.filter = 'none';
+                this.ctx.globalAlpha = 1.0;
+                this.ctx.drawImage(this.img, 0, 0);
+            },
+
+            startFullPipeline() {
+                if(this.isRunning) return;
+                this.resetScene();
+                this.isRunning = true;
+                
+                const tl = gsap.timeline();
+                const code = document.getElementById('codePanel');
+                const roi = document.getElementById('roiMask');
+                const mPoint = document.getElementById('measurePoint');
+
+                // 1. 采集
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    this.currentStep = 0;
+                    code.innerText = this.steps[0].op;
+                    this.ctx.drawImage(this.img, 0, 0);
+                }});
+
+                // 2. 预处理
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    this.currentStep = 1;
+                    code.innerText = this.steps[1].op;
+                    this.ctx.filter = 'blur(4px)';
+                    this.ctx.drawImage(this.img, 0, 0);
+                }});
+
+                // 3. ROI
+                tl.to({}, { duration: 1, onStart: () => {
+                    this.currentStep = 2;
+                    code.innerText = this.steps[2].op;
+                    this.ctx.filter = 'none';
+                    this.ctx.drawImage(this.img, 0, 0);
+                    // 遮罩效果
+                    roi.style.display = "block";
+                    roi.style.width = "200px"; roi.style.height = "200px";
+                    roi.style.top = "150px"; roi.style.left = "150px";
+                }});
+
+                // 4. 分割
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    this.currentStep = 3;
+                    code.innerText = this.steps[3].op;
+                    const imageData = this.ctx.getImageData(150, 150, 200, 200);
+                    const d = imageData.data;
+                    for(let i=0; i<d.length; i+=4) {
+                        const gray = (d[i]+d[i+1]+d[i+2])/3;
+                        const v = gray > 100 ? 255 : 0;
+                        d[i] = d[i+1] = d[i+2] = v;
+                    }
+                    this.ctx.putImageData(imageData, 150, 150);
+                }});
+
+                // 5. 形态学
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    this.currentStep = 4;
+                    code.innerText = this.steps[4].op;
+                    // 视觉模拟形态学纯化
+                    this.ctx.fillStyle = "rgba(82, 196, 26, 0.4)";
+                    this.ctx.fillRect(150, 150, 200, 200);
+                }});
+
+                // 6. 特征分析
+                tl.to({}, { duration: 1, onStart: () => {
+                    this.currentStep = 5;
+                    code.innerText = this.steps[5].op;
+                    this.measuredArea = 7540;
+                    mPoint.style.display = "block";
+                    mPoint.style.left = "250px"; mPoint.style.top = "250px";
+                }});
+
+                // 7. 判定
+                tl.to({}, { duration: 0.5, onStart: () => {
+                    this.currentStep = 6;
+                    code.innerText = this.steps[6].op;
+                    this.processTime = 42;
+                    this.isOK = this.measuredArea > 5000;
+                }});
+
+                // 8. 输出
+                tl.to({}, { duration: 0.5, onStart: () => {
+                    this.currentStep = 7;
+                    code.innerText = this.steps[7].op;
+                    const label = this.isOK ? "#resLabelOK" : "#resLabelNG";
+                    gsap.to(label, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out" });
+                }});
+
+                tl.add(() => {
+                    this.isRunning = false;
+                });
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

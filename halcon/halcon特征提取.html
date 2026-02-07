@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Halcon 特征提取 (Feature Extraction) 交互实验室</title>
+    
+    <!-- 引入核心 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #001529; color: #fff; margin: 0; padding: 20px; font-family: -apple-system, sans-serif; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        /* 卡片样式 */
+        .section-card { background: #001c3d; padding: 20px; border-radius: 8px; border: 1px solid #1890ff33; margin-bottom: 20px; }
+        h2 { color: #1890ff; border-left: 4px solid #1890ff; padding-left: 12px; margin-bottom: 20px; }
+
+        /* 主布局 */
+        .main-layout { display: flex; gap: 20px; align-items: flex-start; }
+        
+        /* 动画画布区 */
+        .canvas-area { 
+            flex: 2; background: #000; border: 2px solid #1890ff; position: relative; 
+            border-radius: 12px; height: 500px; display: flex; align-items: center; 
+            justify-content: center; overflow: hidden; 
+        }
+
+        /* 测量标注层 */
+        .measure-overlay {
+            position: absolute; border: 1px solid #ff4d4f; pointer-events: none; display: none;
+            box-sizing: border-box; transition: all 0.3s;
+        }
+        .centroid-dot {
+            position: absolute; width: 8px; height: 8px; background: #ff4d4f; border-radius: 50%;
+            display: none; transform: translate(-50%, -50%); z-index: 10;
+        }
+
+        /* 侧边面板 */
+        .side-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        .feature-panel { background: #000; padding: 15px; border-radius: 4px; border: 1px solid #333; }
+        .feature-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: monospace; }
+        .feature-value { color: #00e5ff; font-weight: bold; }
+
+        /* 底部解析卡片 */
+        .desc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px; }
+        .desc-item { background: rgba(24, 144, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(24, 144, 255, 0.2); }
+        .desc-item h4 { color: #00e5ff; margin-bottom: 10px; }
+        .desc-item p { font-size: 13px; color: #ccc; line-height: 1.6; }
+
+        .algo-syntax { font-family: 'Consolas', monospace; color: #a6e22e; background: #000; padding: 10px; border-radius: 4px; font-size: 13px; border: 1px solid #333; }
+        canvas { border-radius: 4px; }
+        .mermaid-card { background: #fff; padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #fff; font-size: 32px;">Halcon 特征提取 (Feature Extraction) 实验室</h1>
+        <p style="color: #1890ff;">从几何轮廓到结构化数据的跨越</p>
+    </div>
+
+    <!-- 1. 逻辑流图 -->
+    <div class="mermaid-card">
+        <div class="mermaid">
+            graph LR
+                Region[Region / XLD] --> Calc[特征计算算子]
+                Calc --> Shape[形状特征: 面积/圆度/矩形度]
+                Calc --> Gray[灰度特征: 均值/标准差]
+                Calc --> Texture[纹理特征: 能量/反差]
+                Shape & Gray & Texture --> Select{select_shape / select_gray}
+                Select --> Final[筛选后的 Region]
+                style Region fill:#e6f7ff,stroke:#1890ff
+                style Final fill:#f6ffed,stroke:#52c41a
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- 2. 核心动画区 -->
+        <div class="canvas-area" id="stage">
+            <!-- 测量辅助线 -->
+            <div id="rectBox" class="measure-overlay"></div>
+            <div id="centroid" class="centroid-dot"></div>
+            <!-- 用于圆度展示的等效圆 -->
+            <div id="equivCircle" style="position:absolute; border:2px dashed #52c41a; border-radius:50%; display:none; pointer-events:none;"></div>
+            
+            <canvas id="featureCanvas"></canvas>
+            
+            <div style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; font-size: 12px; border: 1px solid #1890ff;">
+                检测状态: <span id="opStatus" style="color:#00e5ff;">待机</span>
+            </div>
+        </div>
+
+        <!-- 3. 数据监控面板 -->
+        <div class="side-panel">
+            <div class="section-card">
+                <h3><a-icon type="dashboard"></a-icon> 实时特征数据 (Values)</h3>
+                <div class="feature-panel">
+                    <div class="feature-row"><span>Area (面积):</span> <span class="feature-value" id="valArea">0</span></div>
+                    <div class="feature-row"><span>Circularity (圆度):</span> <span class="feature-value" id="valCirc">0.00</span></div>
+                    <div class="feature-row"><span>Rectangularity (矩形度):</span> <span class="feature-value" id="valRect">0.00</span></div>
+                    <div class="feature-row"><span>Mean Gray (灰度均值):</span> <span class="feature-value" id="valGray">0</span></div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h3><a-icon type="code"></a-icon> 算子语法同步</h3>
+                <div id="syntaxDisplay" class="algo-syntax">
+                    * 等待算子触发...
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h3><a-icon type="filter"></a-icon> 特征筛选器 (select_shape)</h3>
+                <div style="margin-bottom:10px;">设定面积范围: 500 - 5000</div>
+                <a-slider range :default-value="[20, 80]" disabled />
+                <p style="font-size:12px; color:#888;">* 只有满足设定阈值的对象才会被保留</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 控制区 -->
+    <div class="section-card" style="text-align: center;">
+        <a-button-group size="large">
+            <a-button type="primary" @click="animateShapeFeatures" icon="radius-setting">1. 几何形状分析</a-button>
+            <a-button type="primary" @click="animateGrayFeatures" icon="bg-colors">2. 灰度特征计算</a-button>
+            <a-button type="primary" @click="animateSelectShape" icon="filter">3. 自动筛选 (Select)</a-button>
+            <a-button type="danger" @click="resetScene" icon="reload">重置场景</a-button>
+        </a-button-group>
+    </div>
+
+    <!-- 5. 逻辑深度解析 -->
+    <div class="desc-grid">
+        <div class="desc-item">
+            <h4>1. 形状特征 (Shape)</h4>
+            <p><b>逻辑体现：</b>计算区域的几何属性。面积是像素总数；圆度描述区域与圆的相似度；矩形度是区域面积与其最小外接矩形的比值。</p>
+            <p><b>动画说明：</b>测量过程中，系统会自动描绘“最小外接矩形”和“质心”，并绘制等效圆进行对比，实时显示计算出的特征数值。</p>
+        </div>
+        <div class="desc-item">
+            <h4>2. 灰度特征 (Gray)</h4>
+            <p><b>逻辑体现：</b>结合原始图像像素，计算区域内的统计规律。均值反映整体亮度，标准差反映表面对比度或纹理复杂程度。</p>
+            <p><b>动画说明：</b>模拟“灰度扫描器”在 Region 内部遍历像素，统计所有点的灰度级并取平均值，展示从图像亮度到具体数值的转化过程。</p>
+        </div>
+        <div class="desc-item">
+            <h4>3. 特征筛选 (Select)</h4>
+            <p><b>逻辑体现：</b>这是视觉决策的核心。通过 <code>select_shape</code> 设定过滤条件（如：面积需大于 1000 且圆度需大于 0.8），滤除干扰项。</p>
+            <p><b>动画说明：</b>场景中会出现多个目标，系统会对它们逐一评分。不满足条件的目标会变红并消失，只有“合格”目标会被赋予高亮 Region 颜色。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                ctx: null,
+                img: null,
+                objects: [
+                    { type: 'circle', x: 150, y: 150, r: 60, color: '#1890ff', name: '对象_1', area: 11310, circ: 0.99, rect: 0.78 },
+                    { type: 'rect', x: 300, y: 120, w: 120, h: 80, color: '#1890ff', name: '对象_2', area: 9600, circ: 0.75, rect: 0.99 },
+                    { type: 'blob', x: 120, y: 320, color: '#1890ff', name: '噪声_3', area: 350, circ: 0.45, rect: 0.3 }
+                ],
+                isRunning: false
+            }
+        },
+        mounted() {
+            this.init();
+            mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+        },
+        methods: {
+            init() {
+                const canvas = document.getElementById('featureCanvas');
+                canvas.width = 600;
+                canvas.height = 450;
+                this.ctx = canvas.getContext('2d');
+                this.drawInitialScene();
+            },
+
+            drawInitialScene() {
+                this.ctx.clearRect(0, 0, 600, 450);
+                // 绘制背景
+                this.ctx.fillStyle = "#111";
+                this.ctx.fillRect(0, 0, 600, 450);
+                
+                // 绘制几个典型的 Region 对象
+                this.objects.forEach(obj => {
+                    this.drawObject(obj, obj.color);
+                });
+            },
+
+            drawObject(obj, color) {
+                this.ctx.fillStyle = color;
+                this.ctx.beginPath();
+                if(obj.type === 'circle') {
+                    this.ctx.arc(obj.x, obj.y, obj.r, 0, Math.PI*2);
+                } else if(obj.type === 'rect') {
+                    this.ctx.rect(obj.x, obj.y, obj.w, obj.h);
+                } else {
+                    // 绘制一个不规则小块 (噪声)
+                    this.ctx.moveTo(obj.x, obj.y);
+                    this.ctx.lineTo(obj.x+20, obj.y-10);
+                    this.ctx.lineTo(obj.x+30, obj.y+20);
+                    this.ctx.lineTo(obj.x, obj.y+15);
+                }
+                this.ctx.fill();
+            },
+
+            resetScene() {
+                this.isRunning = false;
+                gsap.killTweensOf("*");
+                document.getElementById('rectBox').style.display = 'none';
+                document.getElementById('centroid').style.display = 'none';
+                document.getElementById('equivCircle').style.display = 'none';
+                document.getElementById('syntaxDisplay').innerText = "* 等待算子触发...";
+                document.getElementById('opStatus').innerText = "待机";
+                this.updateValues(0, 0, 0, 0);
+                this.drawInitialScene();
+            },
+
+            updateValues(a, c, r, g) {
+                document.getElementById('valArea').innerText = a;
+                document.getElementById('valCirc').innerText = c.toFixed(2);
+                document.getElementById('valRect').innerText = r.toFixed(2);
+                document.getElementById('valGray').innerText = g;
+            },
+
+            // --- 1. 几何形状分析动画 ---
+            animateShapeFeatures() {
+                if(this.isRunning) return;
+                this.isRunning = true;
+                this.resetScene();
+
+                const obj = this.objects[0]; // 对圆形对象进行分析
+                const syntax = document.getElementById('syntaxDisplay');
+                const status = document.getElementById('opStatus');
+                const rectBox = document.getElementById('rectBox');
+                const centroid = document.getElementById('centroid');
+                const circShow = document.getElementById('equivCircle');
+
+                syntax.innerText = "region_features(Region, ['area', 'circularity', 'rectangularity'], Values)";
+                status.innerText = "计算形状特征中...";
+
+                const tl = gsap.timeline();
+
+                // 1. 测面积
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    status.innerText = "正在扫描像素面积...";
+                    this.updateValues(obj.area, 0, 0, 0);
+                }});
+
+                // 2. 找质心与外接矩形
+                tl.to({}, { duration: 0.5, onStart: () => {
+                    status.innerText = "提取质心与 BoundingBox...";
+                    rectBox.style.display = "block";
+                    rectBox.style.left = (obj.x - obj.r) + "px";
+                    rectBox.style.top = (obj.y - obj.r) + "px";
+                    rectBox.style.width = (obj.r * 2) + "px";
+                    rectBox.style.height = (obj.r * 2) + "px";
+                    
+                    centroid.style.display = "block";
+                    centroid.style.left = obj.x + "px";
+                    centroid.style.top = obj.y + "px";
+                }});
+
+                // 3. 算圆度
+                tl.to({}, { duration: 0.8, onStart: () => {
+                    status.innerText = "对比等效圆 (Circularity)...";
+                    circShow.style.display = "block";
+                    circShow.style.left = (obj.x - obj.r) + "px";
+                    circShow.style.top = (obj.y - obj.r) + "px";
+                    circShow.style.width = (obj.r * 2) + "px";
+                    circShow.style.height = (obj.r * 2) + "px";
+                    this.updateValues(obj.area, obj.circ, obj.rect, 0);
+                }});
+
+                tl.add(() => {
+                    status.innerText = "几何分析完成";
+                    this.isRunning = false;
+                });
+            },
+
+            // --- 2. 灰度特征计算动画 ---
+            animateGrayFeatures() {
+                if(this.isRunning) return;
+                this.isRunning = true;
+                this.resetScene();
+                
+                const syntax = document.getElementById('syntaxDisplay');
+                const status = document.getElementById('opStatus');
+                syntax.innerText = "intensity(Region, Image, Mean, Deviation)";
+                status.innerText = "同步灰度矩阵数据...";
+
+                const scanBar = { y: 0 };
+                gsap.to(scanBar, {
+                    y: 450,
+                    duration: 1.5,
+                    onUpdate: () => {
+                        // 绘制一条扫描线
+                        this.drawInitialScene();
+                        this.ctx.strokeStyle = "#00e5ff";
+                        this.ctx.lineWidth = 2;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(0, scanBar.y);
+                        this.ctx.lineTo(600, scanBar.y);
+                        this.ctx.stroke();
+                        
+                        // 随机更新一点灰度值显示
+                        document.getElementById('valGray').innerText = Math.floor(150 + Math.random()*20);
+                    },
+                    onComplete: () => {
+                        document.getElementById('valGray').innerText = 168;
+                        status.innerText = "灰度特征计算完成";
+                        this.isRunning = false;
+                    }
+                });
+            },
+
+            // --- 3. 特征筛选 (Select Shape) 动画 ---
+            animateSelectShape() {
+                if(this.isRunning) return;
+                this.isRunning = true;
+                this.resetScene();
+
+                const syntax = document.getElementById('syntaxDisplay');
+                const status = document.getElementById('opStatus');
+                syntax.innerText = "select_shape(Regions, Selected, 'area', 'and', 500, 99999)";
+                status.innerText = "执行 select_shape 决策筛选...";
+
+                const tl = gsap.timeline();
+
+                this.objects.forEach((obj, idx) => {
+                    tl.to({}, { duration: 0.6, onStart: () => {
+                        status.innerText = `正在评估: ${obj.name}...`;
+                        // 高亮当前评估对象
+                        this.drawInitialScene();
+                        this.ctx.strokeStyle = "#fff";
+                        this.ctx.lineWidth = 3;
+                        this.ctx.strokeRect(obj.x-70, obj.y-70, 140, 140);
+                    }});
+
+                    if(obj.area < 1000) {
+                        // 不合格项
+                        tl.to({}, { duration: 0.4, onStart: () => {
+                            this.ctx.fillStyle = "#ff4d4f"; // 变红
+                            this.drawObject(obj, "#ff4d4f");
+                            status.innerText = `${obj.name} 面积过小 -> 滤除`;
+                        }});
+                        tl.to({}, { duration: 0.3, onStart: () => {
+                            obj.visible = false;
+                            this.drawInitialScene(); // 重新绘制场景，该对象由于标记消失
+                            this.objects = this.objects.filter(o => o.name !== obj.name);
+                        }});
+                    } else {
+                        // 合格项
+                        tl.to({}, { duration: 0.4, onStart: () => {
+                            this.drawObject(obj, "#52c41a"); // 变绿
+                            status.innerText = `${obj.name} 合格 -> 保留`;
+                        }});
+                    }
+                });
+
+                tl.add(() => {
+                    status.innerText = "筛选完成：已提取目标 Region";
+                    this.isRunning = false;
+                });
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
