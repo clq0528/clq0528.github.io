@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Halcon 图像分割 (Segmentation) 深度交互实验室</title>
+    
+    <!-- 引入核心 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #000b14; 
+            color: #fff; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+        }
+        .section-card { 
+            background: #001529; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #1890ff33; 
+            margin-bottom: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); 
+        }
+        h2, h3 { 
+            color: #1890ff; 
+        }
+        
+        .main-layout { 
+            display: flex; 
+            gap: 20px; 
+        }
+        .canvas-area { 
+            flex: 2; 
+            background: #050505; 
+            border: 2px solid #1890ff; 
+            position: relative; 
+            border-radius: 12px; 
+            height: 500px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            overflow: hidden; 
+            box-shadow: inset 0 0 50px rgba(24,144,255,0.2);
+        }
+        
+        #scanLine { 
+            position: absolute; 
+            width: 100%; 
+            height: 2px; 
+            background: #00e5ff; 
+            box-shadow: 0 0 15px #00e5ff; 
+            z-index: 10; 
+            pointer-events: none;
+            display: none;
+        }
+
+        #seedPoint { 
+            position: absolute; 
+            width: 16px; 
+            height: 16px; 
+            background: #ff4d4f; 
+            border-radius: 50%; 
+            z-index: 11; 
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px #ff4d4f; 
+            border: 2px solid #fff; 
+            display: none;
+        }
+
+        .side-panel { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
+        }
+        .algo-syntax { 
+            font-family: 'Fira Code', 'Consolas', monospace; 
+            color: #a6e22e; 
+            background: #000; 
+            padding: 15px; 
+            border-radius: 4px; 
+            font-size: 13px; 
+            line-height: 1.5; 
+            border: 1px solid #1890ff44; 
+            min-height: 80px; 
+        }
+
+        .desc-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        .desc-item { 
+            background: rgba(24, 144, 255, 0.05); 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(24, 144, 255, 0.2); 
+            transition: 0.3s; 
+        }
+        .desc-item:hover { 
+            background: rgba(24, 144, 255, 0.1); 
+            border-color: #1890ff; 
+        }
+        .desc-item h4 { 
+            color: #00e5ff; 
+            margin-bottom: 10px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .desc-item p { 
+            font-size: 13px; 
+            color: #aaa; 
+            line-height: 1.6; 
+            margin: 0; 
+        }
+
+        .status-badge { 
+            color: #00e5ff; 
+            font-weight: bold; 
+            background: rgba(0,229,255,0.1); 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+        }
+        
+        .debug-info { 
+            position: fixed; 
+            top: 10px; 
+            left: 10px; 
+            background: rgba(0,0,0,0.8); 
+            color: #00ff00; 
+            padding: 10px; 
+            font-size: 12px; 
+            z-index: 1000; 
+            border: 1px solid #00ff00; 
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container">
+    <!-- 调试信息 -->
+    <div class="debug-info" id="debugInfo">系统状态: 初始化中...</div>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #fff; margin:0;">Halcon 图像分割 (Segmentation) 逻辑实验室</h1>
+        <p style="color: #1890ff;">深度理解：从连续灰度矩阵到离散逻辑区域的转换</p>
+    </div>
+
+    <div class="main-layout">
+        <!-- 核心显示区 -->
+        <div class="canvas-area" id="stage">
+            <div id="scanLine"></div>
+            <div id="seedPoint" ref="seed"></div>
+            <canvas id="mainCanvas"></canvas>
+            <div style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.7); padding: 8px 15px; border-radius: 4px; border: 1px solid #1890ff;">
+                <span style="font-size: 12px; color: #888;">当前图层:</span><br>
+                <b id="layerName" style="color: #00e5ff;">原始图像</b>
+            </div>
+        </div>
+
+        <!-- 右侧面板 -->
+        <div class="side-panel">
+            <div class="section-card">
+                <h3><a-icon type="code"></a-icon> 算子语法同步</h3>
+                <div id="syntaxDisplay" class="algo-syntax" v-html="currentSyntax"></div>
+                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span class="status-badge" id="statusText">[ 系统就绪 ]</span>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h3><a-icon type="line-chart"></a-icon> 实时直方图联动</h3>
+                <div style="height: 180px;"><canvas id="histChart"></canvas></div>
+                <p style="font-size: 11px; color: #555; margin-top: 10px;">* 观察分割后直方图的"两极分化"现象</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互控制台 -->
+    <div class="section-card" style="text-align: center; margin-top: 20px; border-top: 2px solid #1890ff;">
+        <a-button-group size="large">
+            <a-button type="primary" @click="runBinaryThreshold" icon="scan">执行：全局阈值 (Binary)</a-button>
+            <a-button type="primary" @click="runDynThreshold" icon="bulb">执行：动态阈值 (Dynamic)</a-button>
+            <a-button type="primary" @click="runRegionGrowing" icon="RadarChart">执行：区域生长 (Growing)</a-button>
+            <a-button type="danger" @click="resetAll" icon="rest">重置实验</a-button>
+        </a-button-group>
+    </div>
+
+    <!-- 深度解析 -->
+    <div class="desc-grid">
+        <div class="desc-item">
+            <h4>1. 全局阈值 (Binary)</h4>
+            <p><b>动画模拟：</b>通过一根蓝色的"扫描线"从上至下划过图像。</p>
+            <p><b>逻辑体现：</b>模拟了 Halcon 对图像矩阵的单次遍历。当扫描线经过时，像素立即根据灰度值（128）被强制转为 0 或 255。</p>
+            <p><b>适用场景：</b>背景与目标灰度差异极大的工业件检测。</p>
+        </div>
+        <div class="desc-item">
+            <h4>2. 动态阈值 (Dynamic)</h4>
+            <p><b>动画模拟：</b>图像首先整体变模糊（模拟 mean_image 提取背景），然后瞬间提取出对比度高的区域。</p>
+            <p><b>逻辑体现：</b>这是处理"光照不均"的王牌算法。它不是对比一个固定值，而是对比像素及其周围的平均值。</p>
+            <p><b>适用场景：</b>表面有反光、环境光会变化的检测线。</p>
+        </div>
+        <div class="desc-item">
+            <h4>3. 区域生长 (Growing)</h4>
+            <p><b>动画模拟：</b>在屏幕中心出现一个红色的"种子点"，随后绿色区域像水滴散开一样逐渐包裹物体。</p>
+            <p><b>逻辑体现：</b>体现了"自下而上"的聚类思想。检查种子点周围像素，若灰度差在 Tolerance 内则将其吞并。</p>
+            <p><b>适用场景：</b>纹理特征明显或需要从特定位置提取的区域。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// 确保Ant Design Vue组件正确注册
+if (window.antd) {
+    Vue.use(antd);
+}
+
+new Vue({
+    el: '#app',
+    data() {
+        return {
+            ctx: null,
+            chart: null,
+            img: null,
+            width: 640,
+            height: 480,
+            originalData: null,
+            isRunning: false,
+            activeAlgo: '',
+            currentSyntax: '* 等待算子触发...',
+            debugMode: true
+        }
+    },
+    mounted() {
+        this.debugLog('Vue实例已挂载');
+        this.init();
+    },
+    methods: {
+        debugLog(message) {
+            if (this.debugMode) {
+                console.log('DEBUG:', message);
+                document.getElementById('debugInfo').innerText = '状态: ' + message;
+            }
+        },
+        
+        init() {
+            this.debugLog('初始化Canvas和图像');
+            const canvas = document.getElementById('mainCanvas');
+            canvas.width = this.width;
+            canvas.height = this.height;
+            this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+            this.initChart();
+            this.createSimulationImage();
+        },
+
+        // 创建一个模拟工业场景的图像
+        createSimulationImage() {
+            this.debugLog('创建本地测试图像');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = this.width;
+            tempCanvas.height = this.height;
+            const tCtx = tempCanvas.getContext('2d');
+            
+            // 1. 模拟不均匀背景（左暗右亮）
+            const grad = tCtx.createLinearGradient(0,0,640,0);
+            grad.addColorStop(0, '#1a1a1a');
+            grad.addColorStop(1, '#4d4d4d');
+            tCtx.fillStyle = grad;
+            tCtx.fillRect(0,0,640,480);
+
+            // 2. 绘制几个待检测零件（灰度值不同）
+            tCtx.fillStyle = '#b0b0b0'; // 亮色零件
+            tCtx.beginPath();
+            tCtx.arc(150, 200, 60, 0, Math.PI*2);
+            tCtx.fill();
+            
+            tCtx.fillStyle = '#808080'; // 暗色零件
+            tCtx.fillRect(350, 150, 120, 120);
+
+            this.img = new Image();
+            this.img.onload = () => { 
+                this.debugLog('测试图像加载完成');
+                this.resetAll(); 
+            };
+            this.img.src = tempCanvas.toDataURL();
+        },
+
+        initChart() {
+            this.debugLog('初始化直方图');
+            const ctx = document.getElementById('histChart').getContext('2d');
+            this.chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 32}, (_, i) => i * 8), // 抽样显示
+                    datasets: [{ 
+                        label: '灰度频率',
+                        data: new Array(32).fill(0), 
+                        backgroundColor: '#1890ff',
+                        barPercentage: 1,
+                        categoryPercentage: 1
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        x: { display: false }, 
+                        y: { display: false } 
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }, 
+                    animation: false 
+                }
+            });
+        },
+
+        updateHistogram() {
+            if (!this.ctx || !this.chart) return;
+            
+            try {
+                const data = this.ctx.getImageData(0,0,this.width,this.height).data;
+                const hist = new Array(32).fill(0);
+                for(let i=0; i<data.length; i+=16) { // 抽样计算
+                    const gray = (data[i] + data[i+1] + data[i+2])/3;
+                    hist[Math.floor(gray/8)]++;
+                }
+                this.chart.data.datasets[0].data = hist;
+                this.chart.update('none');
+            } catch (error) {
+                this.debugLog('直方图更新错误: ' + error.message);
+            }
+        },
+
+        resetAll() {
+            this.debugLog('重置所有状态');
+            this.isRunning = false;
+            this.activeAlgo = '';
+            
+            // 停止所有GSAP动画
+            gsap.killTweensOf("#scanLine");
+            gsap.killTweensOf("#seedPoint");
+            gsap.killTweensOf("#mainCanvas");
+            
+            const scanLine = document.getElementById('scanLine');
+            const seedPoint = document.getElementById('seedPoint');
+            
+            if (scanLine) {
+                scanLine.style.display = 'none';
+                scanLine.style.top = '0%';
+            }
+            if (seedPoint) {
+                seedPoint.style.display = 'none';
+            }
+            
+            // 重置Canvas显示
+            if (this.ctx && this.img) {
+                this.ctx.filter = 'none';
+                this.ctx.clearRect(0, 0, this.width, this.height);
+                this.ctx.drawImage(this.img, 0, 0);
+                this.originalData = this.ctx.getImageData(0, 0, this.width, this.height);
+            }
+            
+            // 重置UI状态
+            document.getElementById('layerName').innerText = "原始图像";
+            document.getElementById('statusText').innerText = "[ 系统就绪 ]";
+            this.currentSyntax = '* 等待算子触发...';
+            
+            this.updateHistogram();
+        },
+
+        // --- 核心动画算法 1: 全局阈值 ---
+        runBinaryThreshold() {
+            if(this.isRunning) {
+                this.debugLog('动画正在运行，请等待完成');
+                return;
+            }
+            
+            this.debugLog('开始全局阈值动画');
+            this.resetAll();
+            this.isRunning = true;
+            this.activeAlgo = 'binary';
+
+            const scanLine = document.getElementById('scanLine');
+            const syntax = document.getElementById('syntaxDisplay');
+            const status = document.getElementById('statusText');
+            const layer = document.getElementById('layerName');
+
+            syntax.innerText = "binary_threshold(Image, Region, 128, 255)";
+            status.innerText = "[ 执行中：逐行矩阵遍历 ]";
+            layer.innerText = "分割结果 (Region)";
+            scanLine.style.display = 'block';
+
+            const obj = { y: 0 };
+            gsap.to(obj, {
+                y: this.height,
+                duration: 2.5,
+                ease: "none",
+                onStart: () => {
+                    this.debugLog('GSAP动画开始');
+                },
+                onUpdate: () => {
+                    scanLine.style.top = (obj.y / this.height * 100) + "%";
+                    
+                    // 局部像素处理逻辑
+                    const currentData = this.ctx.getImageData(0, 0, this.width, this.height);
+                    const d = currentData.data;
+                    const src = this.originalData.data;
+                    
+                    const limit = Math.floor(obj.y) * this.width * 4;
+                    for(let i = 0; i < limit; i += 4) {
+                        const gray = (src[i] + src[i+1] + src[i+2]) / 3;
+                        const val = gray > 125 ? 255 : 0; // 阈值分割
+                        d[i] = d[i+1] = d[i+2] = val;
+                    }
+                    this.ctx.putImageData(currentData, 0, 0);
+                    this.updateHistogram();
+                },
+                onComplete: () => {
+                    scanLine.style.display = 'none';
+                    status.innerText = "[ 完成：观察直方图两极分化 ]";
+                    this.isRunning = false;
+                    this.debugLog('全局阈值动画完成');
+                }
+            });
+        },
+
+        // --- 核心动画算法 2: 动态阈值 ---
+        runDynThreshold() {
+            if(this.isRunning) {
+                this.debugLog('动画正在运行，请等待完成');
+                return;
+            }
+            
+            this.debugLog('开始动态阈值动画');
+            this.resetAll();
+            this.isRunning = true;
+
+            const syntax = document.getElementById('syntaxDisplay');
+            const status = document.getElementById('statusText');
+            const layer = document.getElementById('layerName');
+
+            syntax.innerText = "mean_image(Img, Blur, 15, 15)\ndyn_threshold(Img, Blur, Reg, 5, 'light')";
+            status.innerText = "[ 1. 提取背景均值图像... ]";
+            layer.innerText = "背景均值估计 (Mean)";
+
+            const tl = gsap.timeline({ 
+                onComplete: () => {
+                    this.isRunning = false;
+                    this.debugLog('动态阈值动画完成');
+                }
+            });
+
+            // 第一阶段：变模糊 (模拟 mean_image)
+            tl.to("#mainCanvas", {
+                filter: "blur(10px)",
+                duration: 1.2
+            });
+
+            tl.add(() => {
+                status.innerText = "[ 2. 对比差值提取目标... ]";
+                layer.innerText = "动态分割结果";
+                
+                // 模拟动态阈值后的二值化
+                const currentData = this.ctx.getImageData(0, 0, this.width, this.height);
+                const d = currentData.data;
+                const src = this.originalData.data;
+                
+                for(let i=0; i<d.length; i+=4) {
+                    const gray = (src[i] + src[i+1] + src[i+2]) / 3;
+                    // 模拟动态阈值：与周围像素比较
+                    const v = gray > 140 ? 255 : 0;
+                    d[i] = d[i+1] = d[i+2] = v;
+                }
+                this.ctx.putImageData(currentData, 0, 0);
+                this.updateHistogram();
+            });
+
+            tl.to("#mainCanvas", {
+                filter: "none",
+                duration: 0.5,
+                onComplete: () => {
+                    status.innerText = "[ 完成：成功补偿不均匀光照 ]";
+                }
+            });
+        },
+
+        // --- 核心动画算法 3: 区域生长 ---
+        runRegionGrowing() {
+            if(this.isRunning) {
+                this.debugLog('动画正在运行，请等待完成');
+                return;
+            }
+            
+            this.debugLog('开始区域生长动画');
+            this.resetAll();
+            this.isRunning = true;
+
+            const seed = document.getElementById('seedPoint');
+            const syntax = document.getElementById('syntaxDisplay');
+            const status = document.getElementById('statusText');
+            const layer = document.getElementById('layerName');
+
+            syntax.innerText = "regiongrowing(Image, Regions, 3, 3, 2.5, 100)";
+            status.innerText = "[ 选取初始种子点... ]";
+            layer.innerText = "区域增长扩散";
+
+            // 设置种子位置 (画布中心)
+            seed.style.left = "50%";
+            seed.style.top = "50%";
+            seed.style.display = "block";
+
+            const growParams = { radius: 0 };
+            gsap.to(growParams, {
+                radius: this.width * 0.7,
+                duration: 3,
+                ease: "power2.out",
+                onStart: () => {
+                    status.innerText = "[ 正在按像素灰度相似度扩散... ]";
+                    this.debugLog('区域生长动画开始');
+                },
+                onUpdate: () => {
+                    this.ctx.save();
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.width/2, this.height/2, growParams.radius, 0, Math.PI*2);
+                    this.ctx.clip();
+                    
+                    const currentData = this.ctx.getImageData(0, 0, this.width, this.height);
+                    const d = currentData.data;
+                    const src = this.originalData.data;
+                    
+                    for(let i=0; i<d.length; i+=4) {
+                        const gray = (src[i] + src[i+1] + src[i+2]) / 3;
+                        // 模拟生长规则：只填充灰度在一定范围内的连通区域
+                        if(gray > 100 && gray < 200) {
+                            d[i] = 82; d[i+1] = 196; d[i+2] = 26; // 绿色 Region
+                        }
+                    }
+                    this.ctx.putImageData(currentData, 0, 0);
+                    this.ctx.restore();
+                },
+                onComplete: () => {
+                    status.innerText = "[ 完成：区域聚类结束 ]";
+                    this.isRunning = false;
+                    this.updateHistogram();
+                    this.debugLog('区域生长动画完成');
+                }
+            });
+        }
+    }
+});
+</script>
+</body>
+</html>

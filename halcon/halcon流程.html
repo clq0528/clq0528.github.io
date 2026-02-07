@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halcon 机器视觉技术逻辑指南</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #1890ff;
+        }
+        .chart-container { 
+            width: 100%; 
+            min-height: 200px; 
+            border: 1px solid #e8e8e8; 
+            border-radius: 4px; 
+            background: #fafafa; 
+            overflow: auto; 
+            padding: 20px;
+            margin-top: 15px;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 10px; 
+            color: #001529;
+            font-weight: bold;
+        }
+        .logic-desc {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            padding: 12px 16px;
+            border-radius: 4px;
+            color: rgba(0, 0, 0, 0.85);
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .operator-tag { margin: 2px; font-family: monospace; }
+        .mermaid svg { max-width: 100% !important; }
+        .ant-table-thead > tr > th { background: #fafafa !important; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 标题区域 -->
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h1 style="font-size: 28px; color: #001529;">Halcon 机器视觉全流程算子与逻辑架构</h1>
+            <p style="color: #666;">基于 HObject 数据体系的图像处理、几何变换与特征分析指南</p>
+        </div>
+
+        <!-- 1. 基础数据结构 -->
+        <div class="section-card">
+            <h2>1. 基础数据结构 (Data Types)</h2>
+            <div class="logic-desc">
+                Halcon 将所有视觉数据封装为 <b>HObject</b>。Image 提供像素矩阵，Region 提供坐标集合实现高效 ROI 操作，XLD 提供亚像素精度的矢量轮廓，Tuple 则负责非图形化的参数运算。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        HObject --> Image[Image: 像素矩阵/通道]
+                        HObject --> Region[Region: 坐标压缩集合/离散点]
+                        HObject --> XLD[XLD: 亚像素轮廓/多边形]
+                        Tuple[Tuple: 数组/句柄/数值控制]
+                        
+                        style HObject fill:#1890ff,stroke:#003a8c,color:#fff
+                        style Tuple fill:#f5222d,stroke:#a8071a,color:#fff
+                </div>
+            </div>
+            <a-table :columns="dataColumns" :data-source="dataInfo" size="small" :pagination="false" bordered style="margin-top:20px"></a-table>
+        </div>
+
+        <!-- 2. 仿射变换与标定 -->
+        <div class="section-card">
+            <h2>2. 几何变换与九点标定 (Transformations)</h2>
+            <div class="logic-desc">
+                <b>逻辑：</b>通过创建单位矩阵，级联平移、旋转、缩放参数，最后将其应用到目标对象。九点标定本质上是寻找像素坐标系与物理坐标系之间的单应性矩阵映射。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Init[hom_mat2d_identity] --> Set[平移/旋转/缩放算子]
+                        Set --> Apply{affine_trans_*}
+                        Apply --> |图像| TransImg[affine_trans_image]
+                        Apply --> |区域| TransReg[affine_trans_region]
+                        Apply --> |轮廓| TransXLD[affine_trans_contour_xld]
+                        
+                        Points[像素/机械坐标对] --> Calib[vector_to_hom_mat2d]
+                        Calib --> Matrix[生成仿射矩阵]
+                        Matrix --> Decompose[hom_mat2d_to_affine_par]
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 图像预处理与 ROI -->
+        <div class="section-card">
+            <h2>3. ROI 裁剪与图像增强 (Preprocessing)</h2>
+            <div class="logic-desc">
+                <b>逻辑：</b>Halcon 的 ROI (reduce_domain) 不会生成新图像，而是建立一个掩膜范围。后续算子仅在范围内运算，极大提升效率。增强侧重于频率域或空域的对比度拉伸与噪声抑制。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Raw[原始图像] --> GenROI[gen_rectangle/circle]
+                        GenROI --> Reduce[reduce_domain]
+                        Reduce --> Filter{滤波/增强}
+                        Filter --> Mean[mean_image: 均值去噪]
+                        Filter --> Gauss[gauss_filter: 高斯平滑]
+                        Filter --> Shock[shock_filter: 边缘锐化]
+                        Filter --> Equ[equ_histo_image: 直方图均衡]
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 图像分割策略 -->
+        <div class="section-card">
+            <h2>4. 图像分割 (Segmentation)</h2>
+            <div class="logic-desc">
+                <b>逻辑：</b>根据灰度特征将目标从背景分离。全局阈值适合光照均匀场景；动态阈值 (dyn_threshold) 适合背景复杂或打光不均；区域生长适合处理具有相似纹理的连通区域。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Seg[图像分割] --> Global[binary_threshold: 自动全局]
+                        Seg --> Dynamic[dyn_threshold: 局部动态对比]
+                        Seg --> Var[var_threshold: 均值标准差]
+                        Seg --> Water[watersheds: 分水岭/洼地]
+                        Seg --> Grow[regiongrowing: 种子生长]
+                </div>
+            </div>
+            <div style="margin-top:15px">
+                <a-tag color="blue" class="operator-tag">auto_threshold</a-tag>
+                <a-tag color="cyan" class="operator-tag">binary_threshold</a-tag>
+                <a-tag color="green" class="operator-tag">dyn_threshold</a-tag>
+                <a-tag color="orange" class="operator-tag">regiongrowing_mean</a-tag>
+            </div>
+        </div>
+
+        <!-- 5. 特征提取分析 -->
+        <div class="section-card">
+            <h2>5. 特征提取 (Feature Extraction)</h2>
+            <div class="logic-desc">
+                <b>逻辑：</b>对分割后的 Region 或 XLD 进行定量描述。筛选过程通常是：计算特征 -> 设定范围 -> `select_shape`。纹理特征基于共生矩阵，描述灰度空间分布的规律性。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Feature[特征提取] --> Shape[形状特征: 面积/圆度/矩形度]
+                        Feature --> Gray[灰度特征: 均值/标准差/能量]
+                        Feature --> Texture[纹理特征: 能量/相关性/反差]
+                        Shape --> Select[select_shape]
+                        Gray --> SelectG[gray_features]
+                        Texture --> Cooc[gen_cooc_matrix]
+                </div>
+            </div>
+            <a-collapse simple style="margin-top:15px">
+                <a-collapse-panel key="1" header="常用几何形状特征参数对照表">
+                    <a-table :columns="featureColumns" :data-source="featureData" size="small" :pagination="{pageSize: 5}"></a-table>
+                </a-collapse-panel>
+            </a-collapse>
+        </div>
+
+        <!-- 6. 边缘检测与轮廓处理 -->
+        <div class="section-card">
+            <h2>6. 亚像素边缘与 XLD 轮廓 (Edges & Contours)</h2>
+            <div class="logic-desc">
+                <b>逻辑：</b>提取边缘后，XLD 通常是不连续的。需要经过：分割(线/弧) -> 筛选(长度) -> 连接(共线/端点) -> 拟合(最小二乘法) 这一标准流程来获得高精度的几何参数。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Detect[edges_sub_pix] --> Split[segment_contours_xld]
+                        Split --> FilterX[select_contours_xld]
+                        FilterX --> Union[union_collinear_contours_xld]
+                        Union --> Fit{轮廓拟合}
+                        Fit --> FitLine[fit_line_contour_xld]
+                        Fit --> FitCircle[fit_circle_contour_xld]
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. 总结：标准视觉处理流程图 -->
+        <div class="section-card" style="border-top: 4px solid #52c41a;">
+            <h2>总结：Halcon 标准视觉开发全流程</h2>
+            <div class="logic-desc">
+                这是一个典型的机器视觉检测逻辑：从图像获取到结果输出的闭环。
+            </div>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        Start((开始)) --> Acq[图像采集/读取]
+                        Acq --> Pre[预处理/滤波增强]
+                        Pre --> ROI[确定 ROI/ReduceDomain]
+                        ROI --> Seg[图像分割/边缘提取]
+                        Seg --> Morph[形态学/开闭运算]
+                        Morph --> Feat[特征计算/筛选]
+                        Feat --> Result{判定/分类}
+                        Result --> |OK| Out[输出坐标/显示标注]
+                        Result --> |NG| Alarm[报警/日志]
+                        Out & Alarm --> End((结束))
+
+                        classDef green fill:#f6ffed,stroke:#52c41a;
+                        classDef blue fill:#e6f7ff,stroke:#1890ff;
+                        class Acq,Pre,ROI,Seg blue;
+                        class Result,Out,Alarm green;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    dataColumns: [
+                        { title: '数据类型', dataIndex: 'type', key: 'type', width: '20%' },
+                        { title: '核心定义', dataIndex: 'def', key: 'def' },
+                        { title: '应用场景', dataIndex: 'scene', key: 'scene' }
+                    ],
+                    dataInfo: [
+                        { type: 'Image', def: '多通道像素矩阵', scene: '所有处理的载体' },
+                        { type: 'Region', def: '行程编码 (RLE) 坐标集合', scene: 'ROI裁剪、面积/位置测量' },
+                        { type: 'XLD', def: '亚像素精度的矢量轮廓点集', scene: '高精度测量、形状匹配、拟合' },
+                        { type: 'Tuple', def: '灵活的数值数组/字符串', scene: '存储坐标、循环控制、算子参数' }
+                    ],
+                    featureColumns: [
+                        { title: '特征名称', dataIndex: 'name', key: 'name' },
+                        { title: 'Halcon 对应参数', dataIndex: 'param', key: 'param' },
+                        { title: '物理意义', dataIndex: 'desc', key: 'desc' }
+                    ],
+                    featureData: [
+                        { name: '面积', param: 'area', desc: '区域内像素的总数' },
+                        { name: '圆度', param: 'circularity', desc: '区域与圆的相似度 (1为完美圆)' },
+                        { name: '矩形度', param: 'rectangularity', desc: '区域与最小外接矩形的覆盖比' },
+                        { name: '凸包性', param: 'convexity', desc: '区域与其凸包的面积比' },
+                        { name: '紧凑度', param: 'compactness', desc: '轮廓长度与面积的关系' },
+                        { name: '主轴角度', param: 'phi', desc: '等效椭圆或外接矩形的旋转弧度' },
+                        { name: '内接圆半径', param: 'inner_radius', desc: '区域内能容纳的最大圆半径' }
+                    ]
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init(undefined, '.mermaid');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
