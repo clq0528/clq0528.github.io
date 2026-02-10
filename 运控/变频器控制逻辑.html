@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>变频器控制系统管理后台</title>
+    
+    <!-- 引入 Mermaid 10.x -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue 1.x (Vue 2 对应的稳定版) -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 24px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); 
+            border-top: 4px solid #1890ff;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 20px; 
+            color: #001529;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .chart-container { 
+            width: 100%; 
+            background: #fafafa; 
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            padding: 20px;
+            overflow-x: auto;
+        }
+        /* Mermaid 样式自定义 */
+        .mermaid { display: flex; justify-content: center; }
+        
+        .rule-card { margin-bottom: 16px; transition: all 0.3s; }
+        .rule-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .status-tag { min-width: 80px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <!-- 1. 变频器控制任务列表 -->
+        <div class="section-card">
+            <h2><a-icon type="bars" /> 变频器控制任务列表 (Task List)</h2>
+            <div style="margin-bottom: 16px;">
+                <a-button type="primary" icon="plus" @click="handleEdit({})">新建任务单</a-button>
+            </div>
+            <a-table :columns="columns" :data-source="taskList" row-key="id" bordered size="middle">
+                <template slot="status" slot-scope="text">
+                    <a-tag :color="text === '运行中' ? 'green' : 'orange'" class="status-tag">
+                        {{ text }}
+                    </a-tag>
+                </template>
+                <template slot="action" slot-scope="record">
+                    <a-button type="link" icon="edit" @click="handleEdit(record)">编辑</a-button>
+                    <a-divider type="vertical" />
+                    <a-popconfirm title="确定删除此任务吗？" @confirm="handleDelete(record.id)">
+                        <a-button type="link" class="ant-btn-danger">删除</a-button>
+                    </a-popconfirm>
+                </template>
+            </a-table>
+        </div>
+
+        <!-- 2. 变频器控制规则设置 -->
+        <div class="section-card">
+            <h2><a-icon type="setting" /> 变频器控制规则 (Control Rules)</h2>
+            <a-row :gutter="16">
+                <a-col :span="8" v-for="rule in controlRules" :key="rule.id">
+                    <a-card :title="rule.name" size="small" class="rule-card">
+                        <template slot="extra">
+                            <a-switch v-model="rule.enabled" size="small" />
+                        </template>
+                        <p style="color: #666; font-size: 13px;">{{ rule.description }}</p>
+                        <div style="text-align: right; margin-top: 10px;">
+                            <a-button size="small" icon="edit" @click="openRuleDrawer(rule)">详情设置</a-button>
+                        </div>
+                    </a-card>
+                </a-col>
+            </a-row>
+        </div>
+
+        <!-- 4. 变频器控制逻辑流程图 -->
+        <div class="section-card">
+            <h2><a-icon type="apartment" /> 变频器控制逻辑流程图 (Control Logic)</h2>
+            <div class="chart-container">
+                <div class="mermaid">
+                    graph LR
+                        %% 样式定义
+                        classDef core fill:#e6f7ff,stroke:#1890ff,stroke-width:2px;
+                        classDef source fill:#f6ffed,stroke:#52c41a,stroke-width:2px;
+                        classDef param fill:#fff7e6,stroke:#ffa940,stroke-width:2px;
+                        classDef wiring fill:#f9f0ff,stroke:#722ed1,stroke-width:2px;
+
+                        subgraph Core[逻辑一：控制核心 Core Control]
+                            A[启动/停止指令] --> B{频率运算}
+                            B --> C[加减速波形生成]
+                            C --> D[IGBT功率输出]
+                        end
+
+                        subgraph Source[逻辑二：设置源 Setting Source]
+                            E[命令源选择] --> F[面板旋钮/手动]
+                            E --> G[外部远控/自动化]
+                            H[频率源切换] --> I[模拟量/通讯]
+                        end
+
+                        subgraph Params[逻辑三：定义参数 Definition Params]
+                            J[端子功能定义] --> K[物理接线匹配]
+                            L[参数逻辑设置] --> M[运行模式激活]
+                        end
+
+                        subgraph Wiring[逻辑四：接线方式 Wiring Types]
+                            N{交互接口} --> O[数字量: 开关信号]
+                            N --> P[模拟量: 0-10V/4-20mA]
+                            N --> Q[RS485: Modbus通讯]
+                            N --> R[继电器: 隔离开关]
+                        end
+
+                        %% 跨组逻辑连接
+                        A --> E
+                        D --> J
+                        F --> N
+                        G --> Q
+
+                        class Core,A,B,C,D core;
+                        class Source,E,F,G,H,I source;
+                        class Params,J,K,L,M param;
+                        class Wiring,N,O,P,Q,R wiring;
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务编辑弹窗 (Modal) -->
+        <a-modal
+            v-model="modalVisible"
+            :title="form.id ? '编辑任务单' : '新建任务单'"
+            @ok="handleModalOk"
+            ok-text="保存"
+            cancel-text="取消"
+            :width="600"
+        >
+            <a-form :form="form" layout="vertical">
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <a-form-item label="任务名称">
+                            <a-input v-model="form.name" placeholder="请输入任务名称" />
+                        </a-form-item>
+                    </a-col>
+                    <a-col :span="12">
+                        <a-form-item label="变频器型号">
+                            <a-select v-model="form.type" placeholder="请选择型号">
+                                <a-select-option value="VFD-A500">VFD-A500 高性能系列</a-select-option>
+                                <a-select-option value="VFD-E300">VFD-E300 经济型</a-select-option>
+                                <a-select-option value="VFD-M200">VFD-M200 迷你系列</a-select-option>
+                            </a-select>
+                        </a-form-item>
+                    </a-col>
+                </a-row>
+                <a-form-item label="运行模式">
+                    <a-radio-group v-model="form.mode">
+                        <a-radio value="手动">面板手动</a-radio>
+                        <a-radio value="外部">外部端子控制</a-radio>
+                        <a-radio value="通讯">RS485通讯控制</a-radio>
+                    </a-radio-group>
+                </a-form-item>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <a-form-item label="设定频率 (Hz)">
+                            <a-input-number v-model="form.frequency" :min="0" :max="60" style="width: 100%" />
+                        </a-form-item>
+                    </a-col>
+                    <a-col :span="12">
+                        <a-form-item label="加速时间 (s)">
+                            <a-input-number v-model="form.accTime" :min="0.1" style="width: 100%" />
+                        </a-form-item>
+                    </a-col>
+                </a-row>
+                <a-form-item label="备注说明">
+                    <a-textarea v-model="form.remark" placeholder="请输入接线要求或参数说明" :rows="3" />
+                </a-form-item>
+            </a-form>
+        </a-modal>
+
+        <!-- 规则编辑抽屉 (Drawer) -->
+        <a-drawer
+            title="规则详情配置"
+            placement="right"
+            :closable="true"
+            :visible="drawerVisible"
+            width="400"
+            @close="drawerVisible = false"
+        >
+            <div v-if="activeRule">
+                <h3>{{ activeRule.name }}</h3>
+                <p>{{ activeRule.description }}</p>
+                <a-divider />
+                <a-form layout="vertical">
+                    <a-form-item label="触发阈值">
+                        <a-input-number style="width: 100%" :default-value="120" />
+                    </a-form-item>
+                    <a-form-item label="响应动作">
+                        <a-select default-value="alarm">
+                            <a-select-option value="alarm">仅报警 (Alarm)</a-select-option>
+                            <a-select-option value="stop">自由停车 (Coast Stop)</a-select-option>
+                            <a-select-option value="slow">减速运行 (Slow Down)</a-select-option>
+                        </a-select>
+                    </a-form-item>
+                    <a-form-item label="复位方式">
+                        <a-radio-group default-value="auto">
+                            <a-radio value="auto">自动复位</a-radio>
+                            <a-radio value="manual">手动复位</a-radio>
+                        </a-radio-group>
+                    </a-form-item>
+                </a-form>
+                <div style="position: absolute; bottom: 20px; left: 0; width: 100%; padding: 0 24px;">
+                    <a-button type="primary" block @click="drawerVisible = false">应用配置</a-button>
+                </div>
+            </div>
+        </a-drawer>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true }
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    // 表格列定义
+                    columns: [
+                        { title: '任务 ID', dataIndex: 'id', key: 'id', width: 100 },
+                        { title: '任务名称', dataIndex: 'name', key: 'name' },
+                        { title: '变频器型号', dataIndex: 'type', key: 'type' },
+                        { title: '运行模式', dataIndex: 'mode', key: 'mode' },
+                        { title: '设定频率', dataIndex: 'frequency', key: 'frequency', customRender: (text) => `${text} Hz` },
+                        { title: '状态', dataIndex: 'status', key: 'status', scopedSlots: { customRender: 'status' } },
+                        { title: '操作', key: 'action', scopedSlots: { customRender: 'action' }, width: 180 }
+                    ],
+                    // 模拟数据
+                    taskList: [
+                        { id: 'T2024001', name: '1号送风机变频任务', type: 'VFD-A500', mode: '通讯', frequency: 45.0, status: '运行中', accTime: 5.0, remark: '主厂房送风控制' },
+                        { id: 'T2024002', name: '输送带调速测试', type: 'VFD-E300', mode: '手动', frequency: 25.5, status: '待机', accTime: 3.0, remark: '现场手动调试' },
+                        { id: 'T2024003', name: '水泵节能运行', type: 'VFD-A500', mode: '外部', frequency: 50.0, status: '运行中', accTime: 10.0, remark: '液位闭环控制' }
+                    ],
+                    // 控制规则数据
+                    controlRules: [
+                        { id: 1, name: '过载保护 (Overload)', description: '电流超过额定值 150% 持续 60s 自动跳闸保护。', enabled: true },
+                        { id: 2, name: '限速逻辑 (Speed Limit)', description: '限制最高频率输出，防止机械共振损伤设备。', enabled: true },
+                        { id: 3, name: '自动启停 (Auto Start/Stop)', description: '根据外部压力/温度反馈自动执行变频启停。', enabled: false },
+                        { id: 4, name: '故障复位逻辑', description: '瞬时停电或欠压故障后的自动尝试重启逻辑。', enabled: true }
+                    ],
+                    // 表单与状态
+                    modalVisible: false,
+                    drawerVisible: false,
+                    activeRule: null,
+                    form: {
+                        id: null,
+                        name: '',
+                        type: undefined,
+                        mode: '手动',
+                        frequency: 50,
+                        accTime: 5,
+                        remark: ''
+                    }
+                }
+            },
+            methods: {
+                // 编辑/新建处理
+                handleEdit(record) {
+                    if (record.id) {
+                        this.form = { ...record };
+                    } else {
+                        this.form = { id: null, name: '', type: undefined, mode: '手动', frequency: 50, accTime: 5, remark: '' };
+                    }
+                    this.modalVisible = true;
+                },
+                // 提交表单
+                handleModalOk() {
+                    if (!this.form.name) {
+                        this.$message.warning('请输入任务名称');
+                        return;
+                    }
+                    if (this.form.id) {
+                        const index = this.taskList.findIndex(item => item.id === this.form.id);
+                        this.taskList.splice(index, 1, { ...this.form });
+                        this.$message.success('任务更新成功');
+                    } else {
+                        const newId = 'T' + moment().format('YYYYMMDDHHmm');
+                        this.taskList.push({ ...this.form, id: newId, status: '待机' });
+                        this.$message.success('新建任务成功');
+                    }
+                    this.modalVisible = false;
+                },
+                // 删除处理
+                handleDelete(id) {
+                    this.taskList = this.taskList.filter(item => item.id !== id);
+                    this.$message.success('任务已删除');
+                },
+                // 打开规则抽屉
+                openRuleDrawer(rule) {
+                    this.activeRule = rule;
+                    this.drawerVisible = true;
+                }
+            },
+            mounted() {
+                // 确保 Mermaid 在页面渲染后执行
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
