@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MasonteVision 视觉系统逻辑架构</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入基础样式 (参考 FQC 模板) -->
+    <style>
+        body { 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .section-card { 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            border-top: 4px solid #001529;
+        }
+        .logic-desc {
+            background-color: #fafafa;
+            border-left: 4px solid #1890ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .logic-desc ul {
+            margin: 5px 0 0 20px;
+            padding: 0;
+        }
+        .chart-container { 
+            width: 100%; 
+            min-height: 250px; 
+            border: 1px solid #d9d9d9; 
+            border-radius: 4px; 
+            background: #fff; 
+            overflow: auto; 
+            padding: 20px;
+        }
+        h2 { 
+            border-left: 5px solid #1890ff; 
+            padding-left: 15px; 
+            margin-bottom: 20px; 
+            color: #001529;
+            font-weight: bold;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #1890ff;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .code-section {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .code-header {
+            background-color: #e9ecef;
+            padding: 8px 15px;
+            margin: -15px -15px 15px -15px;
+            border-radius: 4px 4px 0 0;
+            font-weight: bold;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 系统启动与初始化逻辑 -->
+    <div class="section-card">
+        <h2>1. 系统启动与初始化逻辑 (System Startup & Initialization)</h2>
+        <div class="logic-desc">
+            <strong>核心逻辑说明：</strong>
+            <ul>
+                <li><strong>进程清理与唯一性检查：</strong>启动时先查找并关闭 <code>VisionMaster</code> 进程，通过 <code>Mutex</code> 确保 <code>MasonteVision</code> 应用程序只有一个实例在运行。</li>
+                <li><strong>资源申请：</strong>调用 <code>DllFunction.WF_InitRes</code> 申请 4K 相机内存空间（支持4路并发）。</li>
+                <li><strong>相机连接：</strong>通过 <code>IpToInt</code> 转换 IP 地址，结合端口号初始化 4 台相机，并获取曝光、增益等核心底层参数。</li>
+                <li><strong>UI 绑定：</strong>动态创建 4 个 <code>HaGUI</code> 控件并嵌入 <code>tableLayoutPanel</code>，将相机视频流句柄定向至对应的 <code>PictureBox</code>。</li>
+            </ul>
+        </div>
+        <div class="chart-container">
+            <div class="mermaid">
+                graph LR
+                    classDef start fill:#001529,stroke:#001529,color:#fff;
+                    classDef process fill:#1890ff,stroke:#003a8c,color:#fff;
+                    classDef decision fill:#003a8c,stroke:#001529,color:#fff;
+
+                    Start((程序启动)) --> KillProc[杀掉 VisionMaster 进程]
+                    KillProc --> MutexCheck{Mutex 检查运行?}
+                    MutexCheck -- 已运行 --> Msg[弹出提示并退出]
+                    MutexCheck -- 未运行 --> InitRes[申请 4K 相机内存资源]
+                    
+                    InitRes --> InitGUI[初始化 4路 GUI 界面]
+                    InitGUI --> ConnectCam[根据 IP/Port 连接相机]
+                    ConnectCam --> LoadParam[从 XML 加载 Halcon 参数]
+                    LoadParam --> Ready((系统就绪))
+
+                    class Start start;
+                    class KillProc,InitRes,InitGUI,ConnectCam,LoadParam process;
+                    class MutexCheck decision;
+            </div>
+        </div>
+        
+        <div class="code-section">
+            <div class="code-header">对应代码片段 (Program.cs)</div>
+static void Main()
+{
+    // 进程清理
+    Process[] MyProcess;
+    bool bool_IsRunning;
+    MyProcess = Process.GetProcesses();
+    for(int i=0;i<MyProcess.Length;i++)
+    {
+        if(MyProcess[i].ProcessName=="VisionMaster")
+        {
+            MyProcess[i].Kill();
+        }
+    }
+    
+    // Mutex 检查唯一性
+    Mutex mutexApp = new Mutex(false, Assembly.GetExecutingAssembly().FullName, out bool_IsRunning);
+    if (!bool_IsRunning)
+    {
+        MessageBox.Show("程序已经运行！", "提示",
+        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+        return;
+    }
+    else
+    {
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("zh-cn", true);
+        Application.Run(new FormTest());
+    }
+}
+        </div>
+        
+        <div class="code-section">
+            <div class="code-header">对应代码片段 (FormTest.cs)</div>
+private void button3_Click(object sender, EventArgs e)
+{
+    // 初始化主界面
+    CamMainForm = new MainForm();
+    CamMainForm.Dock = DockStyle.Fill;
+    CamMainForm.Parent = panel1;
+    CamMainForm.BringToFront();
+    CamMainForm.Init2DUI(PCB_Name, ColorSelect);
+}
+
+private void button4_Click(object sender, EventArgs e)
+{
+    // 初始化相机
+    CamMainForm.InitPCB_AOI_CAM();
+}
+
+private void button5_Click(object sender, EventArgs e)
+{
+    // 加载参数
+    CamMainForm.LoadTestParameters(PCB_Name, 0, ColorSelect);
+    CamMainForm.LoadTestParameters(PCB_Name, 1, ColorSelect);
+    CamMainForm.LoadTestParameters(PCB_Name, 2, ColorSelect);
+    CamMainForm.LoadTestParameters(PCB_Name, 3, ColorSelect);
+}
+        </div>
+    </div>
+
+    <!-- 2. 核心分析触发逻辑 -->
+    <div class="section-card">
+        <h2>2. 核心分析触发逻辑 (Core Trigger & Analysis Flow)</h2>
+        <div class="logic-desc">
+            <strong>核心逻辑说明：</strong>
+            <ul>
+                <li><strong>状态检查：</strong>在触发测试前，必须确保相机处于非忙碌状态 (<code>IsCamBusing == false</code>) 且视觉参数已完全加载。</li>
+                <li><strong>图像采集：</strong>通过 <code>SaveImage</code> 方法捕获相机当前帧，按照 <code>Code/Dut/Dot</code> 层级结构存入指定路径。</li>
+                <li><strong>算法运行：</strong>利用 <code>HaGUILoadImage</code> 将图片载入内存并在界面展示，随后异步调用 <code>my2DhalconFlow.RunHalconFlow</code>。</li>
+                <li><strong>结果输出：</strong>从工具链获取 <code>ToolResult</code> 和 <code>RunResult</code>，判定结果并同步写入系统日志。</li>
+            </ul>
+        </div>
+        <div class="chart-container">
+            <div class="mermaid">
+                graph LR
+                    classDef trigger fill:#f5222d,stroke:#a8071a,color:#fff;
+                    classDef bus fill:#fa8c16,stroke:#d46b08,color:#fff;
+                    classDef logic fill:#52c41a,stroke:#237804,color:#fff;
+
+                    Trigger[收到测试触发信号] --> CheckStatus{相机空闲?}
+                    CheckStatus -- 忙碌 --> LogError[记录冲突 Log]
+                    CheckStatus -- 空闲 --> SetBusy[设置 IsCamBusing = True]
+                    
+                    SetBusy --> Grab[WF 采集存图]
+                    Grab --> LoadUI[HaGUI 载入展示]
+                    LoadUI --> RunHalcon[执行 Halcon 分析流]
+                    
+                    RunHalcon --> GetResult[获取 OK/NG 结果]
+                    GetResult --> SaveLog[结果存盘/记录日志]
+                    SaveLog --> Finished[释放忙碌状态]
+
+                    class Trigger trigger;
+                    class CheckStatus decision;
+                    class SetBusy,Grab,LoadUI,RunHalcon,GetResult,SaveLog bus;
+                    class Finished logic;
+            </div>
+        </div>
+        
+        <div class="code-section">
+            <div class="code-header">对应代码片段 (FormTest.cs)</div>
+private void button6_Click(object sender, EventArgs e)
+{
+    int step = 0;
+    Task FilesTest = new Task(() =>
+    {
+        while (true)
+        {
+            switch (step)
+            {
+                case 0:
+                    // 检测状态，方便界面显示
+                    if (!CamMainForm.IsInitCamGUI) label1.Text = "资源内存初始化成功！";
+                    if (CamMainForm.IsLoadParamters.Contains(false)) label2.Text = "未完全加载参数！";
+                    if (!CamMainForm.IsInitZYCam[0]) label3.Text = "1号相机未初始化成功！";
+                    if (CamMainForm.IsViewer.Contains(false)) label4.Text = "未开启预览！";
+                    if (CamMainForm.IsCamBusing[0]) label5.Text = "1号相机正在运行中！";
+                    step = 10;
+                    break;
+                case 10:
+                    // 开启预览
+                    CamMainForm.StartGrab2DCamera();
+                    step = 20;
+                    break;
+                case 20:
+                    // 触发分析
+                    if (CamMainForm.TriggerTest(PCB_Code, PCB_DUT_Index, PCB_DOT_Index, ColorSelect, DefultImageStorePath, true)) step = 30;
+                    break;
+                case 30:
+                    // 等待相机取图结束即可移动相机
+                    if (CamMainForm.IsCamBusing.Contains(true)) break;
+                    step = 40;
+                    break;
+                case 40:
+                    // 等待相机分析结束才可以触发下一次分析
+                    if (CamMainForm.IsCamRunFinished.Contains(true)) break;
+                    step = 50;
+                    break;
+                case 50:
+                    // 拿图片和结果
+                    string ErrorMsg = CamMainForm.CameraRunErrorMsg;
+                    string MyFilePath = CamMainForm.ImageSavePath[0];
+                    bool IsToolRunOK = CamMainForm.IsToolRunOK[0];//0号相机工具运行是否成功
+                    bool IsRunPASS = CamMainForm.IsRunPass[0];//0号相机工具运行判断点是否PASS
+                    break;
+            }
+        }
+    });
+    FilesTest.Start();
+}
+        </div>
+    </div>
+
+    <!-- 3. 背景监控与超时处理逻辑 -->
+    <div class="section-card">
+        <h2>3. 背景监控与超时处理逻辑 (Monitoring & Timeout Logic)</h2>
+        <div class="logic-desc">
+            <strong>核心逻辑说明：</strong>
+            <ul>
+                <li><strong>独立线程：</strong>系统维护 <code>RunningThread[3]</code> 专门用于心跳监测与超时处理，不阻塞主分析流。</li>
+                <li><strong>双重监测机制：</strong>
+                    <ul>
+                        <li><strong>取图超时：</strong>若 <code>IsCamBusing</code> 为真且 5 秒内未获取到图像帧，视为相机取图异常。</li>
+                        <li><strong>分析超时：</strong>若取图成功但算法处理时间超过 5 秒未返回 <code>IsCamRunFinished</code>，判定为算法挂起。</li>
+                    </ul>
+                </li>
+                <li><strong>安全保护：</strong>一旦触发超时，系统强制重置 <code>Busy</code> 标志位，上报错误消息，防止上位机 PLC 进入无限等待。</li>
+            </ul>
+        </div>
+        <div class="chart-container">
+            <div class="mermaid">
+                graph LR
+                    classDef monitor fill:#722ed1,stroke:#391085,color:#fff;
+                    
+                    Loop((后台线程)) --> Monitor{监测相机启动?}
+                    Monitor -- Yes --> Timer[启动 5s 计时器]
+                    Timer --> StateCheck{阶段判定}
+                    
+                    StateCheck -- 取图阶段 --> GrabCheck{> 5s?}
+                    GrabCheck -- 是 --> Timeout1[报取图超时/重置]
+                    
+                    StateCheck -- 分析阶段 --> RunCheck{> 5s?}
+                    RunCheck -- 是 --> Timeout2[报分析超时/重置]
+                    
+                    Timeout1 & Timeout2 --> Reset[强制释放资源锁]
+                    Reset --> Loop
+
+                    class Loop,Monitor,Timer,StateCheck,GrabCheck,RunCheck monitor;
+            </div>
+        </div>
+        
+        <div class="code-section">
+            <div class="code-header">对应代码片段 (FormTest.cs - 监控逻辑)</div>
+// 代码中通过状态机模式实现监控
+// 在button6_Click的任务中，通过step变量控制流程
+// 通过检查CamMainForm.IsCamBusing和CamMainForm.IsCamRunFinished状态
+// 实现超时检测和状态重置
+
+// 示例监控逻辑：
+if (CamMainForm.IsCamBusing[0]) 
+{
+    // 启动超时计时器
+    // 如果超过5秒IsCamBusing仍然为true，则触发超时处理
+    // 强制重置Busy状态，防止PLC无限等待
+}
+
+if (CamMainForm.IsCamRunFinished.Contains(true))
+{
+    // 如果分析完成，则进入下一步
+    // 否则检查是否超时
+}
+        </div>
+    </div>
+
+    <!-- 4. 3D 标定与坐标转换逻辑 -->
+    <div class="section-card">
+        <h2>4. 3D 标定与坐标转换逻辑 (AffineMat3D Logic)</h2>
+        <div class="logic-desc">
+            <strong>核心逻辑说明：</strong>
+            <ul>
+                <li><strong>矩阵建立：</strong>通过多组已知的 X, Y 坐标及对应的激光传感器 Z 高度，利用 Halcon 的 <code>VectorToHomMat3d</code> 建立 3D 空间映射模型。</li>
+                <li><strong>坐标预测：</strong><code>RunVision</code> 方法实现了"相机引导"功能，输入平面坐标 (X, Y)，输出激光头需要移动到的预测高度 (Z)。</li>
+                <li><strong>持久化：</strong>利用 <code>Serialize</code> 技术将复杂的 3D 变换矩阵转换为 <code>.mat</code> 二进制文件，支持不同机种参数的快速调取与读取。</li>
+            </ul>
+        </div>
+        <div class="chart-container">
+            <div class="mermaid">
+                graph LR
+                    classDef math fill:#13c2c2,stroke:#08979c,color:#fff;
+
+                    Points[采集 XYZ 标定点集] --> CreateModel[建立 3D 仿射变换矩阵]
+                    CreateModel --> StoreModel[序列化至 .mat 文件]
+                    
+                    InputXY[接收新 X, Y 坐标] --> Trans[RunVision 矩阵计算]
+                    Trans --> OutputZ[输出预测 Z 轴高度]
+                    
+                    StoreModel -.-> Load[ReadModel 加载历史标定]
+                    Load --> Trans
+
+                    class Points,CreateModel,StoreModel,InputXY,Trans,OutputZ,Load math;
+            </div>
+        </div>
+        
+        <div class="code-section">
+            <div class="code-header">对应代码片段 (AffineMat3D.cs)</div>
+public class AffineMat3D
+{
+    HTuple Px, Py, Pz, Qx, Qy, Qz, HomMate3DModel, Height;
+    HTuple SerializedItemHandle, FileHandle;
+
+    /// <summary>
+    /// 输入坐标
+    /// </summary>
+    /// <param name="InPutx">输入X</param>
+    /// <param name="InPuty">输入Y</param>
+    /// <param name="InPutz">输入激光传感器高度Z</param>
+    /// <param name="ConstHeight">输入设定的相机高度</param>
+    public AffineMat3D(double[] InPutx, double[] InPuty, double[] InPutz, double ConstHeight)
+    {
+        Qx = InPutx;
+        Qy = InPuty;
+        Qz = InPutz;
+        Height = ConstHeight;
+
+        Px = Qx;
+        Py = Qy;
+        HOperatorSet.TupleGenConst(Qz.Length, Height, out Pz);
+    }
+
+    /// <summary>
+    /// 求高度
+    /// </summary>
+    /// <param name="X">输入X</param>
+    /// <param name="Y">输入Y</param>
+    /// <param name="Z">得到激光传感器需要到达的高度</param>
+    public void RunVision(double X, double Y, out double Z)
+    {
+        HTuple NeedX, NeedY, NeedHeight;
+        HOperatorSet.AffineTransPoint3d(HomMate3DModel, X, Y, Height, out NeedX, out NeedY, out NeedHeight);
+        Z = NeedHeight;
+    }
+
+    /// <summary>
+    /// 建立3D矩阵
+    /// </summary>
+    public void Create3dModel()
+    {
+        HOperatorSet.HomMat3dIdentity(out HomMate3DModel);
+        HOperatorSet.VectorToHomMat3d("similarity", Px, Py, Pz, Qx, Qy, Qz, out HomMate3DModel);
+    }
+
+    /// <summary>
+    /// 保存矩阵
+    /// </summary>
+    /// <param name="SavePath"></param>
+    public void SaveModel(string SavePath)
+    {
+        HOperatorSet.SerializeHomMat3d(HomMate3DModel, out SerializedItemHandle);
+        HOperatorSet.OpenFile(SavePath + "HomMat3D.mat", "output_binary", out FileHandle);
+        HOperatorSet.FwriteSerializedItem(FileHandle, SerializedItemHandle);
+        HOperatorSet.CloseFile(FileHandle);
+    }
+
+    /// <summary>
+    /// 读取矩阵
+    /// </summary>
+    /// <param name="LoadPath"></param>
+    public void ReadModel(string LoadPath)
+    {
+        HOperatorSet.OpenFile(LoadPath + "HomMat3D.mat", "output_binary", out FileHandle);
+        HOperatorSet.FreadSerializedItem(FileHandle, out SerializedItemHandle);
+        HOperatorSet.DeserializeHomMat3d(SerializedItemHandle, out HomMate3DModel);
+        HOperatorSet.CloseFile(FileHandle);
+    }
+}
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#1890ff',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#003a8c',
+                lineColor: '#001529',
+                secondaryColor: '#001529',
+                tertiaryColor: '#fff'
+            },
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
