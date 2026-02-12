@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyWalking APM 架构与 Oracle 类比全景图</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f4f7f9; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { 
+            background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-top: 4px solid #448aff;
+        }
+        .chart-container { 
+            width: 100%; min-height: 300px; border: 1px solid #e8e8e8; 
+            border-radius: 4px; background: #ffffff; overflow: auto; padding: 20px; margin-top: 15px;
+        }
+        h2 { border-left: 5px solid #448aff; padding-left: 15px; margin-bottom: 10px; color: #1a237e; font-weight: bold; }
+        .logic-desc { background: #f0f7ff; border: 1px solid #bbdefb; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; color: #37474f; line-height: 1.6; }
+        .tag-logic { margin-bottom: 10px; }
+        
+        /* 统计看板样式 */
+        .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-item { background: #1a237e; color: #fff; padding: 15px; border-radius: 4px; text-align: center; }
+        .stat-item .val { font-size: 20px; color: #40c4ff; font-weight: bold; }
+        .stat-item .lb { font-size: 12px; opacity: 0.8; }
+
+        /* Mermaid 样式微调，确保文字清晰 */
+        .mermaid svg { font-family: 'Arial' !important; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <a-tabs default-active-key="0" type="card" @change="handleTabChange">
+            
+            <!-- Tab 1: 核心架构 -->
+            <a-tab-pane key="0" tab="1 SkyWalking 核心架构">
+                <div class="section-card">
+                    <h2>SkyWalking 数据流转全景 (类比 Oracle 实例)</h2>
+                    <div class="logic-desc">
+                        <b>核心逻辑：</b> SkyWalking 采用“探针收集+后端聚合+异步持久化”架构。
+                        类似于 Oracle 的 <b>SGA 内存处理与后台进程写盘</b> 的分离模式。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                subgraph AppLayer [应用层 - 类比 Client]
+                                    Agent[Java Agent 探针]
+                                end
+
+                                subgraph OAPLayer [OAP 分析层 - 类比 Oracle Instance]
+                                    Receiver[Receiver 接收器 - 类比 Listener]
+                                    Core[Core Analysis 核心引擎 - 类比 SGA/Server Process]
+                                    Queue[Data Queue 缓冲队列 - 类比 Redo Log Buffer]
+                                end
+
+                                subgraph StorageLayer [存储层 - 类比 Database Files]
+                                    ES[(ElasticSearch / TiDB)]
+                                end
+
+                                Agent -- gRPC/HTTP --> Receiver
+                                Receiver --> Queue
+                                Queue --> Core
+                                Core --> ES
+                                
+                                style Agent fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+                                style OAPLayer fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+                                style ES fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 2: 探针逻辑 -->
+            <a-tab-pane key="1" tab="2 Agent 探针层级">
+                <div class="section-card">
+                    <h2>探针拦截与数据产生 (类比 Oracle User Process)</h2>
+                    <div class="logic-desc">
+                        <b>逻辑说明：</b> 探针利用字节码增强技术（Bytecode Instrumentation）植入代码。
+                        当 Java 调用 Oracle AWR 存储过程时，Agent 会将其包装为一个 <b>Span</b>。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                App[业务代码执行] --> Intercept{Agent 拦截点}
+                                Intercept -->|类比 SQL 解析| Context[创建 Trace Context]
+                                Context -->|生成记录| Span[Span: 执行 dbms_awr]
+                                Span -->|缓冲数据| Buffer[Segment Buffer - 类比 Log Buffer]
+                                Buffer -->|异步发送| Remote[OAP 后端]
+
+                                style Intercept fill:#ffccbc,stroke:#e64a19
+                                style Span fill:#c8e6c9,stroke:#2e7d32
+                        </div>
+                    </div>
+                    <div class="logic-desc">
+                        <b>AWR 动作：</b> Java 调用 `create_report_html` -> Agent 识别为数据库操作 -> 抓取 SQL 及返回长度。
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 3: 分析层与存储 -->
+            <a-tab-pane key="2" tab="3 OAP 分析与存储逻辑">
+                <div class="section-card">
+                    <h2>后端处理逻辑 (类比 Oracle 背景进程)</h2>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                In[接收 Trace 数据] --> Agg[Streaming Aggregation 聚合计算]
+                                Agg -->|类比 SMON/CKPT| Index[Index Builder 索引构建]
+                                Index -->|类比 DBWn 写盘| Persist[Persistent Storage 存储]
+                                
+                                Persist --> ES_S[ES: Minute Metrics]
+                                Persist --> ES_D[ES: Trace Details]
+                                
+                                style Agg fill:#bbdefb,stroke:#1976d2
+                                style Persist fill:#d1c4e9,stroke:#512da8
+                        </div>
+                    </div>
+                    <div class="logic-desc">
+                        <b>分析逻辑：</b> OAP 并不直接保存原始日志，而是进行“秒级聚合”。
+                        如果 AWR 报告太大，存储层（如 ES）会面临索引压力，就像 Oracle 遇到海量小碎片写入。
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 4: 类比对照表 -->
+            <a-tab-pane key="3" tab="4 SkyWalking vs Oracle 类比">
+                <div class="section-card">
+                    <h2>层级对应关系表</h2>
+                    <a-table :columns="compareCols" :data-source="compareData" size="middle" :pagination="false" bordered style="margin-top:20px;"></a-table>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 5: AWR 监控与异常排查 -->
+            <a-tab-pane key="4" tab="5 AWR 集成与切换逻辑排查">
+                <div class="section-card">
+                    <h2>为什么“从右向左”切换 Tab 会失效？</h2>
+                    <div class="logic-desc" style="background:#fff3e0; border-color:#ffb74d;">
+                        <b>排查核心：上下文丢失 (Trace Context Loss)</b>
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            sequenceDiagram
+                                participant Browser as 浏览器页面
+                                participant App as Java 应用
+                                participant Agent as SW Agent
+                                participant OAP as SW 后端
+
+                                Note over Browser, Agent: 【正常：从左向右点】
+                                Browser->>App: 携带 TraceHeader (ID: 001)
+                                App->>Agent: 保持线程上下文
+                                Agent->>OAP: 发送 AWR 数据 (关联 ID: 001)
+
+                                Note over Browser, Agent: 【异常：从右向左点】
+                                Browser->>App: 异步请求/刷新 (无 Header 或 新 ID)
+                                App-->>Agent: 线程切换/上下文丢失
+                                Agent--xOAP: 数据断层 (无法关联之前的操作)
+                        </div>
+                    </div>
+                    <div class="logic-desc">
+                        <b>技术原因分析：</b>
+                        1. <b>Trace 传递中断：</b> 从右往左点可能触发了页面的重新加载或非受控的异步请求，导致 HTTP Header 中的 `sw8` 追踪头丢失。
+                        2. <b>异步超时：</b> Oracle 生成 AWR 较慢（类比慢 SQL），如果此时切换 Tab，前端可能直接断开连接，探针捕捉到异常结束，导致数据无法上报。
+                        3. <b>缓冲区限制：</b> AWR 文本过大，Agent 的 `Log Reporter` 缓冲区是有大小限制的，频繁切换会导致缓冲区溢出。
+                    </div>
+                </div>
+            </a-tab-pane>
+            <!-- Tab 6: SkyWalking UI 监控展现 -->
+            <a-tab-pane key="5" tab="6 SkyWalking UI 监控展现">
+                <div class="section-card">
+                    <h2>SkyWalking 控制台展现逻辑 (类比 Oracle OEM / SQL Developer)</h2>
+                    
+                    <!-- 模拟监控看板数据 -->
+                    <div class="stat-grid">
+                        <div class="stat-item" style="background:#2e7d32;"><div class="val">99.8%</div><div class="lb">SLA (可用性)</div></div>
+                        <div class="stat-item" style="background:#1565c0;"><div class="val">420 ms</div><div class="lb">Avg Response Time</div></div>
+                        <div class="stat-item" style="background:#ef6c00;"><div class="val">150 cpm</div><div class="lb">Throughput (吞吐量)</div></div>
+                        <div class="stat-item" style="background:#c62828;"><div class="val">0.02%</div><div class="lb">Error Rate</div></div>
+                        <div class="stat-item" style="background:#455a64;"><div class="val">AWR</div><div class="lb">Log Attached</div></div>
+                    </div>
+                    <div class="logic-desc">
+                        <b>UI 展现逻辑：</b> SkyWalking UI 通过 GraphQL 协议从 OAP 获取数据。
+                        对于 AWR/ASH，通常在 <b>"Trace" (链路)</b> 或 <b>"Log" (日志)</b> 菜单中进行多维展示。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                UI[SkyWalking Dashboard] --> Topology[Topology 拓扑图]
+                                UI --> Trace[Trace 链路详情]
+                                UI --> Log[Log 日志面板]
+
+                                subgraph TraceView [Trace 详情页 - 类比 SQL Monitor]
+                                    T1[Span: Controller] --> T2[Span: Service]
+                                    T2 --> T3[Span: Oracle JDBC Execute]
+                                    T3 -.-> Attachment[附件: 查看 AWR 文本]
+                                end
+
+                                subgraph LogView [Log 分析页 - 类比 Alert.log]
+                                    L1[Service Log]
+                                    L2[AWR Content - 大文本展现]
+                                    L1 --- L2
+                                end
+
+                                style TraceView fill:#e8f5e9,stroke:#2e7d32
+                                style LogView fill:#fff3e0,stroke:#ef6c00
+                                style Attachment fill:#fce4ec,stroke:#d81b60,stroke-dasharray: 5 5
+                        </div>
+                    </div>
+                    <a-row :gutter="16" style="margin-top:20px;">
+                        <a-col :span="12">
+                            <a-card title="AWR 在 UI 中的查看路径" size="small">
+                                <a-steps direction="vertical" :current="2" size="small">
+                                    <a-step title="搜索 TraceID" description="定位到执行 AWR 抽取的特定请求"></a-step>
+                                    <a-step title="进入 Span 详情" description="点击对应的 Oracle 执行节点"></a-step>
+                                    <a-step title="查看 Tags/Logs" description="在弹窗中直接阅读 AWR 文本或点击链接"></a-step>
+                                </a-steps>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="12">
+                            <a-card title="UI 渲染瓶颈提示" size="small">
+                                <div class="logic-desc" style="background:#fff7e6; border-color:#ffa940; margin-top:0;">
+                                    <b>性能注意：</b> <br>
+                                    如果 AWR 报告超过 <b>1MB</b>，UI 渲染大文本时会卡顿。 <br>
+                                    <b>类比：</b> 就像在 SQL Developer 里打开一个 500MB 的 Trace 文件。
+                                    <br><br>
+                                    <b>优化建议：</b> 在日志中仅打印 AWR 的 <b>HTML 下载地址</b>，而不是全文。
+                                </div>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    compareCols: [
+                        { title: '层级', dataIndex: 'layer', key: 'layer', width: '15%' },
+                        { title: 'SkyWalking 概念', dataIndex: 'sw', key: 'sw', width: '25%' },
+                        { title: 'Oracle 对应概念', dataIndex: 'ora', key: 'ora', width: '25%' },
+                        { title: '类比说明', dataIndex: 'desc', key: 'desc' }
+                    ],
+                    compareData: [
+                        { key: '1', layer: '入口层', sw: 'Agent (探针)', ora: 'User Process', desc: '负责发起请求/拦截逻辑' },
+                        { key: '2', layer: '监听层', sw: 'OAP Receiver', ora: 'Listener (tnslsnr)', desc: '接收外部数据并分发' },
+                        { key: '3', layer: '处理层', sw: 'Analysis Core', ora: 'Instance (SGA/Background Proc)', desc: '数据处理的核心逻辑与缓存' },
+                        { key: '4', layer: '缓存层', sw: 'Internal Queue', ora: 'Redo Log Buffer', desc: '数据落盘前的临时缓冲' },
+                        { key: '5', layer: '存储层', sw: 'ElasticSearch / TiDB', ora: 'Data Files (.dbf)', desc: '数据的持久化归宿' },
+                        { key: '6', layer: '报告层', sw: 'SW UI / Dashboard', ora: 'AWR / ASH / OEM', desc: '展现性能指标的视图' }
+                    ]
+                }
+            },
+            methods: {
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        const els = document.querySelectorAll('.mermaid');
+                        els.forEach(el => {
+                            if (!el.getAttribute('data-source')) {
+                                el.setAttribute('data-source', el.textContent);
+                            }
+                            el.textContent = el.getAttribute('data-source');
+                            el.removeAttribute('data-processed');
+                        });
+                        
+                        mermaid.run({
+                            nodes: document.querySelectorAll('.mermaid')
+                        }).catch(err => {
+                            console.error("Mermaid 渲染失败:", err);
+                        });
+                    });
+                }
+            },
+            mounted() {
+                const els = document.querySelectorAll('.mermaid');
+                els.forEach(el => {
+                    el.setAttribute('data-source', el.textContent);
+                });
+                this.handleTabChange('0');
+            }
+        });
+    </script>
+</body>
+</html>

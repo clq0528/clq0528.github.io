@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle 架构与 SkyWalking 监控集成全景图</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { 
+            background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #1890ff;
+        }
+        .chart-container { 
+            width: 100%; min-height: 350px; border: 1px solid #d9d9d9; 
+            border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; margin-top: 15px;
+        }
+        h2 { border-left: 5px solid #001529; padding-left: 15px; margin-bottom: 10px; color: #001529; font-weight: bold; }
+        .logic-desc { background: #e6f7ff; border: 1px solid #91d5ff; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 13px; color: #555; }
+        .tag-logic { margin-bottom: 10px; }
+        
+        /* 模拟看板统计 */
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-item { background: #001529; color: #fff; padding: 15px; border-radius: 4px; text-align: center; }
+        .stat-item .val { font-size: 24px; color: #1890ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <a-tabs default-active-key="0" type="card" @change="handleTabChange">
+            
+            <!-- 0 & 1: Oracle 体系架构 -->
+            <a-tab-pane key="0" tab="0&1 Oracle 核心架构">
+                <div class="section-card">
+                    <h2>Oracle 实例 (Instance) 与 数据库 (Database) 逻辑全景</h2>
+                    <div class="logic-desc">
+                        <b>核心逻辑：</b> Oracle 采用“内存实例+物理存储”分离架构。
+                        1. <b>Instance</b> 是动态的（内存+进程），重启即消失；
+                        2. <b>Database</b> 是静态的（磁盘文件），永久存储。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                                subgraph SGA [SGA 共享内存区]
+                                    BC[Buffer Cache - 数据缓存]
+                                    LB[Redo Log Buffer - 日志缓冲]
+                                    SP[Shared Pool - SQL解析及缓存]
+                                end
+                                
+                                subgraph Processes [后台进程]
+                                    DBWn[DBWn - 写数据文件]
+                                    LGWR[LGWR - 写日志文件]
+                                    CKPT[CKPT - 检查点控制]
+                                    PMON[PMON - 进程清理]
+                                    SMON[SMON - 实例恢复]
+                                end
+
+                                subgraph Storage [物理数据库文件]
+                                    DF[(Data Files - 数据文件)]
+                                    RL[(Redo Logs - 重做日志)]
+                                    CF[(Control Files - 控制文件)]
+                                    AL[(Archive Logs - 归档日志)]
+                                end
+
+                                SGA --> Processes
+                                DBWn --> DF
+                                LGWR --> RL
+                                CKPT --> CF
+                                LGWR -.-> AL
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- 2: Schema 概念 -->
+            <a-tab-pane key="2" tab="2 Schema 逻辑模式">
+                <div class="section-card">
+                    <h2>Schema 与 User 的对应逻辑</h2>
+                    <div class="logic-desc">
+                        <b>逻辑说明：</b> 在 Oracle 中，用户 (User) 与 模式 (Schema) 是一对一关系。Schema 是一个逻辑容器，存储表、索引、视图等。
+                    </div>
+                    <a-table :columns="schemaCols" :data-source="schemaData" size="small" :pagination="false" style="margin-top:20px;"></a-table>
+                </div>
+            </a-tab-pane>
+
+            <!-- 3 & 4: 安装与运行实例 (Linux vs Windows) -->
+            <a-tab-pane key="3" tab="3&4 安装实例与进程差异">
+                <div class="section-card">
+                    <h2>不同操作系统下的 Oracle 运行形态</h2>
+                    <a-row :gutter="20">
+                        <a-col :span="12">
+                            <a-card title="Linux/Unix (多进程模式)" size="small">
+                                <div class="tag-logic"><a-tag color="blue">逻辑：独立 PID 控制</a-tag></div>
+                                <div class="mermaid">
+                                    graph TD
+                                        OS_L[Linux Kernel] --> Inst_L[Oracle Instance]
+                                        Inst_L --> P1[ora_pmon_orcl]
+                                        Inst_L --> P2[ora_dbw0_orcl]
+                                        Inst_L --> P3[ora_lgwr_orcl]
+                                        Inst_L --> P4[ora_smon_orcl]
+                                        style OS_L fill:#f5f5f5
+                                </div>
+                                <div class="logic-desc">配置核心：/etc/oratab, oraInst.loc</div>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="12">
+                            <a-card title="Windows (单进程多线程模式)" size="small">
+                                <div class="tag-logic"><a-tag color="green">逻辑：Windows 服务 + 线程</a-tag></div>
+                                <div class="mermaid">
+                                    graph TD
+                                        OS_W[Windows Service Control] --> SVC[OracleServiceORCL]
+                                        SVC --> EXE[oracle.exe 主进程]
+                                        EXE --> T1((Thread: PMON))
+                                        EXE --> T2((Thread: LGWR))
+                                        EXE --> T3((Thread: DBW0))
+                                        style OS_W fill:#f5f5f5
+                                </div>
+                                <div class="logic-desc">守护进程：OracleOraDb19Home1TNSListener</div>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                </div>
+            </a-tab-pane>
+
+            <!-- 5: SkyWalking 集成 AWR/ASH -->
+            <a-tab-pane key="5" tab="5 SkyWalking 集成 AWR/ASH">
+                <div class="section-card">
+                    <h2>基于 SkyWalking Log Reporter 的 Oracle 监控集成方案</h2>
+                    <div class="stat-grid">
+                        <div class="stat-item"><div class="val">AWR</div><div class="lb">性能基线报告</div></div>
+                        <div class="stat-item"><div class="val">ASH</div><div class="lb">活动会话历史</div></div>
+                        <div class="stat-item"><div class="val">Agent</div><div class="lb">SW Java 探针</div></div>
+                        <div class="stat-item"><div class="val">OAP</div><div class="lb">数据聚合中心</div></div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            sequenceDiagram
+                                participant DB as Oracle Database
+                                participant Java as Java App (with SW Agent)
+                                participant Log as Logback/Log4j2
+                                participant SW as SkyWalking OAP
+
+                                Note over DB, Java: 步骤 0: 开启 Diagnostic Pack 权限
+                                Java->>DB: 定时执行 dbms_workload_repository.awr_report_text
+                                DB-->>Java: 返回 CLOB/Text 报告内容
+                                Java->>Log: logger.info("AWR_CONTENT", reportBody)
+                                Note right of Log: SW Toolkit 拦截日志
+                                Log->>Java: 注入 TraceID / Context
+                                Java->>SW: gRPC 发送 LogData (含 AWR 文本)
+                                SW-->>SW: 进入 Log Analysis 仪表盘
+                        </div>
+                    </div>
+
+                    <a-collapse default-active-key="1" style="margin-top:20px;">
+                        <a-collapse-panel key="1" header="关键实现代码逻辑">
+                            <pre style="background:#272822; color:#f8f8f2; padding:15px; border-radius:5px;">
+// 1. 调用 Oracle 存储过程获取 AWR
+String sql = "SELECT output FROM TABLE(dbms_workload_repository.awr_report_text(?, 1, ?, ?))";
+List&lt;String&gt; lines = jdbcTemplate.queryForList(sql, String.class, dbid, startSnap, endSnap);
+
+// 2. 使用 SLF4J 打印，SW Agent 自动抓取
+log.info("Oracle_AWR_Report_Sync: {}", String.join("\n", lines));
+                            </pre>
+                        </a-collapse-panel>
+                    </a-collapse>
+                </div>
+            </a-tab-pane>
+
+        </a-tabs>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'neutral',
+            securityLevel: 'loose'
+        });
+        
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    schemaCols: [
+                        { title: '对象类型', dataIndex: 'type', key: 'type' },
+                        { title: '所属层级', dataIndex: 'level', key: 'level' },
+                        { title: '逻辑说明', dataIndex: 'desc', key: 'desc' }
+                    ],
+                    schemaData: [
+                        { key: '1', type: 'Database User', level: 'Security', desc: '拥有连接权限及配额的账号' },
+                        { key: '2', type: 'Schema', level: 'Logical Container', desc: '与用户同名的对象集合（Table, Index, PL/SQL）' },
+                        { key: '3', type: 'Tablespace', level: 'Physical Allocation', desc: 'Schema 对象在磁盘上的存储空间' }
+                    ]
+                }
+            },
+            // 【关键点 1】所有的函数必须放在 methods 对象里！！
+            methods: {
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        const els = document.querySelectorAll('.mermaid');
+                        els.forEach(el => {
+                            // --- 核心逻辑：恢复原始文本 ---
+                            
+                            // 1. 如果是第一次运行，把原始代码备份到 data-source 属性里
+                            if (!el.getAttribute('data-source')) {
+                                el.setAttribute('data-source', el.textContent);
+                            }
+                            
+                            // 2. 无论当前内容是什么（可能是上次渲染的 SVG），都强制还原成备份的代码
+                            el.textContent = el.getAttribute('data-source');
+                            
+                            // 3. 移除已处理标记，让 Mermaid 重新扫描
+                            el.removeAttribute('data-processed');
+                        });
+                        
+                        // 4. 执行渲染
+                        mermaid.run({
+                            nodes: document.querySelectorAll('.mermaid')
+                        }).catch(err => {
+                            console.error("渲染错误:", err);
+                        });
+                    });
+                }
+            },
+            mounted() {
+                // 页面加载完成后，先备份所有图表的代码
+                const els = document.querySelectorAll('.mermaid');
+                els.forEach(el => {
+                    el.setAttribute('data-source', el.textContent);
+                });
+                // 初次加载
+                this.handleTabChange('0');
+            }
+        });
+    </script>
+</body>
+</html>
