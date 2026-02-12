@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle Data Guard 故障定位分析报告</title>
+    
+    <!-- 引入 Mermaid 用于流程图 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <style>
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; font-family: -apple-system, system-ui, sans-serif; }
+        .section-card { 
+            background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 4px solid #ff4d4f;
+        }
+        .chart-container { 
+            width: 100%; min-height: 300px; border: 1px solid #d9d9d9; 
+            border-radius: 4px; background: #fafafa; overflow: auto; padding: 20px; margin-top: 15px;
+        }
+        h2 { border-left: 5px solid #ff4d4f; padding-left: 15px; margin-bottom: 10px; color: #001529; font-weight: bold; }
+        .logic-desc { background: #fff1f0; border: 1px solid #ffa39e; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 13px; color: #555; }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-item { background: #001529; color: #fff; padding: 15px; border-radius: 4px; text-align: center; }
+        .stat-item .val { font-size: 20px; color: #ff4d4f; font-weight: bold; }
+        .stat-item .lb { font-size: 12px; color: #999; }
+        pre { background:#272822; color:#f8f8f2; padding:15px; border-radius:5px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <a-tabs default-active-key="1" type="card" @change="handleTabChange">
+            
+            <!-- Tab 1: 故障现象复现 -->
+            <a-tab-pane key="1" tab="1. 故障现象描述">
+                <div class="section-card">
+                    <h2>10:30 分数据“失踪”场景还原</h2>
+                    <div class="stat-grid">
+                        <div class="stat-item"><div class="val">10:29</div><div class="lb">主库数据落库成功</div></div>
+                        <div class="stat-item"><div class="val">10:30</div><div class="lb">备库查询结果为空</div></div>
+                        <div class="stat-item"><div class="val">11:00</div><div class="lb">备库数据突然出现</div></div>
+                        <div class="stat-item"><div class="val">IDLE</div><div class="lb">关键异常状态</div></div>
+                    </div>
+                    <div class="logic-desc">
+                        <b>核心痛点：</b> 备库角色为 <code>PHYSICAL STANDBY</code>，且恢复模式处于 <code>IDLE</code>。这说明日志虽已到达，但“搬运工”(MRP进程) 罢工了。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                P[主库 Primary] -- 1.写入 10:29数据 --> PR[Online Redo Log]
+                                PR -- 2.网络传输 --> SR[Standby Redo Log]
+                                subgraph Standby [备库 Physical Standby]
+                                    SR -- 3.日志已就绪 --> MRP{MRP 进程}
+                                    MRP -- 4.状态为 IDLE --> DB[(备库数据文件)]
+                                    style MRP fill:#fff1f0,stroke:#ff4d4f,stroke-width:4px
+                                end
+                                DB -- 5. 10:30 查询 --> Q[结果: 查无此人]
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 2: 数据来源真相 -->
+            <a-tab-pane key="2" tab="2. 数据来源真相">
+                <div class="section-card">
+                    <h2>Redo Log 与 Alert Log 的本质区别</h2>
+                    <div class="logic-desc">
+                        <b>纠正误区：</b> 备库同步的数据源是二进制的 <b>Redo Log</b>，而 <b>Alert Log</b> 只是文本说明书。
+                    </div>
+                    <a-row :gutter="20" style="margin-top:20px;">
+                        <a-col :span="12">
+                            <a-card title="数据源：Redo Log (二进制)" size="small">
+                                <p><a-badge status="error" text="这是血液" /></p>
+                                <pre>包含：RowID, 改变前后的值, SCN...
+作用：真正落库到备库表里的数据。</pre>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="12">
+                            <a-card title="监控源：Alert Log (文本)" size="small">
+                                <p><a-badge status="processing" text="这是病例本" /></p>
+                                <pre>包含：MRP启动/停止时间, ORA错误代码...
+作用：用来查为什么 10:30 同步停了。</pre>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                Redo((Redo Log)) -- 注入数据 --> Tables[Business Tables]
+                                Alert[[Alert Log]] -- 记录事件 --> Admin[管理员排查]
+                                style Redo fill:#e6f7ff,stroke:#1890ff
+                                style Alert fill:#fff7e6,stroke:#ffa940
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 3: 根因定位分析 -->
+            <a-tab-pane key="3" tab="3. 根因定位与SQL">
+                <div class="section-card">
+                    <h2>为什么 11:00 又能查出来了？</h2>
+                    <div class="logic-desc">
+                        <b>推测逻辑：</b> MRP 进程在 10:30 处于 <code>IDLE</code>（可能是因为报错停止或人为关闭），但在 11:00 前被重新拉起或执行了手动同步。
+                    </div>
+                    <a-collapse default-active-key="1" style="margin-top:20px;">
+                        <a-collapse-panel key="1" header="排查诊断 SQL 清单">
+                            <pre>
+-- 1. 查看 MRP 进程当前在做什么？
+SELECT process, status, sequence# FROM v$managed_standby_db;
+
+-- 2. 查看是否有延迟参数设置？
+SELECT dest_id, delay_mins FROM v$archive_dest WHERE target='STANDBY';
+
+-- 3. 实时开启同步命令（治本方案）
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE USING CURRENT LOGFILE DISCONNECT;
+                            </pre>
+                        </a-collapse-panel>
+                    </a-collapse>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                A[开始排查] --> B{MRP 状态是否为 IDLE?}
+                                B -- 是 --> C[检查 Alert Log 查找 ORA 错误]
+                                B -- 否 --> D[检查网络延时 Transport Lag]
+                                C --> E[解决错误并重启恢复进程]
+                                E --> F[状态变为 REAL TIME APPLY]
+                                F --> G[10:29落库, 10:29:05即可查询]
+                                style F fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+        </a-tabs>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        
+        new Vue({
+            el: '#app',
+            methods: {
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        const els = document.querySelectorAll('.mermaid');
+                        els.forEach(el => {
+                            if (!el.getAttribute('data-source')) {
+                                el.setAttribute('data-source', el.textContent);
+                            }
+                            el.textContent = el.getAttribute('data-source');
+                            el.removeAttribute('data-processed');
+                        });
+                        mermaid.run({ nodes: document.querySelectorAll('.mermaid') });
+                    });
+                }
+            },
+            mounted() {
+                this.handleTabChange('1');
+            }
+        });
+    </script>
+</body>
+</html>
