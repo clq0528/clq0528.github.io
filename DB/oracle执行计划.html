@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle 执行计划（Execution Plan）深度解析全景图</title>
+    <!-- 引入 Ant Design Vue V2 (1.7.8) 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --oracle-red: #f80000;
+            --oracle-blue: #0075b0;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --bg-gray: #f0f2f5;
+            --navy-blue: #002140;
+        }
+        body {
+            background: var(--bg-gray);
+            margin: 0;
+            padding: 24px;
+            font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+        }
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 6px solid var(--oracle-blue);
+        }
+        .section-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h2 {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 12px;
+            color: var(--navy-blue);
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--oracle-blue);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+        .chart-container {
+            width: 100%;
+            background: #fafafa;
+            border: 1px solid #ebedf0;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+        .logic-desc {
+            margin: 10px 0 20px 0;
+            padding: 12px 16px;
+            background: #e6f7ff;
+            border-left: 4px solid #1890ff;
+            color: #003a8c;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 10px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #d46b08;
+            margin-left: 12px;
+            font-size: 0.85em;
+        }
+        .step-num {
+            background: var(--navy-blue);
+            color: white;
+            border-radius: 4px;
+            padding: 0 8px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        .warning-box {
+            background: #fff1f0;
+            border: 1px solid #ffa39e;
+            color: #cf1322;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .ant-tag-red { color: #f5222d; background: #fff1f0; border-color: #ffa39e; }
+        .ant-tag-green { color: #52c41a; background: #f6ffed; border-color: #b7eb8f; }
+        /* 覆盖 Ant Design Tab 样式 */
+        .ant-tabs-bar {
+            margin-bottom: 30px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .ant-tabs-tab {
+            font-size: 16px !important;
+            padding: 18px 24px !important;
+            font-weight: 500;
+        }
+        .ant-tabs-tab-active {
+            color: var(--oracle-blue) !important;
+        }
+        .ant-tabs-ink-bar {
+            background-color: var(--oracle-blue) !important;
+        }
+        /* 仿真执行计划窗口容器 */
+        .plan-window {
+            background: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            position: relative;
+            min-width: 1100px;
+        }
+
+        /* 表头样式 */
+        .plan-header {
+            display: flex;
+            background: #f8f8f8;
+            border-bottom: 2px solid #ddd;
+            font-weight: bold;
+            color: #666;
+            font-size: 13px;
+        }
+        .col { padding: 8px 12px; border-right: 1px solid #eee; overflow: hidden; white-space: nowrap; }
+        .col-op { flex: 3; }
+        .col-obj { flex: 1.5; }
+        .col-opt { flex: 1; }
+        .col-val { flex: 0.8; text-align: right; }
+
+        /* 行样式 */
+        .plan-row {
+            display: flex;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 12px;
+            color: #333;
+            transition: background 0.3s;
+            position: relative;
+        }
+        .plan-row:hover { background: #f0f7ff; }
+        .highlight-green { background: #90ee90 !important; font-weight: bold; } /* 还原截图中的绿色高亮 */
+
+        /* 缩进逻辑 */
+        .indent-icon { display: inline-block; width: 16px; color: #999; margin-right: 4px; }
+
+        /* --- 审阅点评系统 (带箭头的文字) --- */
+        .audit-layer {
+            position: absolute;
+            top: 0;
+            right: -320px;
+            width: 300px;
+            pointer-events: none;
+        }
+
+        .audit-tag {
+            position: absolute;
+            background: #fff7e6;
+            border: 1px solid #ffa39e;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #cf1322;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+            width: 280px;
+            z-index: 10;
+        }
+
+        /* 绘制指向箭头 */
+        .audit-tag::before {
+            content: "";
+            position: absolute;
+            left: -40px;
+            top: 50%;
+            width: 40px;
+            height: 2px;
+            background: #ff4d4f;
+        }
+        .audit-tag::after {
+            content: "";
+            position: absolute;
+            left: -40px;
+            top: 50%;
+            margin-top: -4px;
+            border-style: solid;
+            border-width: 5px 8px 5px 0;
+            border-color: transparent #ff4d4f transparent transparent;
+        }
+
+        .title-bar {
+            background: #e1e1e1;
+            padding: 5px 10px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .kb-container { max-width: 1000px; margin: 0 auto; }
+        
+        /* 术语卡片样式 */
+        .term-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-left: 6px solid #ccc;
+        }
+        
+        .card-header {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fafafa;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .card-title { font-size: 18px; font-weight: bold; color: #262626; }
+        .perf-tag { padding: 2px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        
+        .card-body { padding: 24px; line-height: 1.8; color: #595959; }
+        
+        .logic-box {
+            background: #f9f9f9;
+            border: 1px dashed #d9d9d9;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .analogy-box {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+            position: relative;
+        }
+        .analogy-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 40px;
+            opacity: 0.1;
+        }
+
+        /* 颜色区分 */
+        .border-green { border-left-color: var(--index-green); }
+        .border-blue { border-left-color: var(--view-blue); }
+        .tag-green { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .tag-blue { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+
+        h4 { margin-top: 15px; color: #000; font-weight: 600; display: flex; align-items: center; }
+        h4::before { content: "•"; margin-right: 8px; color: currentColor; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 头部 -->
+        <div class="header">
+            <h1 style="margin: 0; color: #002140;">Oracle 执行计划（Explain Plan）核心原理与性能诊断</h1>
+            <p style="color: #666; margin-top: 10px;">
+                基于 CBO (Cost-Based Optimizer) 优化器的路径决策分析，涵盖全表扫描识别、索引访问路径及多表关联逻辑。
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange">
+            <!-- TAB 1: 核心诊断与执行计划 -->
+            <a-tab-pane key="1" tab="核心诊断与执行计划">
+                <!-- 第一部分：如何从界面判断全表扫描 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 界面判断：是否触发全表扫描 (FTS) <span class="method-tag">Operation: TABLE ACCESS FULL</span></h2>
+                    <div class="logic-desc">
+                        全表扫描是数据库性能杀手的首要标志。在执行计划的 <b>Operation</b> 列中，如果看到明显的红色标记或特定的关键字组合，即代表存在全表扫描。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            UI["查看执行计划表格"] --> Op["列: Operation"]
+                            Op --> FTS_Check{"包含关键字?"}
+                            FTS_Check -- "TABLE ACCESS FULL" --> Result_FTS["⚠️ 诊断结果: 全表扫描 (FTS)"]
+                            FTS_Check -- "INDEX RANGE SCAN" --> Result_IDX["✅ 诊断结果: 索引范围扫描"]
+                            FTS_Check -- "INDEX UNIQUE SCAN" --> Result_UIDX["🚀 诊断结果: 唯一索引扫描 (最优)"]
+                            Result_FTS --> Cost["观察 Cost/Cardinality"]
+                            Cost --> High{"Cost 值是否巨大?"}
+                            High -- 是 --> Performance["结论: 严重影响性能，需加索引"]
+                            style Result_FTS fill:#fff1f0,stroke:#ff4d4f
+                            style Result_IDX fill:#f6ffed,stroke:#52c41a
+                            style Result_UIDX fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                    <div class="warning-box">
+                        ❗ 关键判定：在 Operation 列中出现 "TABLE ACCESS FULL" 且 Cost 值占比超过整体计划的 50% 以上时，应优先进行 SQL 优化。
+                    </div>
+                </div>
+
+                <!-- 第二部分：数据访问方法流程 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 数据访问路径流程解析 <span class="method-tag">Access Methods Flow</span></h2>
+                    <div class="logic-desc">
+                        描述 Oracle 如何根据不同的扫描方式从磁盘或缓存中获取原始数据块。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            DataReq["获取数据请求"] --> Path{"访问路径决策"}
+                            Path -- "全表扫描" --> ReadAll["多块读 (Multi-Block Read)<br/>顺序读取高水位线下所有块"]
+                            Path -- "索引访问" --> IndexSearch["单块读 (Single-Block Read)<br/>根据 B-Tree 查找 RowID"]
+                            IndexSearch --> RowID["通过 RowID 回表获取数据"]
+                            ReadAll --> Filter["执行 Where 条件过滤"]
+                            RowID --> Filter
+                            Filter --> ResultSet["返回结果集"]
+                            style ReadAll fill:#fff1f0,stroke:#ff4d4f
+                            style IndexSearch fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第三部分：多表关联（Join）核心算法流程 -->
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 多表关联逻辑流 <span class="method-tag">Join Algorithm Logic</span></h2>
+                    <div class="logic-desc">
+                        当 SQL 涉及多表连接时，Oracle 采用不同的物理关联算法。
+                    </div>
+                    <!-- Nested Loops -->
+                    <h3 style="margin-top: 20px;">3.1 嵌套循环 (Nested Loops) <span class="method-tag">Ideal for Small Data</span></h3>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Outer["驱动表 (Outer Table)"] --> RowIter["逐行循环扫描"]
+                            RowIter --> InnerMatch["匹配被驱动表 (Inner Table)<br/>通过索引快速检索 RowID"]
+                            InnerMatch --> JoinOk["合并数据行"]
+                            JoinOk --> NextRow{"驱动表是否结束?"}
+                            NextRow -- No --> RowIter
+                            NextRow -- Yes --> Final["输出结果"]
+                            style Outer fill:#e6f7ff,stroke:#1890ff
+                            style InnerMatch fill:#f9f0ff,stroke:#722ed1
+                        </div>
+                    </div>
+                    <!-- Hash Join -->
+                    <h3 style="margin-top: 30px;">3.2 哈希连接 (Hash Join) <span class="method-tag">Ideal for Large Data</span></h3>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            T1["表 A (较小表)"] --> HashBuild["在内存中构建<br/>Hash Table (PGA)"]
+                            T2["表 B (较大表)"] --> HashProbe["扫描表 B<br/>并计算每一行的 Hash 值"]
+                            HashProbe --> Match{"与 Hash Table<br/>匹配成功?"}
+                            Match -- Yes --> Merge["输出关联行"]
+                            Merge --> NextB{"扫描下一行"}
+                            Match -- No --> NextB
+                            style HashBuild fill:#fff7e6,stroke:#faad14
+                            style HashProbe fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第四部分：层级查询处理流程（对应用户提供的 CONNECT BY 图片） -->
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 递归与层级查询处理 <span class="method-tag">CONNECT BY (With Filtering)</span></h2>
+                    <div class="logic-desc">
+                        针对你截图中出现的 <b>CONNECT BY</b> 操作，这是 Oracle 处理树状结构数据的特有流程。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Root["START WITH<br/>确定根节点"] --> ChildSeek["CONNECT BY PRIOR<br/>查找下一层子节点"]
+                            ChildSeek --> Filter["WITH FILTERING<br/>应用过滤谓词"]
+                            Filter --> Pump["CONNECT BY PUMP<br/>将结果压入递归栈"]
+                            Pump --> Loop{"是否还有<br/>符合条件的层级?"}
+                            Loop -- Yes --> ChildSeek
+                            Loop -- No --> Union["UNION-ALL 合并各层级"]
+                            Union --> Sort["SORT (UNIQUE) 排重显示"]
+                            style Root fill:#f6ffed,stroke:#52c41a
+                            style Pump fill:#fff7e6,stroke:#faad14
+                            style Loop fill:#fff1f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第五部分：执行计划的阅读顺序与指标 -->
+                <div class="section-card">
+                    <h2><span class="step-num">5</span> 执行计划阅读顺序与核心指标解析</h2>
+                    <div class="logic-desc">
+                        阅读原则：从内向外（缩进越深越先执行），从上向下（缩进相同时上方先执行）。
+                    </div>
+                    <a-row :gutter="16">
+                        <a-col :span="8">
+                            <a-card title="Cost (成本)" size="small">
+                                <p>CBO 优化器估算的 CPU 和 I/O 开销。Cost 越小，通常执行越快。FTS 往往导致 Cost 飙升。</p>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="8">
+                            <a-card title="Cardinality (基数)" size="small">
+                                <p>该操作预计返回的行数。如果基数严重偏差，说明统计信息过旧。</p>
+                            </a-card>
+                        </a-col>
+                        <a-col :span="8">
+                            <a-card title="Bytes (数据量)" size="small">
+                                <p>该操作处理的字节数。数据量大时，要注意内存（PGA）溢出导致的磁盘排序。</p>
+                            </a-card>
+                        </a-col>
+                    </a-row>
+                    <div class="chart-container" style="margin-top: 30px;">
+                        <div class="mermaid">
+                            graph LR
+                            S1["Step 1: 查找缩进最深的操作"] --> S2["Step 2: 处理基础表访问 (Index/Table Scan)"]
+                            S2 --> S3["Step 3: 进行中间结果集过滤 (Filter)"]
+                            S3 --> S4["Step 4: 多表关联 (Join) 处理"]
+                            S4 --> S5["Step 5: 聚合或排序 (Group By/Sort)"]
+                            S5 --> S6["Step 6: SELECT STATEMENT (输出结果)"]
+                            style S1 fill:#fff1f0,stroke:#ff4d4f
+                            style S6 fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 2: 索引优化与访问路径 -->
+            <a-tab-pane key="2" tab="索引优化与访问路径">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 索引访问路径深度解析 <span class="method-tag">Index Access Paths</span></h2>
+                    <div class="logic-desc">
+                        详细解析不同的索引访问方式及其适用场景，包括 Index Range Scan、Index Unique Scan、Index Full Scan、Index Fast Full Scan、Index Skip Scan 等。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            Start["查询条件分析"] --> PathDecision{"索引访问路径选择"}
+                            PathDecision -- "等值查询 (主键/唯一键)" --> UniqueScan["INDEX UNIQUE SCAN"]
+                            PathDecision -- "范围查询 (非唯一)" --> RangeScan["INDEX RANGE SCAN"]
+                            PathDecision -- "全索引扫描 (无过滤条件)" --> FullScan["INDEX FULL SCAN"]
+                            PathDecision -- "组合索引前导列缺失" --> SkipScan["INDEX SKIP SCAN"]
+                            UniqueScan --> Result1["直接定位到唯一行"]
+                            RangeScan --> Result2["扫描索引范围，按 RowID 排序"]
+                            FullScan --> Result3["读取整个索引段 (有序)"]
+                            SkipScan --> Result4["跳跃式扫描组合索引非前导列"]
+                            style UniqueScan fill:#f6ffed,stroke:#52c41a
+                            style SkipScan fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 索引失效场景诊断 <span class="method-tag">Index Invalidations</span></h2>
+                    <div class="logic-desc">
+                        列出常见导致索引无法使用的 SQL 写法及优化建议。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Condition["SQL 条件"] --> Check1["隐式类型转换?"]
+                            Check1 -- 是 --> Failure1["索引失效"]
+                            Condition --> Check2["函数包裹索引列?"]
+                            Check2 -- 是 --> Failure2["索引失效"]
+                            Condition --> Check3["LIKE '%前缀' 查询?"]
+                            Check3 -- 是 --> Failure3["索引失效 (LIKE '前缀%' 有效)"]
+                            Condition --> Check4["IS NULL / IS NOT NULL?"]
+                            Check4 -- 是 --> Failure4["索引可能失效 (取决于索引类型)"]
+                            Failure1 & Failure2 & Failure3 & Failure4 --> Advice["建议: 创建函数索引或改写SQL"]
+                            style Failure1 fill:#fff1f0,stroke:#ff4d4f
+                            style Advice fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 3: SQL 调优实战案例 -->
+            <a-tab-pane key="3" tab="SQL 调优实战案例">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 全表扫描优化案例 <span class="method-tag">FTS Optimization Case</span></h2>
+                    <div class="logic-desc">
+                        通过实际案例展示如何将全表扫描转换为高效的索引扫描。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Problem["原始 SQL: SELECT * FROM orders WHERE status = 'PENDING'"] --> Plan1["执行计划: TABLE ACCESS FULL (orders)"]
+                            Plan1 --> Cost1["Cost: 1200, Rows: 1000"]
+                            Problem --> Diagnosis["诊断: status 列无索引"]
+                            Diagnosis --> Action["行动: 创建索引 CREATE INDEX idx_status ON orders(status)"]
+                            Action --> NewSQL["优化后 SQL (不变)"]
+                            NewSQL --> Plan2["执行计划: INDEX RANGE SCAN (idx_status)"]
+                            Plan2 --> Cost2["Cost: 50, Rows: 1000 (实际)"]
+                            Cost1 --> Result1["性能: 慢 (全表扫描)"]
+                            Cost2 --> Result2["性能: 快 (索引扫描)"]
+                            style Plan1 fill:#fff1f0,stroke:#ff4d4f
+                            style Plan2 fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 关联查询优化案例 <span class="method-tag">Join Optimization Case</span></h2>
+                    <div class="logic-desc">
+                        展示如何通过调整关联顺序、添加索引或使用 HINT 优化多表连接性能。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            BadSQL["低效 SQL: Nested Loop 驱动大表"] --> BadPlan["执行计划: NESTED LOOPS (小表被驱动)"]
+                            BadPlan --> HighCost["Cost: 5000"]
+                            Analysis["分析: 大表作为驱动表导致循环次数过多"] --> Solution1["方案1: 添加外键索引"]
+                            Analysis --> Solution2["方案2: 使用 HINT /*+ LEADING(small_table) */"]
+                            Analysis --> Solution3["方案3: 改用 HASH JOIN"]
+                            Solution1 & Solution2 & Solution3 --> GoodPlan["优化后执行计划: HASH JOIN 或索引 NESTED LOOPS"]
+                            GoodPlan --> LowCost["Cost: 800"]
+                            style BadPlan fill:#fff1f0,stroke:#ff4d4f
+                            style GoodPlan fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 4: 高级特性与等待事件 -->
+            <a-tab-pane key="4" tab="高级特性与等待事件">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 执行计划绑定与基线 <span class="method-tag">Plan Baseline & Binding</span></h2>
+                    <div class="logic-desc">
+                        讲解如何固定执行计划，防止因统计信息变化导致的计划退化。
+                    </div>
+                    <div class="warning-box">
+                        🚧 此部分内容待完善，计划包含 SQL Plan Baseline、Outlines、SQL Profile 的创建与管理流程。
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 常见等待事件关联分析 <span class="method-tag">Wait Events Analysis</span></h2>
+                    <div class="logic-desc">
+                        将执行计划中的操作与常见的等待事件（如 db file sequential read, db file scattered read, direct path read 等）关联，定位物理 I/O 瓶颈。
+                    </div>
+                    <div class="warning-box">
+                        🚧 此部分内容待完善，计划包含等待事件与执行计划操作的映射关系图。
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 5: 性能监控与 AWR 报告 -->
+            <a-tab-pane key="5" tab="性能监控与 AWR 报告">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> AWR 报告中的执行计划统计 <span class="method-tag">AWR Report Analysis</span></h2>
+                    <div class="logic-desc">
+                        讲解如何在 AWR 报告的 "SQL ordered by Elapsed Time"、"SQL ordered by CPU Time" 等章节中定位高消耗 SQL，并查看其历史执行计划变化。
+                    </div>
+                    <div class="warning-box">
+                        🚧 此部分内容待完善，计划包含 AWR 报告关键章节解读与 SQL 性能历史对比。
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 动态性能视图 (V$SQL, V$SQL_PLAN) <span class="method-tag">Dynamic Performance Views</span></h2>
+                    <div class="logic-desc">
+                        介绍如何通过查询 V$SQL、V$SQL_PLAN、V$SQL_PLAN_STATISTICS_ALL 等视图，获取 SQL 的实时执行统计信息（逻辑读、物理读、执行次数等）与执行计划详情。
+                    </div>
+                    <div class="warning-box">
+                        🚧 此部分内容待完善，计划包含关键视图的查询语句与结果解读。
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 6: 附录与参考资料 -->
+            <a-tab-pane key="6" tab="附录与参考资料">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 常用 SQL 性能诊断命令 <span class="method-tag">Useful Commands</span></h2>
+                    <div class="logic-desc">
+                        收集常用的 SQL 性能诊断相关命令，便于快速查询和使用。
+                    </div>
+                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow: auto;">
+-- 1. 获取 SQL 执行计划 (多种方式)
+EXPLAIN PLAN FOR SELECT * FROM employees WHERE department_id = 10;
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- 2. 查看当前会话的 SQL 执行计划 (需要实际运行)
+SET AUTOTRACE TRACEONLY EXPLAIN;
+
+-- 3. 查询 SQL 在共享池中的执行计划与统计信息
+SELECT * FROM V$SQL_PLAN WHERE SQL_ID = '&sql_id';
+SELECT EXECUTIONS, BUFFER_GETS, DISK_READS, ELAPSED_TIME FROM V$SQLAREA WHERE SQL_ID = '&sql_id';
+
+-- 4. 收集表统计信息 (优化器决策基础)
+BEGIN
+   DBMS_STATS.GATHER_TABLE_STATS(
+      OWNNAME => 'SCHEMA_NAME',
+      TABNAME => 'TABLE_NAME',
+      ESTIMATE_PERCENT => DBMS_STATS.AUTO_SAMPLE_SIZE,
+      METHOD_OPT => 'FOR ALL COLUMNS SIZE AUTO'
+   );
+END;
+/
+                    </pre>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 术语表与扩展阅读 <span class="method-tag">Glossary & Further Reading</span></h2>
+                    <div class="logic-desc">
+                        提供关键术语解释和相关官方文档链接。
+                    </div>
+                    <div class="warning-box">
+                        📚 此部分为资料区，用于存放概念解释、参考链接和待补充内容。
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 7: 界面 -->
+            <a-tab-pane key="7" tab="界面">
+                <div id="app" class="kb-container">
+    
+                    <!-- 1. INDEX (RANGE SCAN) 卡片 -->
+                    <div class="term-card border-green">
+                        <div class="card-header">
+                            <span class="card-title">1. INDEX (RANGE SCAN) —— 索引范围扫描</span>
+                            <span class="perf-tag tag-green">性能评价：优良 (High Efficiency)</span>
+                        </div>
+                        <div class="card-body">
+                            <p>这是数据库访问数据的一种“高效路径”。</p>
+                            
+                            <h4>字面意思</h4>
+                            <p>按照一定的“范围”去搜寻索引树。</p>
+
+                            <h4>技术原理</h4>
+                            <p>Oracle 的索引通常是 <b>B-Tree (平衡树)</b> 结构。范围扫描意味着优化器在索引中找到了起始点，然后沿着索引的叶子节点水平扫描，直到达到终止点。</p>
+                            
+                            <div class="logic-box">
+                                <div class="mermaid">
+                                    graph LR
+                                    Start((开始)) --> Seek[B-Tree 根节点寻址]
+                                    Seek --> Leaf[定位初始叶子节点]
+                                    Leaf --> Scan[水平顺序遍历叶子节点]
+                                    Scan --> Stop{达到范围边界?}
+                                    Stop -- No --> Scan
+                                    Stop -- Yes --> End((结束))
+                                </div>
+                            </div>
+
+                            <h4>什么情况下会出现？</h4>
+                            <ul>
+                                <li><b>范围操作符：</b>如 <code>WHERE ID > 10</code> 或 <code>WHERE ID BETWEEN 1 AND 100</code>。</li>
+                                <li><b>前缀匹配：</b>如 <code>WHERE NAME LIKE '张%'</code>。</li>
+                                <li><b>非唯一性索引：</b>即便搜索 <code>WHERE NAME = '张三'</code>，若该字段非唯一，Oracle 会扫描范围以确保找全所有“张三”。</li>
+                            </ul>
+
+                            <div class="analogy-box">
+                                <strong>📖 形象类比：查字典</strong><br>
+                                就像你在查字典。你翻到“张”字开头的页码，然后在那几页里从上往下找，直到找到不是“张”字为止。这叫<b>按范围找</b>。
+                                <div class="analogy-icon"><a-icon type="book"></a-icon></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. VIEW 卡片 -->
+                    <div class="term-card border-blue">
+                        <div class="card-header">
+                            <span class="card-title">2. VIEW —— 视图操作 (或虚拟中间表)</span>
+                            <span class="perf-tag tag-blue">性能评价：中性 (Intermediate)</span>
+                        </div>
+                        <div class="card-body">
+                            <p>代表 Oracle 正在处理一个“无法合并的子查询”或“临时结果集”。</p>
+
+                            <h4>字面意思</h4>
+                            <p>并非手动创建的数据库视图，而是指一个<b>中间处理环节</b>产生的虚拟表。</p>
+
+                            <h4>技术原理</h4>
+                            <p>当 SQL 语句包含 <code>UNION</code>, <code>DISTINCT</code>, <code>GROUP BY</code> 或复杂子查询时，优化器无法将逻辑“拍平”。流程如下：</p>
+                            
+                            <div class="logic-box">
+                                <div class="mermaid">
+                                    graph LR
+                                    Sub[执行独立子查询] --> Temp[生成临时结果集/VIEW]
+                                    Temp --> Upper[供上层 JOIN/递归使用]
+                                    style Temp fill:#e6f7ff,stroke:#1890ff
+                                </div>
+                            </div>
+
+                            <h4>截图场景分析 (VW_NSO_1)</h4>
+                            <ul>
+                                <li><b>VW_ 前缀：</b>代表 <i>Virtual View</i>，由优化器内部生成的临时视图。</li>
+                                <li><b>上下文逻辑：</b>底层 <code>UNION-ALL</code> 和 <code>SORT (UNIQUE)</code> 的结果被打包成 <code>VW_NSO_1</code>，再与外部的 <code>NESTED LOOPS</code> 进行关联。</li>
+                            </ul>
+
+                            <div class="analogy-box">
+                                <strong>📋 形象类比：复印件小册子</strong><br>
+                                就像你先从几本书里复印了一些资料，把这些复印件整理成一个<b>临时小册子</b>放在桌上。接下来的工作中，你不再去翻那几本书，而是直接翻这个小册子。这个小册子就是 <b>VIEW</b>。
+                                <div class="analogy-icon"><a-icon type="copy"></a-icon></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="title-bar">
+                    <a-icon type="table" style="margin-right:8px"></a-icon>
+                    <span>SQL Explain Plan - 层次查询性能分析</span>
+                </div>
+
+                <div class="plan-window">
+                    <!-- 头部 -->
+                    <div class="plan-header">
+                        <div class="col col-op">Operation</div>
+                        <div class="col col-obj">Object</div>
+                        <div class="col col-opt">Optimizer</div>
+                        <div class="col col-val">Cost</div>
+                        <div class="col col-val">Cardinality</div>
+                        <div class="col col-val">Bytes</div>
+                    </div>
+
+                    <!-- 数据体 (还原截图数据) -->
+                    <div class="plan-body">
+                        <!-- 根节点 -->
+                        <div class="plan-row">
+                            <div class="col col-op">▼ SELECT STATEMENT</div>
+                            <div class="col col-obj"></div>
+                            <div class="col col-opt">ALL_ROWS</div>
+                            <div class="col col-val">264</div>
+                            <div class="col col-val">232</div>
+                            <div class="col col-val">135,256</div>
+                        </div>
+
+                        <!-- 递归查询节点 -->
+                        <div class="plan-row" style="padding-left: 20px;">
+                            <div class="col col-op">▼ CONNECT BY (WITH FILTERING)</div>
+                            <div class="col col-obj"></div>
+                            <div class="col col-opt"></div>
+                            <div class="col col-val">262</div>
+                            <div class="col col-val">0</div>
+                            <div class="col col-val">0</div>
+                        </div>
+
+                        <!-- 循环节点 -->
+                        <div class="plan-row" style="padding-left: 40px;">
+                            <div class="col col-op">▼ NESTED LOOPS</div>
+                            <div class="col col-obj"></div>
+                            <div class="col col-opt"></div>
+                            <div class="col col-val">56</div>
+                            <div class="col col-val">25</div>
+                            <div class="col col-val">10,850</div>
+                        </div>
+
+                        <!-- 视图节点 -->
+                        <div class="plan-row" style="padding-left: 60px;">
+                            <div class="col col-op">▼ VIEW</div>
+                            <div class="col col-obj">VW_NSO_1</div>
+                            <div class="col col-opt"></div>
+                            <div class="col col-val">38</div>
+                            <div class="col col-val">3</div>
+                            <div class="col col-val">366</div>
+                        </div>
+
+                        <!-- 中间省略...直接还原关键绿色部分 -->
+                        <div class="plan-row highlight-green" style="padding-left: 100px;">
+                            <div class="col col-op">INDEX (RANGE SCAN)</div>
+                            <div class="col col-obj">I_LINK_DATA_SN</div>
+                            <div class="col col-opt">ANALYZED</div>
+                            <div class="col col-val">3</div>
+                            <div class="col col-val">8</div>
+                            <div class="col col-val">0</div>
+                        </div>
+
+                        <div class="plan-row" style="padding-left: 40px;">
+                            <div class="col col-op">TABLE ACCESS (BY INDEX ROWID)</div>
+                            <div class="col col-obj">LINK_DATA</div>
+                            <div class="col col-opt">ANALYZED</div>
+                            <div class="col col-val">6</div>
+                            <div class="col col-val">8</div>
+                            <div class="col col-val">2,496</div>
+                        </div>
+
+                        <div class="plan-row" style="padding-left: 40px;">
+                            <div class="col col-op">▼ NESTED LOOPS</div>
+                            <div class="col col-obj"></div>
+                            <div class="col col-opt"></div>
+                            <div class="col col-val">206</div>
+                            <div class="col col-val">207</div>
+                            <div class="col col-val">75,348</div>
+                        </div>
+
+                        <div class="plan-row" style="padding-left: 60px;">
+                            <div class="col col-op">CONNECT BY PUMP</div>
+                            <div class="col col-obj"></div>
+                            <div class="col col-opt"></div>
+                            <div class="col col-val">0</div>
+                            <div class="col col-val">0</div>
+                            <div class="col col-val">0</div>
+                        </div>
+
+                        <div class="plan-row highlight-green" style="padding-left: 100px;">
+                            <div class="col col-op">INDEX (RANGE SCAN)</div>
+                            <div class="col col-obj">I_LINK_DATA_SN</div>
+                            <div class="col col-opt">ANALYZED</div>
+                            <div class="col col-val">3</div>
+                            <div class="col col-val">8</div>
+                            <div class="col col-val">0</div>
+                        </div>
+                    </div>
+
+                    <!-- 审阅点评层 -->
+                    <div class="audit-layer">
+                        <!-- 点评1：总成本 -->
+                        <div class="audit-tag" style="top: 0px;">
+                            <strong>💡 总体审阅：</strong><br>
+                            SELECT STATEMENT 总 Cost 为 264。考虑到 Cardinality 达到 232，整体性能表现尚可，但在递归链路中存在多重嵌套循环，可能在大数据量下劣化。
+                        </div>
+
+                        <!-- 点评2：绿色高亮部分 -->
+                        <div class="audit-tag" style="top: 155px;">
+                            <strong>🚀 性能亮点：</strong><br>
+                            这里的 INDEX (RANGE SCAN) 成本极低 (Cost=3)。说明过滤条件有效命中了索引 `I_LINK_DATA_SN`，避免了全表扫描，是此计划中最健康的访问路径。
+                        </div>
+
+                        <!-- 点评3：泵节点 -->
+                        <div class="audit-tag" style="top: 280px;">
+                            <strong>🔍 递归机制：</strong><br>
+                            此处出现的 `CONNECT BY PUMP` 是层次查询的核心。它负责将上一层的结果集传递给下一层进行迭代，该处 Cost=0 说明是纯内存操作。
+                        </div>
+
+                        <!-- 点评4：嵌套循环 -->
+                        <div class="audit-tag" style="top: 365px;">
+                            <strong>⚠️ 潜在隐患：</strong><br>
+                            下层的 NESTED LOOPS 基数(207)高于上层。如果驱动表数据集增大，这部分 Cost 将呈几何倍数增长。建议观察 `I_LINK_DATA_SN` 索引的聚簇因子。
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <!-- 引入 Vue 2 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <script>
+        // 注册 Antd 组件
+        Vue.use(antd);
+
+        // 初始化 Mermaid
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'neutral',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            methods: {
+                handleTabChange(key) {
+                    // Tab 切换时的回调函数
+                    console.log('切换到标签页: ', key);
+                    // 确保切换后重新渲染 mermaid 图表
+                    this.$nextTick(() => {
+                        mermaid.init();
+                    });
+                }
+            },
+            mounted() {
+                // 确保 DOM 加载后渲染 mermaid
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
