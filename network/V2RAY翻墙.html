@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2Ray 网络代理技术架构全景图</title>
+    <!-- 引入 Ant Design Vue V2 (1.7.8) 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #722ed1; /* 代理逻辑常用紫色 */
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --link-color: #1890ff;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { 
+            background: var(--bg-gray); 
+            margin: 0; 
+            padding: 24px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 12px;
+            color: var(--navy-blue); 
+            font-weight: bold; 
+            margin-bottom: 20px; 
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; 
+            background: #fafafa; 
+            border: 1px solid #ebedf0; 
+            border-radius: 6px; 
+            padding: 20px; 
+            overflow-x: auto; 
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #f9f0ff;
+            padding: 2px 10px;
+            border: 1px solid #d3adf7;
+            border-radius: 4px;
+            color: #722ed1;
+            margin-left: 12px;
+            font-size: 0.85em;
+        }
+
+        .logic-desc {
+            margin: 10px 0 20px 0;
+            padding: 12px 16px;
+            background: #e6f7ff;
+            border-left: 4px solid #1890ff;
+            color: #003a8c;
+            line-height: 1.6;
+        }
+
+        .step-num {
+            background: var(--navy-blue);
+            color: white;
+            border-radius: 4px;
+            padding: 0 8px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .warning-box {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            color: #856404;
+        }
+
+        /* 覆盖 Ant Design Tab 样式 */
+        .ant-tabs-bar {
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">V2Ray 流量转发与负载均衡技术架构</h1>
+        <p style="color: #666; margin-top: 10px;">
+            基于 VLESS + WebSocket + TLS 协议栈，实现多区域（新加坡、韩国、日本）高可用集群架构。
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange">
+        <!-- TAB 1: 流量入口与预处理 -->
+        <a-tab-pane key="1" tab="1. 流量入口与预处理 (Inbound)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1.1</span> 客户端请求接入 <span class="method-tag">Inbound: SOCKS5</span></h2>
+                <div class="logic-desc">本地应用程序（浏览器、终端）通过 SOCKS5 协议连接到 1080 端口。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        App["本地应用 (Browser/PC)"] --> Port["监听端口: 1080"]
+                        Port --> Proto["协议: SOCKS"]
+                        Proto --> Auth["Auth: noauth (免密)"]
+                        Auth --> Sniff["流量嗅探 (Sniffing)"]
+                        style Port fill:#e6f7ff,stroke:#1890ff
+                        style Sniff fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">1.2</span> 流量特性嗅探 <span class="method-tag">Sniffing & DestOverride</span></h2>
+                <div class="logic-desc">识别加密流量中的真实域名（HTTP/TLS），用于后续分流判断。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Raw["原始 TCP 数据流"] --> Detect["识别内容类型"]
+                        Detect --> Type{是否 HTTP/TLS?}
+                        Type -- 是 --> Extract["提取域名 (SNI/Host)"]
+                        Type -- 否 --> IP["保留原始目标 IP"]
+                        Extract --> Routing["进入路由决策引擎"]
+                        IP --> Routing
+                        style Extract fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 2: 核心路由与负载均衡 -->
+        <a-tab-pane key="2" tab="2. 路由逻辑与负载均衡 (Routing & Balancer)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">2.1</span> 分流决策链 <span class="method-tag">Routing Rules Tree</span></h2>
+                <div class="logic-desc">根据预设规则，决定请求是“直连”、“拦截”还是“转发至远端节点”。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Req["路由请求 (Domain/IP)"] --> Rule1{"GeoSite: CN?"}
+                        Rule1 -- Yes --> Direct["Outbound: Direct (直连)"]
+                        Rule1 -- No --> Rule2{"GeoIP: CN/Private?"}
+                        Rule2 -- Yes --> Direct
+                        Rule2 -- No --> Balancer["匹配 Balancer: oracle"]
+                        style Balancer fill:#fff7e6,stroke:#faad14,stroke-width:2px
+                        style Direct fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2.2</span> Oracle 节点池负载均衡 <span class="method-tag">Balancer Strategy</span></h2>
+                <div class="logic-desc">平衡多个海外节点（韩国、新加坡、日本）的负载压力，提高可用性。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Bal["Balancer: oracle"] --> Selector["节点选择器 (Selector)"]
+                        Selector --> Node1["韩国: chuncheon 1~4"]
+                        Selector --> Node2["新加坡: singapore 1~2"]
+                        Selector --> Node3["日本: osaka 1~2"]
+                        Node1 & Node2 & Node3 --> Dispatch["随机/循环分发请求"]
+                        style Selector fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 3: 协议封装与出口 -->
+        <a-tab-pane key="3" tab="3. 协议封装与加密出口 (Outbound)">
+
+            <div class="section-card">
+                <h2><span class="step-num">3.1</span> 传输层封装 <span class="method-tag">WS + TLS Stack</span></h2>
+                <div class="logic-desc">将代理数据伪装成标准的 HTTPS 流量，躲避网络审查。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Data["代理数据 (VLESS)"] --> WS["WebSocket 握手 (/ws)"]
+                        WS --> TLS["TLS 加密 (SNI: *.weirch.com)"]
+                        TLS --> TCP["底座: TCP (Port 443)"]
+                        TCP --> Server["远端服务器 (Remote Server)"]
+                        style WS fill:#fff7e6,stroke:#faad14
+                        style TLS fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3.2</span> VLESS 协议握手 <span class="method-tag">VLESS Encryption: None</span></h2>
+                <div class="logic-desc">轻量级传输协议，由于已有 TLS 加密，VLESS 层不再进行二次加密（encryption: none）。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Client["V2Ray 客户端"] --> Auth["UUID 身份认证"]
+                        Auth --> Target["目标地址信息 (Addr/Port)"]
+                        Target --> Payload["原始数据负载"]
+                        Payload --> VLESS["打包为 VLESS 帧"]
+                        style VLESS fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 4: DNS 与高级策略 -->
+        <a-tab-pane key="4" tab="4. DNS 解析与系统策略">
+            
+            <div class="section-card">
+                <h2><span class="step-num">4.1</span> 智能 DNS 解析流 <span class="method-tag">DNS Server Dispatch</span></h2>
+                <div class="logic-desc">通过分流解析，防止 DNS 污染并优化国内访问速度。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        DNS["DNS Query"] --> Type{"是否国内域名?"}
+                        Type -- Yes --> CN_DNS["114.114.114.114"]
+                        Type -- No --> Global_DNS["1.1.1.1 / 8.8.8.8"]
+                        CN_DNS --> Cache["结果写入本地缓存"]
+                        Global_DNS --> Cache
+                        style CN_DNS fill:#f6ffed,stroke:#52c41a
+                        style Global_DNS fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">4.2</span> 系统策略与黑洞 <span class="method-tag">Policy & Blackhole</span></h2>
+                <div class="logic-desc">通过 Blackhole（黑洞）协议拦截广告和危险请求。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Req["访问请求"] --> Ads{"匹配 category-ads?"}
+                        Ads -- 命中 --> Blocked["Outbound: blocked"]
+                        Blocked --> Blackhole["直接丢弃数据包"]
+                        Ads -- 未命中 --> Routing["继续后续路由判断"]
+                        style Blocked fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 4: DNS 与高级策略 -->
+        <a-tab-pane key="5" tab="5. VLESS 协议核心工作流解析">
+            <div id="app">
+                <div style="background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 24px; border-left: 6px solid var(--vless-color);">
+                    <h1 style="margin: 0;">VLESS 协议核心工作流解析</h1>
+                    <p style="color: #666; margin-top: 10px;">极致轻量化的无状态代理协议，专注于高性能传输与灵活的架构适配。</p>
+                </div>
+
+                <!-- 1. VLESS 数据包解剖 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> VLESS 请求报文解剖 <span class="method-tag">Packet Structure</span></h2>
+                    <div class="logic-desc">
+                        VLESS 与 VMess 不同，它不包含复杂的加密混淆层，完全依赖底层传输（如 TLS）。报文头部非常精简。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            subgraph Header ["协议头部 (Header)"]
+                                V["版本号 (1 Byte)"] --> ID["UUID (16 Bytes)"]
+                                ID --> Addons["附加信息 (M长度)"]
+                            end
+                            subgraph Command ["指令信息 (Metadata)"]
+                                Addons --> CMD["指令 (1 Byte: TCP/UDP)"]
+                                CMD --> Port["目标端口 (2 Bytes)"]
+                                Port --> AddrType["地址类型 (1 Byte)"]
+                                AddrType --> TargetAddr["目标地址 (N Bytes)"]
+                            end
+                            subgraph Data ["有效载荷 (Payload)"]
+                                TargetAddr --> RealData["应用层原始数据"]
+                            end
+                            style Header fill:#e6f7ff,stroke:#1890ff
+                            style Command fill:#f9f0ff,stroke:#722ed1
+                            style Data fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 无状态验证流 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 无状态身份验证流 <span class="method-tag">Stateless Authentication</span></h2>
+                    <div class="logic-desc">
+                        VLESS 属于“无状态”协议，服务器不需要为了验证而保存客户端的状态信息。这大幅降低了内存开销并提升了连接速度。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Client["客户端请求"] --> Pack["封装 UUID + 指令"]
+                            Pack -- "直接发送" --> Server["服务端监听"]
+                            Server --> Match{"UUID 是否在<br/>用户白名单中?"}
+                            Match -- No --> Drop["断开连接/回落 (Fallback)"]
+                            Match -- Yes --> Parse["解析目标地址 (Target Addr)"]
+                            Parse --> Forward["代理转发数据流"]
+                            style Match fill:#fff7e6,stroke:#faad14
+                            style Drop fill:#fff1f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 叠加态传输流 (你的配置专用) -->
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 传输层叠加态：WS + TLS 封装流 <span class="method-tag">VLESS over WS + TLS</span></h2>
+                    <div class="logic-desc">
+                        这是你配置文件中使用的架构。VLESS 负责协议语义，WebSocket 负责穿透 CDN/反向代理，TLS 负责数据加密与身份伪装。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Raw["原始数据"] --> V_Wrap["1. VLESS 封装 (添加 UUID)"]
+                            V_Wrap --> WS_Wrap["2. WebSocket 帧封装 (Binary Frame)"]
+                            WS_Wrap --> TLS_Enc["3. TLS 握手与全加密"]
+                            TLS_Enc --> TCP_Send["4. 通过 443 端口发送 TCP 包"]
+                            
+                            TCP_Send -. "互联网 (公网伪装)" .-> Receiver["服务端/CDN"]
+                            
+                            Receiver --> TLS_Dec["5. TLS 解密 (由服务器证书完成)"]
+                            TLS_Dec --> WS_Unpack["6. WS 解包 (路径检查 /ws)"]
+                            WS_Unpack --> V_Auth["7. VLESS UUID 校验"]
+                            V_Auth --> Final["8. 转发至目标网站"]
+
+                            style V_Wrap fill:#fff7e6,stroke:#faad14
+                            style WS_Wrap fill:#e6f7ff,stroke:#1890ff
+                            style TLS_Enc fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 服务端处理逻辑 (多节点通用) -->
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 服务端分发处理逻辑 <span class="method-tag">Server-side Dispatch</span></h2>
+                    <div class="logic-desc">
+                        当服务端接收到 VLESS 流量时，它如何处理并在多节点环境下保持高效运行。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            In["接收封装流量 (Port 443)"] --> Transport{"传输层检查"}
+                            Transport -- "Header 不符" --> Fallback["回落至 Web 静态页面 (防探测)"]
+                            Transport -- "WS Path 匹配" --> Auth["执行 UUID 强认证"]
+                            
+                            Auth -- "非法用户" --> Fallback
+                            Auth -- "合法用户" --> Proxy{"代理行为"}
+                            
+                            Proxy --> TCP_C["建立目标主机 TCP 连接"]
+                            Proxy --> UDP_C["UDP 关联 (如适用)"]
+                            
+                            TCP_C --> Sync["全双工实时数据同步"]
+                            UDP_C --> Sync
+                            
+                            style Fallback fill:#fff1f0,stroke:#ff4d4f
+                            style Sync fill:#f9f0ff,stroke:#722ed1
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 客户端负载均衡选路 -->
+                <div class="section-card">
+                    <h2><span class="step-num">5</span> 客户端出站路由选路 <span class="method-tag">Outbound Balancer Path</span></h2>
+                    <div class="logic-desc">
+                        根据你配置中的 `balancer` 策略，流量如何从本地流向你定义的多个 VLESS 节点池。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Local["本地 SOCKS 请求"] --> Routing["路由引擎 (Routing)"]
+                            Routing -- "匹配海外域名" --> Balancer["负载均衡器 (Tag: oracle)"]
+                            
+                            subgraph Pool ["VLESS 节点池 (Vnext)"]
+                                N1["韩国 Chuncheon 1-4"]
+                                N2["新加坡 Singapore 1-2"]
+                                N3["日本 Osaka 1-2"]
+                            end
+                            
+                            Balancer --> Selection{"算法选择<br/>(Random/RoundRobin)"}
+                            Selection --> N1
+                            Selection --> N2
+                            Selection --> N3
+                            
+                            style Balancer fill:#fff7e6,stroke:#faad14
+                            style Selection fill:#f9f0ff,stroke:#722ed1
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 6: 握手协议深度拆解 -->
+        <a-tab-pane key="6" tab="6.TLS 握手流程 (The Handshake)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1.1</span> TLS 1.2 经典握手 (2-RTT) <span class="method-tag">Classic Handshake</span></h2>
+                <div class="logic-desc">TLS 1.2 需要两次往返协商：首先确定加密套件，然后交换密钥种子，最后通过 ChangeCipherSpec 切换加密模式。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C1["Client Hello<br/>(随机数, 算法列表)"] --> S1["Server Hello<br/>(选定算法, 随机数)"]
+                        S1 --> S2["Certificate & KeyExchange<br/>(服务端证书+公钥)"]
+                        S2 --> C2["Client Key Exchange<br/>(预主密钥 Pre-Master)"]
+                        C2 --> C3["Change Cipher Spec<br/>(开始加密通信)"]
+                        C3 --> S3["Finished<br/>(握手校验)"]
+                        style C1 fill:#e6f7ff,stroke:#1890ff
+                        style S2 fill:#fff7e6,stroke:#faad14
+                        style C3 fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">1.2</span> TLS 1.3 现代握手 (1-RTT) <span class="method-tag">Zero/One-RTT Logic</span></h2>
+                <div class="logic-desc">TLS 1.3 大幅简化了流程：客户端在第一次握手中就发送密钥份额（Key Share），直接将握手时间减半。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C1["Client Hello<br/>(Key Share + 随机数)"] -- "直接合并" --> S1["Server Hello<br/>(Key Share + 选定算法)"]
+                        S1 --> S2["Encrypted Extensions<br/>(证书 + 签名)"]
+                        S2 --> S3["Finished"]
+                        S3 --> Data["Application Data<br/>(已加密)"]
+                        style C1 fill:#e6f7ff,stroke:#1890ff
+                        style S3 fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 7: 证书与信任链 -->
+        <a-tab-pane key="7" tab="7.TLS证书信任体系 (PKI & Trust)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">2.1</span> 证书信任链验证流 <span class="method-tag">Certificate Chain</span></h2>
+                <div class="logic-desc">浏览器如何验证一个证书？通过“套娃”式的数字签名，一直追溯到操作系统内置的根证书。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Web["目标网站证书 (EE)"] -- "由谁签名?" --> Inter["中级证书 (Intermediate)"]
+                        Inter -- "由谁签名?" --> Root["根证书 (Root CA)"]
+                        Root -- "预装在" --> OS["本地系统/浏览器信任库"]
+                        OS --> Verify{"校验通过?"}
+                        Verify -- Yes --> Lock["显示绿色小锁"]
+                        Verify -- No --> Warning["浏览器拦截 (不安全警告)"]
+                        style Root fill:#f6ffed,stroke:#52c41a
+                        style OS fill:#f9f0ff,stroke:#722ed1
+                        style Warning fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2.2</span> 数字签名算法逻辑 <span class="method-tag">Digital Signature</span></h2>
+                <div class="logic-desc">签名 = 证书内容哈希 + CA 私钥加密。验证 = 哈希比对 + CA 公钥解密。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                        graph TD
+                                    subgraph Signing ["1. 签名过程 (CA 端)"]
+                                        S_Content["证书原文"] --> S_Hash["SHA256 哈希算法"]
+                                        S_Hash --> S_Digest["摘要 (Digest)"]
+                                        S_Digest --> S_Encrypt["CA 私钥签名 (加密)"]
+                                        S_Encrypt --> S_Signature(["数字签名 (Signature)"])
+                                    end
+
+                                    subgraph Verifying ["2. 验证过程 (用户端)"]
+                                        V_Signature["数字签名"] --> V_Decrypt["CA 公钥解密"]
+                                        V_Decrypt --> V_DigestA["还原摘要 A"]
+
+                                        V_Content["收到的证书原文"] --> V_Hash["SHA256 哈希算法"]
+                                        V_Hash --> V_DigestB["计算摘要 B"]
+
+                                        V_DigestA --> V_Compare{"摘要比对"}
+                                        V_DigestB --> V_Compare
+
+                                        V_Compare -- 一致 --> V_OK["验证成功 (证书可信)"]
+                                        V_Compare -- 不一致 --> V_Fail["验证失败 (证书被篡改)"]
+                                    end
+
+                                    %% 样式美化
+                                    style S_Signature fill:#fff7e6,stroke:#faad14,stroke-width:2px
+                                    style V_Compare fill:#e6f7ff,stroke:#1890ff
+                                    style V_OK fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                                    style V_Fail fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 8: 密钥衍生与对称加密 -->
+        <a-tab-pane key="8" tab="8.TLS密钥生成与数据流 (Encryption)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">3.1</span> 会话密钥衍生 <span class="method-tag">Key Derivation</span></h2>
+                <div class="logic-desc">非对称加密（RSA/DH）仅用于握手阶段，目的是在不安全的环境下协商出最终的“对称密钥”。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        PreMaster["Pre-Master Secret"] --> PRF["伪随机函数 (HKDF)"]
+                        CR["Client Random"] --> PRF
+                        SR["Server Random"] --> PRF
+                        PRF --> Master["Master Secret (主密钥)"]
+                        Master --> SessionKey["会话密钥 (用于 AES/ChaCha20)"]
+                        style Master fill:#f9f0ff,stroke:#722ed1
+                        style SessionKey fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3.2</span> TLS 记录层协议 <span class="method-tag">Record Layer</span></h2>
+                <div class="logic-desc">握手完成后，每一段数据包都会经过：切片 -> 压缩(可选) -> 加 MAC (或 AEAD) -> 加密。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Raw["应用层原始数据"] --> Segment["分段 (Fragments)"]
+                        Segment --> Authenticate["添加 MAC (完整性校验)"]
+                        Authenticate --> Cipher["对称加密 (AES-GCM)"]
+                        Cipher --> Pack["TLS 记录包"]
+                        Pack --> TCP["传输至 TCP 层"]
+                        style Cipher fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 9: 握手与验证 -->
+        <a-tab-pane key="9" tab="9. 协商与验证 (Handshake)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1.1</span> 方法协商阶段 <span class="method-tag">Method Selection</span></h2>
+                <div class="logic-desc">客户端告知服务端自己支持的验证方式（如免密、用户密码），服务端选定一种返回。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C_Send["Client: [VER, NMETHODS, METHODS]"] --> S_Recv["Server: [VER, METHOD]"]
+                        S_Recv --> Logic{"选择哪种方法?"}
+                        Logic -- "0x00" --> NO_AUTH["免密登录 (直接进入请求)"]
+                        Logic -- "0x02" --> USER_PWD["用户名密码验证"]
+                        Logic -- "0xFF" --> ERR["无可支持方法 (断开)"]
+                        style C_Send fill:#e6f7ff,stroke:#1890ff
+                        style S_Recv fill:#fff7e6,stroke:#faad14
+                        style NO_AUTH fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">1.2</span> 身份验证流 (0x02) <span class="method-tag">Sub-negotiation Auth</span></h2>
+                <div class="logic-desc">若选定 0x02，则进入子协议验证环节，确保只有授权用户能通过代理。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C_Auth["Client: [VER, ULEN, USER, PLEN, PWD]"] --> S_Auth["Server: 校验数据库/配置"]
+                        S_Auth --> Result{"校验结果?"}
+                        Result -- 成功 --> S_Success["Server: [0x01, 0x00]"]
+                        Result -- 失败 --> S_Fail["Server: [0x01, 0x01] -> 断开"]
+                        S_Success --> Next["进入正式请求阶段"]
+                        style C_Auth fill:#e6f7ff,stroke:#1890ff
+                        style S_Success fill:#f6ffed,stroke:#52c41a
+                        style S_Fail fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 10: 请求与连接 -->
+        <a-tab-pane key="10" tab="10. 请求与目标连接 (Requesting)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">2.1</span> 请求报文结构 <span class="method-tag">SOCKS5 Request</span></h2>
+                <div class="logic-desc">客户端请求代理服务器连接特定的目标地址（IPv4, 域名 或 IPv6）。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Req["Client Request: [VER, CMD, RSV, ATYP, ADDR, PORT]"] --> CMD{"CMD 命令类型"}
+                        CMD -- "0x01" --> CONNECT["TCP 建立连接 (常用)"]
+                        CMD -- "0x02" --> BIND["端口绑定 (反向连接)"]
+                        CMD -- "0x03" --> UDP["UDP 关联 (UDP Associate)"]
+                        CONNECT --> ATYP{"ATYP 地址类型"}
+                        ATYP -- "0x01" --> IPv4["IPv4 地址"]
+                        ATYP -- "0x03" --> Domain["域名 (由 Server 解析)"]
+                        style Req fill:#e6f7ff,stroke:#1890ff
+                        style CONNECT fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2.2</span> 服务端响应逻辑 <span class="method-tag">Server Response</span></h2>
+                <div class="logic-desc">服务端尝试连接目标，并将连接结果反馈给客户端。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Process["Server 连接目标服务器"] --> Res{"连接状态"}
+                        Res -- 成功 --> S_Reply["Reply: [VER, 0x00 (Success), RSV, ATYP, BND.ADDR, BND.PORT]"]
+                        Res -- 失败 --> S_Err["Reply: [VER, 0x01~0x08 (Error Code), ...]"]
+                        S_Reply --> Tunnel["双向透明转发开启"]
+                        style S_Reply fill:#f6ffed,stroke:#52c41a
+                        style S_Err fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 11: 数据流转发 -->
+        <a-tab-pane key="11" tab="11. 数据转发与 UDP (Relaying)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">3.1</span> TCP 透明代理流 <span class="method-tag">TCP Relay Loop</span></h2>
+                <div class="logic-desc">握手完成后，SOCKS5 角色转变为“纯搬运工”，在两个 Socket 之间无脑同步数据。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Client["Client Socket"] <--> Proxy["Proxy Server (Buffer)"]
+                        Proxy <--> Target["Target Server Socket"]
+                        Note["注：此阶段数据通常不加密<br/>(除非外层包裹了 TLS)"]
+                        style Proxy fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3.2</span> UDP 关联处理流 <span class="method-tag">UDP Associate Flow</span></h2>
+                <div class="logic-desc">UDP 比较特殊，客户端先通过 TCP 告知意图，代理服务器开启一个动态 UDP 端口进行数据中转。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C_TCP["Client (TCP Control)"] -- "CMD 0x03" --> S_TCP["Server (TCP Control)"]
+                        S_TCP -- "告知 UDP 端口" --> C_TCP
+                        C_UDP["Client (UDP Data)"] -- "携带 SOCKS5 Header" --> S_UDP["Proxy (Dynamic UDP Port)"]
+                        S_UDP -- "剥离 Header 发送" --> T_UDP["Target (UDP)"]
+                        T_UDP -- "返回数据" --> S_UDP
+                        S_UDP -- "封装 Header 返回" --> C_UDP
+                        style S_UDP fill:#f9f0ff,stroke:#722ed1
+                        style C_UDP fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 2 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    // 注册 Antd 组件
+    Vue.use(antd);
+
+    // 初始化 Mermaid
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'neutral',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                activeKey: '1'
+            };
+        },
+        methods: {
+            // 当 Tab 切换时重新渲染图表，解决宽度计算问题
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>
