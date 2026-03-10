@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiddler 抓包工具技术架构与诊断全景图</title>
+    <!-- 引入 Ant Design Vue V2 (1.7.8) 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --fiddler-green: #2ecc71; /* Fiddler 标志性绿色 */
+            --fiddler-dark: #2c3e50;
+            --error-red: #e74c3c;
+            --warn-yellow: #f1c40f;
+            --info-blue: #3498db;
+            --bg-gray: #f4f7f6;
+        }
+        body {
+            background: var(--bg-gray);
+            margin: 0;
+            padding: 24px;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .header {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border-top: 8px solid var(--fiddler-green);
+            text-align: center;
+        }
+        .section-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section-card {
+            background: #fff;
+            border-radius: 10px;
+            margin-bottom: 40px;
+            padding: 30px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+            transition: transform 0.3s;
+        }
+        h2 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            color: var(--fiddler-dark);
+            font-weight: 700;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+        }
+        h2::before {
+            content: "◆";
+            color: var(--fiddler-green);
+            margin-right: 15px;
+            font-size: 1.2em;
+        }
+        .chart-container {
+            width: 100%;
+            background: #ffffff;
+            border: 1px dashed #d9d9d9;
+            border-radius: 8px;
+            padding: 25px;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        .logic-desc {
+            margin: 15px 0;
+            padding: 15px 20px;
+            background: #f0f5ff;
+            border-left: 5px solid var(--info-blue);
+            color: #2c3e50;
+            line-height: 1.8;
+            border-radius: 0 5px 5px 0;
+        }
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #e6fffa;
+            padding: 4px 12px;
+            border: 1px solid #87e8de;
+            border-radius: 20px;
+            color: #006d75;
+            margin-left: 15px;
+            font-size: 0.9em;
+            font-weight: normal;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .bg-red { background: var(--error-red); }
+        .bg-yellow { background: var(--warn-yellow); color: #333; }
+        .bg-green { background: var(--fiddler-green); }
+        .step-label {
+            font-weight: bold;
+            color: var(--fiddler-green);
+            margin-right: 8px;
+        }
+        .step-num {
+            background: var(--fiddler-green);
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 12px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        /* 覆盖 Ant Design Tab 样式 */
+        .ant-tabs-bar {
+            margin-bottom: 30px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .ant-tabs-tab {
+            font-size: 16px !important;
+            padding: 18px 24px !important;
+            font-weight: 500;
+        }
+        .ant-tabs-tab-active {
+            color: var(--fiddler-green) !important;
+        }
+        .ant-tabs-ink-bar {
+            background-color: var(--fiddler-green) !important;
+        }
+        /* 模拟 Fiddler 经典的 WinForms 灰调风格 */
+        .fiddler-window {
+            width: 100%;
+            max-width: 1200px;
+            height: 600px;
+            margin: 20px auto;
+            border: 1px solid #999;
+            background: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        /* 顶部工具栏 */
+        .fiddler-toolbar {
+            height: 40px;
+            background: #fff;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 15px;
+            font-size: 12px;
+        }
+
+        /* 主体分栏 */
+        .fiddler-main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 左侧会话列表 */
+        .session-list {
+            flex: 1.2;
+            background: #fff;
+            border-right: 2px solid #ccc;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+
+        .session-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .session-table th {
+            background: #eee;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid #ccc;
+            padding: 4px;
+            text-align: left;
+            font-weight: normal;
+        }
+
+        .session-row { border-bottom: 1px solid #f0f0f0; cursor: default; }
+        .session-row:hover { background: #e8f4ff; }
+        .session-row.selected { background: #0078d7 !important; color: #fff; }
+        .session-row td { padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 状态图标模拟 */
+        .icon { display: inline-block; width: 14px; height: 14px; margin-right: 4px; vertical-align: middle; border-radius: 2px; }
+        .icon-ok { background: #2ecc71; border: 1px solid #27ae60; } /* 正常包 */
+        .icon-error { background: #e74c3c; border: 1px solid #c0392b; position: relative; } /* 报错包 */
+        .icon-error::after { content: '×'; color: #fff; position: absolute; top: -4px; left: 2px; font-weight: bold; }
+        .icon-tunnel { background: #bdc3c7; border: 1px solid #95a5a6; } /* Tunnel */
+
+        /* 右侧详情区 */
+        .details-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+        }
+
+        .details-content {
+            padding: 15px;
+            font-size: 12px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        .stat-group { margin-bottom: 20px; }
+        .stat-title { font-weight: bold; border-bottom: 1px solid #eee; margin-bottom: 5px; color: #555; }
+        .stat-item { display: flex; justify-content: space-between; padding-left: 10px; }
+
+        /* 底部状态栏 */
+        .fiddler-status {
+            height: 25px;
+            background: #f0f0f0;
+            border-top: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 11px;
+            color: #666;
+        }
+        .fiddler-options-window {
+            width: 700px;
+            background: #f0f0f0;
+            border: 1px solid #888;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border-radius: 2px;
+            margin: 0 auto;
+        }
+
+        /* 标题栏 */
+        .window-header {
+            background: #fff;
+            padding: 8px 12px;
+            border-bottom: 1px solid #ccc;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 选项卡内容区 */
+        .window-content {
+            padding: 10px;
+            min-height: 400px;
+        }
+
+        /* 模拟 Fiddler 内部的白色属性框 */
+        .config-pane {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 20px;
+            height: 380px;
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        .indent-option {
+            margin-left: 25px;
+            margin-top: 10px;
+        }
+
+        .action-link {
+            color: #0066cc;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .host-textarea {
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            border: 1px solid #a0a0a0;
+        }
+
+        /* 底部按钮 */
+        .window-footer {
+            padding: 10px 15px;
+            text-align: right;
+            background: #f0f0f0;
+            border-top: 1px solid #ccc;
+        }
+
+        .fiddler-btn {
+            min-width: 80px;
+            height: 24px;
+            padding: 0 10px;
+            font-size: 12px;
+            border-radius: 2px;
+            margin-left: 8px;
+        }
+
+        /* 特殊蓝色提示框 */
+        .info-tip {
+            background: #e1f5fe;
+            border: 1px solid #b3e5fc;
+            padding: 8px;
+            font-size: 11px;
+            color: #01579b;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1 style="margin: 0; font-size: 2.2em;">Fiddler Web Debugger 抓包分析技术全景</h1>
+            <p style="color: #7f8c8d; margin-top: 15px; font-size: 1.1em;">
+                基于中间人代理 (MITM) 原理，深度解析 HTTP/HTTPS 流量监测、调试与诊断流程
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange">
+            <!-- TAB 1: 核心原理与诊断 -->
+            <a-tab-pane key="1" tab="核心原理与诊断">
+                <!-- 1. 核心原理：代理与中间人 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> Fiddler 核心工作机制 <span class="method-tag">Proxy & MITM Architecture</span></h2>
+                    <div class="logic-desc">
+                        Fiddler 作为一个系统代理（默认端口 8888），它介于客户端（浏览器/App）和服务器之间。它劫持 WinINET 协议栈请求，并作为中间人重发数据。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Client["💻 客户端 (Browser/APP)"] -- "1. 发起请求 (Proxy:8888)" --> Fiddler["🛡️ Fiddler (MITM Proxy)"]
+                            Fiddler -- "2. 记录请求并重发" --> Server["🌐 目标服务器 (Remote Server)"]
+                            Server -- "3. 返回响应" --> Fiddler
+                            Fiddler -- "4. 篡改/记录后返回内容" --> Client
+                            subgraph Internal ["Fiddler 内部处理"]
+                            Fiddler --> SessionList["Session List (会话列表)"]
+                            Fiddler --> Inspectors["Inspectors (解析视图)"]
+                            end
+                            style Fiddler fill:#e6fffa,stroke:#36cfc9,stroke-width:2px
+                            style SessionList fill:#fff7e6,stroke:#ffa940
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. HTTPS 解密流程 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> HTTPS 流量解密全流程 <span class="method-tag">SSL/TLS Handshake Hijacking</span></h2>
+                    <div class="logic-desc">
+                        HTTPS 加密流量无法直接查看，Fiddler 通过动态生成“伪造”的 CA 根证书，在握手阶段分别与客户端和服务器建立加密隧道。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            C["Client"] -- "Client Hello" --> F["Fiddler"]
+                            F -- "验证 Fiddler Root Cert" --> C
+                            F -- "建立 TLS 隧道 1" --> C
+                            F -- "Client Hello (伪造)" --> S["Server"]
+                            S -- "Server Certificate" --> F
+                            F -- "建立 TLS 隧道 2" --> S
+                            C -- "加密数据" --> F
+                            F -- "解密并以明文显示" --> View["UI 显示明文"]
+                            F -- "重新加密" --> S
+                            style F fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                            style View fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 界面诊断：如何判断包有问题？ -->
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 抓包异常诊断逻辑 <span class="method-tag">Problematic Packet Identification</span></h2>
+                    <div class="logic-desc">
+                        通过 Session List 的图标、颜色和 Result 码快速定位网络问题。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            Start["👀 观察 Session 会话列表"] --> Code{检查 Result 状态码}
+                            Code -- "4xx (如 404)" --> Error4["客户端错误: 路径不存在/参数错误"]
+                            Code -- "5xx (如 502/504)" --> Error5["服务端错误: 网关超时/程序崩溃"]
+                            Code -- "0 / 200 (红叉)" --> ErrorAbnormal["连接中断: 客户端主动断开或超时"]
+                            Start --> Icon{检查左侧图标}
+                            Icon -- "🔴 圆圈红叉" --> Abort["Session 异常终止"]
+                            Icon -- "🟡 黄色锁头" --> HTTPS_Err["HTTPS 握手失败/证书不受信任"]
+                            Icon -- "🟣 灰色向左箭头" --> Redirect["302/301 强制跳转"]
+                            style Error4 fill:#fff2f0,stroke:#ff4d4f
+                            style Error5 fill:#fff2f0,stroke:#ff4d4f
+                            style ErrorAbnormal fill:#fff1f0,stroke:#cf1322
+                            style HTTPS_Err fill:#fffbe6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 核心功能：数据检测与修改 -->
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 数据处理流：Inspectors vs AutoResponder <span class="method-tag">Analysis & Mocking</span></h2>
+                    <div class="logic-desc">
+                        Inspectors 用于“看”，AutoResponder 用于“改”。这是开发者最常用的两个核心子系统。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Raw["原始报文"] --> Parser["数据解析引擎"]
+                            subgraph Inspection ["数据分析 (Inspectors)"]
+                            Parser --> Headers["Headers (头信息)"]
+                            Parser --> JSON["JSON/XML (结构化数据)"]
+                            Parser --> RawView["Raw (原始流)"]
+                            end
+                            subgraph Mocking ["请求拦截 (AutoResponder)"]
+                            Parser --> Matcher{"匹配规则?"}
+                            Matcher -- "Yes" --> Action["替换响应 (Local File / Redirect)"]
+                            Matcher -- "No" --> Pass["透传至真实服务器"]
+                            end
+                            style Action fill:#e6f7ff,stroke:#1890ff
+                            style Matcher fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 过滤与性能分析 -->
+                <div class="section-card">
+                    <h2><span class="step-num">5</span> 高级策略：Filters 与 Statistics <span class="method-tag">Advanced Optimization</span></h2>
+                    <div class="logic-desc">
+                        在大流量环境下，通过 Filters 排除无关干扰（如系统更新包），通过 Statistics 分析加载耗时。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Total["所有系统流量"] --> FilterRule{"Filters 规则"}
+                            FilterRule -- "域名不匹配" --> Hide["隐藏/丢弃"]
+                            FilterRule -- "匹配目标域名" --> Show["记录到列表"]
+                            Show --> Stats["Statistics (统计)"]
+                            Stats --> Latency["计算 RTT (往返时间)"]
+                            Stats --> Size["计算 Payload 总大小"]
+                            Show --> Timeline["Timeline (时间轴)"]
+                            Timeline --> Waterfall["瀑布图分析加载瓶颈"]
+                            style Hide fill:#f5f5f5,stroke:#d9d9d9
+                            style Show fill:#f6ffed,stroke:#52c41a
+                            style Stats fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. 方法间的联动总流程图 -->
+                <div class="section-card" style="border: 2px solid var(--fiddler-green);">
+                    <h2><span class="step-num">6</span> 全局操作联动总流程 <span class="method-tag">Full Workflow Synchronization</span></h2>
+                    <div class="logic-desc">
+                        展示从启动 Fiddler 到最后完成问题定位的完整操作闭环。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Step1["1. 开启 Capturing<br/>(WinConfig 配置应用)"] --> Step2["2. 配置 HTTPS 解密<br/>(Trust Root Certificate)"]
+                            Step2 --> Step3["3. 设置 Filters 过滤<br/>(只看目标 Host)"]
+                            Step3 --> Step4["4. 触发客户端请求<br/>(APP/Browser 操作)"]
+                            Step4 --> Step5["5. 观察 Session List<br/>(通过 Result/Icon 找异常包)"]
+                            Step5 --> Step6{"异常发现?"}
+                            Step6 -- "数据错" --> Step7["查看 Inspectors<br/>(检查参数与返回 JSON)"]
+                            Step6 -- "链路慢" --> Step8["查看 Statistics/Timeline<br/>(定位耗时环节)"]
+                            Step6 -- "需调试" --> Step9["开启 AutoResponder<br/>(修改响应注入错误场景)"]
+                            Step7 & Step8 & Step9 --> End["🎯 定位 Bug 并修复"]
+                            style Step1 fill:#e6fffa
+                            style Step5 fill:#fff7e6
+                            style Step6 fill:#ffccc7
+                            style End fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 2: HTTPS 解密与证书机制 -->
+            <a-tab-pane key="2" tab="HTTPS 解密与证书机制">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 证书信任链与安装流程 <span class="method-tag">Certificate Chain Installation</span></h2>
+                    <div class="logic-desc">
+                        Fiddler 在首次启用 HTTPS 解密时，会生成一个自签名的根证书 (FiddlerRoot)。用户必须手动将此证书安装到系统的“受信任的根证书颁发机构”存储区，浏览器才会信任 Fiddler 后续动态签发的站点证书。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Start["首次打开 HTTPS 解密"] --> GenCert["生成 FiddlerRoot 证书"]
+                            GenCert --> Export["导出 .cer 文件到桌面"]
+                            Export --> Manual["手动安装向导"]
+                            Manual --> TrustStore["存入“受信任的根证书颁发机构”"]
+                            TrustStore --> Trusted{系统是否信任?}
+                            Trusted -- 是 --> Success["✅ 后续所有站点证书自动信任"]
+                            Trusted -- 否 --> Error["❌ 浏览器显示“不安全连接”警告"]
+                            style TrustStore fill:#f6ffed,stroke:#52c41a
+                            style Error fill:#fff2f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 动态证书生成与 TLS 握手拦截 <span class="method-tag">Dynamic Cert Generation</span></h2>
+                    <div class="logic-desc">
+                        对于每个新的 HTTPS 站点，Fiddler 会实时用根证书私钥签发一个专属于该站点的“伪造”证书。此过程对用户透明，但实现了对加密链路的完全控制。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Client["浏览器访问 https://example.com"] --> Hello["ClientHello"]
+                            Hello --> Fiddler["Fiddler 拦截"]
+                            Fiddler --> CheckCert{"证书缓存是否存在?"}
+                            CheckCert -- 否 --> Generate["用 FiddlerRoot 私钥即时生成 example.com 证书"]
+                            CheckCert -- 是 --> Load["从缓存加载已有证书"]
+                            Generate --> Sign["签名并返回给浏览器"]
+                            Load --> Sign
+                            Sign --> Establish1["与浏览器建立 TLS 隧道 1"]
+                            Establish1 --> ConnectReal["Fiddler 以真实客户端身份连接真实服务器"]
+                            ConnectReal --> Establish2["与真实服务器建立 TLS 隧道 2"]
+                            style Generate fill:#f9f0ff,stroke:#722ed1
+                            style Establish1 fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 3: 断点调试与自动响应 -->
+            <a-tab-pane key="3" tab="断点调试与自动响应">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 断点 (Breakpoint) 设置与拦截点 <span class="method-tag">Request/Response Breakpoints</span></h2>
+                    <div class="logic-desc">
+                        断点允许在请求发出前或响应返回后暂停会话，以便修改其内容。这是动态调试 API 行为的核心手段。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            subgraph BeforeRequest ["请求前断点 (Before Request)"]
+                            Direction1["客户端请求到达 Fiddler"] --> Break1["断点触发，请求暂停"]
+                            Break1 --> Inspect1["开发者可修改: URL, Headers, Body"]
+                            Inspect1 --> Action1{选择操作}
+                            Action1 -- "Run to Completion" --> Continue1["继续发送至服务器"]
+                            Action1 -- "Break on Response" --> Pause1["等待响应返回再断点"]
+                            end
+                            subgraph AfterResponse ["响应后断点 (After Response)"]
+                            Direction2["服务器响应到达 Fiddler"] --> Break2["断点触发，响应暂停"]
+                            Break2 --> Inspect2["开发者可修改: Status Code, Headers, Body"]
+                            Inspect2 --> Continue2["继续返回修改后的响应给客户端"]
+                            end
+                            style Break1 fill:#ffccc7,stroke:#ff4d4f
+                            style Break2 fill:#ffccc7,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> AutoResponder 规则引擎与匹配逻辑 <span class="method-tag">Rule Matching & Action</span></h2>
+                    <div class="logic-desc">
+                        AutoResponder 通过预定义规则（支持通配符和正则表达式）自动匹配请求，并用本地文件或重定向 URL 替换原始响应，用于模拟接口返回、调试前端或制造异常场景。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Request["流入请求"] --> Matcher["规则匹配引擎"]
+                            Matcher --> Rule1{"规则1: EXACT:https://api.com/user"}
+                            Rule1 -- 匹配 --> Action1["返回: user_mock.json"]
+                            Matcher --> Rule2{"规则2: REGEX:.*\\.js$"}
+                            Rule2 -- 匹配 --> Action2["返回: empty.js (模拟加载失败)"]
+                            Matcher --> Rule3{"规则3: 通配符 *slow*"}
+                            Rule3 -- 匹配 --> Action3["重定向: http://localhost:8080/slow"]
+                            Matcher --> NoMatch["无匹配规则"]
+                            NoMatch --> Pass["放行至真实服务器"]
+                            style Action1 fill:#e6fffa,stroke:#36cfc9
+                            style Action2 fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 4: 性能分析与优化策略 -->
+            <a-tab-pane key="4" tab="性能分析与优化策略">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> Timeline 瀑布图与资源加载分析 <span class="method-tag">Waterfall Analysis</span></h2>
+                    <div class="logic-desc">
+                        Timeline 视图以图形化方式展示页面所有资源的加载时序。横条长度代表请求耗时，颜色区分 DNS 查询、TCP 连接、SSL 握手、请求发送、等待响应、接收数据等阶段，直观定位阻塞点。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            subgraph Waterfall ["瀑布图分解 (单个请求)"]
+                            Phase1["灰色 | DNS 查询<br/>耗时过长需检查 HOSTS/网络"]
+                            Phase2["橙色 | TCP 连接<br/>三次握手耗时"]
+                            Phase3["黄色 | SSL 握手<br/>HTTPS 特有，证书交换与密钥协商"]
+                            Phase4["绿色 | 请求发送<br/>请求头发送至服务器"]
+                            Phase5["蓝色 | 等待响应 (TTFB)<br/>服务器处理时间，关键指标"]
+                            Phase6["紫色 | 接收响应<br/>下载数据时间，受带宽和资源大小影响"]
+                            end
+                            subgraph Diagnosis ["常见瓶颈诊断"]
+                            LongBlue["长蓝色块"] --> ServerSlow["服务器处理慢 (DB查询/复杂逻辑)"]
+                            LongYellow["长黄色块"] --> CertIssue["HTTPS 握手慢 (证书链复杂/密钥交换)"]
+                            LongPurple["长紫色块"] --> BigResource["资源过大 (未启用 GZIP/图片未压缩)"]
+                            end
+                            style Phase5 fill:#e6f7ff,stroke:#1890ff
+                            style ServerSlow fill:#ffccc7,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> Statistics 统计面板与关键指标 <span class="method-tag">Key Performance Metrics</span></h2>
+                    <div class="logic-desc">
+                        Statistics 面板聚合所选会话的各类性能数据，提供全局视角的性能洞察，如总请求数、总字节数、握手时间、预估网速等。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Select["选中多个会话"] --> Calc["计算聚合指标"]
+                            Calc --> Metric1["请求计数 & 并发数"]
+                            Calc --> Metric2["总请求/响应字节数 (压缩前/后)"]
+                            Calc --> Metric3["DNS/TCP/HTTPS 握手总耗时"]
+                            Calc --> Metric4["单个请求最小/最大/平均响应时间"]
+                            Calc --> Metric5["网络带宽预估 (KB/s)"]
+                            Metric2 --> CheckGZIP["检查 GZIP 压缩率<br/>压缩率低需优化"]
+                            Metric4 --> FindOutlier["定位最慢的 API 端点"]
+                            Metric5 --> JudgeNetwork["判断是否为网络瓶颈"]
+                            style CheckGZIP fill:#fff7e6,stroke:#faad14
+                            style FindOutlier fill:#ffccc7,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 5: 高级过滤与插件生态 -->
+            <a-tab-pane key="5" tab="高级过滤与插件生态">
+                 <div class="section-card">
+                    <h2><span class="step-num">1</span> Filters 过滤器配置逻辑 <span class="method-tag">Traffic Filtering</span></h2>
+                    <div class="logic-doc">
+                        Filters 面板通过一系列条件组合，从海量系统流量中精确筛选出目标流量，是高效调试的前提。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            RawTraffic["所有进出流量"] --> FilterZone["过滤器处理区"]
+                            FilterZone --> Condition1["按进程过滤 (如: chrome.exe)"]
+                            FilterZone --> Condition2["按主机名过滤 (如: *.myapi.com)"]
+                            FilterZone --> Condition3["按状态码/请求方法过滤"]
+                            FilterZone --> Condition4["按响应内容类型过滤 (如: text/html)"]
+                            FilterZone --> Condition5["按请求体/响应体关键词过滤"]
+                            Condition1 & Condition2 & Condition3 & Condition4 & Condition5 --> Logic{“与”逻辑合并}
+                            Logic --> Result["仅显示匹配的会话<br/>隐藏所有无关噪音"]
+                            style Condition2 fill:#f6ffed,stroke:#52c41a
+                            style Result fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 插件架构与自定义扩展 <span class="method-tag">Plugin Architecture</span></h2>
+                    <div class="logic-desc">
+                        Fiddler 提供完整的 .NET 插件接口，允许开发者通过编写 Inspector、AutoResponder 规则扩展、自定义命令等来无限扩展其功能。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                Dev[".NET 开发者"] --> Code["编写插件 (实现接口)"]
+                                Code --> Interface1["实现 IFiddlerExtension (初始化)"]
+                                Code --> Interface2["实现 ISessionInspector (自定义解析视图)"]
+                                Code --> Interface3["实现 IAutoTamper (修改请求/响应)"]
+                                
+                                Interface1 & Interface2 & Interface3 --> Build["编译为 .dll"]
+                                Build --> Load["通过 FiddlerScript 或菜单加载"]
+                                Load --> Extend["Fiddler 功能被扩展"]
+                                
+                                Extend --> Example1["新增 Protobuf 解码器"]
+                                Extend --> Example2["自动签名算法插件"]
+                                Extend --> Example3["流量自动化测试插件"]
+                                
+                                style Build fill:#f9f0ff,stroke:#722ed1
+                                style Example1 fill:#e6fffa,stroke:#36cfc9
+                                style Dev fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 6: 实践与诊断案例 -->
+            <a-tab-pane key="6" tab="实践与诊断案例">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 案例：API 返回 503 服务不可用 <span class="method-tag">Troubleshooting: 503 Error</span></h2>
+                    <div class="logic-desc">
+                        通过 Fiddler 定位是网络问题、代理问题还是真实的服务端问题。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Symptom[“现象: 客户端收到 503”] --> Step1[“1. 查看 Fiddler Session List<br/>检查该请求是否存在”]
+                            Step1 --> Condition1{“Fiddler 中无此请求?”}
+                            Condition1 -- 是 --> Conclusion1[“结论: 请求未到达 Fiddler<br/>可能: 客户端代理未配置、端口被占、软件冲突”]
+                            Condition1 -- 否 --> Step2[“2. 查看该请求的 Result 列”]
+                            Step2 --> Condition2{“Result 是否为 503?”}
+                            Condition2 -- 是 --> Conclusion2[“结论: 服务器真实返回 503<br/>需排查: 服务负载、中间件、上游服务”]
+                            Condition2 -- 否 --> Step3[“3. 检查 Inspectors 的 Raw 视图<br/>看响应头是否被篡改”]
+                            Step3 --> Conclusion3[“可能: 中间网关/防火墙/Nginx 返回了 503”]
+                            style Conclusion1 fill:#fff7e6,stroke:#faad14
+                            style Conclusion2 fill:#ffccc7,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 案例：HTTPS 站点无法访问 (证书错误) <span class="method-tag">Troubleshooting: HTTPS Failure</span></h2>
+                    <div class="logic-desc">
+                        当启用 Fiddler 后，特定 HTTPS 站点无法访问，浏览器提示“您的连接不是私密连接”。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                Error["浏览器报错: NET::ERR_CERT_AUTHORITY_INVALID"] --> Step1["1. 检查 Fiddler 证书是否安装正确<br/>(Options > HTTPS > Actions)"]
+                                Step1 --> Step2["2. 清除浏览器 SSL 状态缓存<br/>(chrome://net-internals/#hsts)"]
+                                Step2 --> Step3["3. 检查该站点是否使用证书固定 (HPKP)<br/>Fiddler 无法解密此类站点"]
+                                Step3 --> Step4["4. 在 Fiddler 的 Filters 中排除此域名<br/>(Skip decryption for this host)"]
+                                Step4 --> Result{"问题解决?"}
+                                Result -- "是" --> Fixed["✅ 成功: 通常为证书缓存或特定站点兼容性问题"]
+                                Result -- "否" --> Advanced["需检查: 系统时间、杀毒软件干扰、根证书存储异常"]
+                                
+                                style Error fill:#fff1f0,stroke:#ff4d4f
+                                style Step4 fill:#f6ffed,stroke:#52c41a
+                                style Fixed fill:#e6fffa,stroke:#36cfc9
+                                style Result fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 7: 抓包界面 -->
+            <a-tab-pane key="7" tab="抓包界面">
+                <div class="fiddler-window">
+                    <!-- 1. 顶部菜单与工具 -->
+                    <div class="fiddler-toolbar">
+                        <span style="font-weight: bold; color: #27ae60;">WinConfig</span>
+                        <span>⟳ Replay</span>
+                        <span>▶ Go</span>
+                        <span>📖 Decode</span>
+                        <span>| 保持: 所有会话</span>
+                        <span style="margin-left: auto;">🔍 搜索</span>
+                    </div>
+
+                    <div class="fiddler-main">
+                        <!-- 2. 左侧：会话列表（直观展示异常包） -->
+                        <div class="session-list">
+                            <table class="session-table">
+                                <thead>
+                                    <tr>
+                                        <th width="40">#</th>
+                                        <th width="50">结果</th>
+                                        <th width="60">协议</th>
+                                        <th width="120">主机</th>
+                                        <th>URL路径</th>
+                                        <th width="60">主体</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="session-row">
+                                        <td>46</td>
+                                        <td>200</td>
+                                        <td>HTTP</td>
+                                        <td>api.weirch.com</td>
+                                        <td>/v1/user/info</td>
+                                        <td>1,464</td>
+                                    </tr>
+                                    <!-- 异常包模拟 -->
+                                    <tr class="session-row" style="color: red;">
+                                        <td>53</td>
+                                        <td>200</td>
+                                        <td>HTTP</td>
+                                        <td><span class="icon icon-error"></span>10.3.xx.xx</td>
+                                        <td>/packSub/services/check</td>
+                                        <td>0</td>
+                                    </tr>
+                                    <!-- Tunnel包模拟 -->
+                                    <tr class="session-row" style="color: #888;">
+                                        <td>54</td>
+                                        <td>200</td>
+                                        <td>HTTP</td>
+                                        <td><span class="icon icon-tunnel"></span>Tunnel to</td>
+                                        <td>slscr.update.microsoft.com:443</td>
+                                        <td>0</td>
+                                    </tr>
+                                    <tr class="session-row" style="color: #888;">
+                                        <td>60</td>
+                                        <td>200</td>
+                                        <td>HTTP</td>
+                                        <td><span class="icon icon-tunnel"></span>Tunnel to</td>
+                                        <td>displaycatalog.mp.microsoft.com:443</td>
+                                        <td>0</td>
+                                    </tr>
+                                    <!-- 当前选中项 -->
+                                    <tr class="session-row selected">
+                                        <td>78</td>
+                                        <td>200</td>
+                                        <td>HTTP</td>
+                                        <td>api.weirch.com</td>
+                                        <td>/v1/auth/login</td>
+                                        <td>1,526</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 3. 右侧：功能页签（Inspectors/Statistics） -->
+                        <div class="details-pane">
+                            <a-tabs default-active-key="1" size="small" :tab-bar-style="{marginBottom: 0, background: '#eee'}">
+                                <a-tab-pane key="1" tab="统计 (Statistics)">
+                                    <div class="details-content">
+                                        <div class="stat-group">
+                                            <div class="stat-title">请求概况</div>
+                                            <div class="stat-item"><span>请求计数:</span> <span>1</span></div>
+                                            <div class="stat-item"><span>发送字节:</span> <span>1,310 (标头:326; 主体:984)</span></div>
+                                            <div class="stat-item"><span>接收字节:</span> <span>1,738 (标头:212; 主体:1,526)</span></div>
+                                        </div>
+                                        
+                                        <div class="stat-group">
+                                            <div class="stat-title">实际表现 (时间线)</div>
+                                            <div class="stat-item"><span>DNS 查找:</span> <span>0ms</span></div>
+                                            <div class="stat-item"><span>TCP/IP 连接:</span> <span>0ms</span></div>
+                                            <div class="stat-item"><span>HTTPS 信号交换:</span> <span>0ms</span></div>
+                                            <div class="stat-item"><span>服务器开始响应:</span> <span>13:49:17.729</span></div>
+                                            <div class="stat-item"><span>客户端完成响应:</span> <span>13:49:17.729</span></div>
+                                        </div>
+
+                                        <div class="stat-group" style="background: #fffbe6; padding: 10px; border: 1px solid #ffe58f;">
+                                            <div class="stat-title" style="color: #856404; border:none;">💡 诊断建议</div>
+                                            <p style="margin:0; font-size: 11px;">该请求返回 200，但主体大小为 0，且伴有红色图标。建议检查：<br/>1. 服务器是否由于权限原因主动断开了连接。<br/>2. 客户端是否设置了超时。</p>
+                                        </div>
+                                    </div>
+                                </a-tab-pane>
+                                <a-tab-pane key="2" tab="检查器 (Inspectors)">
+                                    <div class="details-content">显示具体的 JSON 或 Raw 报文内容...</div>
+                                </a-tab-pane>
+                                <a-tab-pane key="3" tab="自动响应 (Auto)">
+                                    <div class="details-content">配置 Mock 规则...</div>
+                                </a-tab-pane>
+                            </a-tabs>
+                        </div>
+                    </div>
+
+                    <!-- 4. 底部：状态栏 -->
+                    <div class="fiddler-status">
+                        <span style="border-right: 1px solid #ccc; padding-right: 10px;">[捕捉中]</span>
+                        <span style="border-right: 1px solid #ccc; padding: 0 10px;">所有进程</span>
+                        <span style="padding-left: 10px;">1 / 78 会话 | http://api.weirch.com/...</span>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- TAB 8: 设置界面 -->
+            <a-tab-pane key="8" tab="设置界面">
+                <div class="fiddler-options-window">
+                    <!-- 窗口标题 -->
+                    <div class="window-header">
+                        <span>Fiddler Options</span>
+                        <a-icon type="close" style="font-size: 12px; cursor: pointer;"></a-icon>
+                    </div>
+
+                    <div class="window-content">
+                        <!-- 仿 Fiddler 页签 -->
+                        <a-tabs type="card" v-model="activeTab">
+                            
+                            <!-- 1. HTTPS 配置页 -->
+                            <a-tab-pane key="https" tab="HTTPS">
+                                <div class="config-pane">
+                                    <div class="info-tip">
+                                        <a-icon type="info-circle" style="margin-right: 5px;"></a-icon>
+                                        HTTPS 解密允许 Fiddler 拦截并查看加密流量。
+                                    </div>
+                                    
+                                    <a-checkbox v-model="https.capture">Capture HTTPS CONNECTs</a-checkbox>
+                                    
+                                    <div class="indent-option">
+                                        <a-checkbox v-model="https.decrypt" :disabled="!https.capture">
+                                            <strong>Decrypt HTTPS traffic</strong>
+                                        </a-checkbox>
+                                        
+                                        <div class="indent-option" v-if="https.decrypt">
+                                            <a-select size="small" style="width: 200px" default-value="all">
+                                                <a-select-option value="all">from all processes</a-select-option>
+                                                <a-select-option value="browser">from browsers only</a-select-option>
+                                                <a-select-option value="non-browser">from non-browsers only</a-select-option>
+                                            </a-select>
+                                            
+                                            <div style="margin-top:15px">
+                                                <div style="font-size:12px">Skip decryption for the following hosts:</div>
+                                                <a-input-area 
+                                                    class="host-textarea" 
+                                                    v-model="https.skipHosts" 
+                                                    :rows="3" 
+                                                    placeholder="example.com; *.weirch.com"
+                                                ></a-input-area>
+                                            </div>
+
+                                            <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
+                                                <a-button size="small" type="primary" class="fiddler-btn">Actions</a-button>
+                                                <span class="action-link" @click="trustCert">Trust Root Certificate</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a-tab-pane>
+
+                            <!-- 2. Filters 配置页 -->
+                            <a-tab-pane key="filters" tab="Filters">
+                                <div class="config-pane">
+                                    <a-checkbox v-model="filters.enabled"><strong>Use Filters</strong></a-checkbox>
+                                    <hr style="border:none; border-top:1px solid #eee; margin:10px 0;">
+                                    
+                                    <div :style="{ opacity: filters.enabled ? 1 : 0.5 }">
+                                        <div class="section-title">Hosts</div>
+                                        <div style="margin-left:10px">
+                                            <a-select size="small" style="width: 250px" v-model="filters.hostAction">
+                                                <a-select-option value="none">No Host Filter</a-select-option>
+                                                <a-select-option value="hide">Hide the following Hosts</a-select-option>
+                                                <a-select-option value="show">Show only the following Hosts</a-select-option>
+                                                <a-select-option value="flag">Flag the following Hosts</a-select-option>
+                                            </a-select>
+                                            
+                                            <a-textarea 
+                                                class="host-textarea" 
+                                                v-model="filters.hostList" 
+                                                :rows="4" 
+                                                placeholder="输入域名，以分号隔开 (例如: baidu.com; google.com)"
+                                                :disabled="filters.hostAction === 'none'"
+                                            ></a-textarea>
+                                            <div style="font-size:11px; color:#888; margin-top:5px;">
+                                                Tip: 使用通配符如 *.example.com 或用分号分隔多个域名。
+                                            </div>
+                                        </div>
+
+                                        <div class="section-title" style="margin-top:20px">Response Status Codes</div>
+                                        <div style="margin-left:10px">
+                                            <a-checkbox v-model="filters.hide404">Hide 404s</a-checkbox><br>
+                                            <a-checkbox v-model="filters.hide304">Hide 304s</a-checkbox>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a-tab-pane>
+
+                            <!-- 3. 其他占位页签 -->
+                            <a-tab-pane key="conn" tab="Connections"></a-tab-pane>
+                            <a-tab-pane key="tools" tab="Tools"></a-tab-pane>
+                        </a-tabs>
+                    </div>
+
+                    <!-- 底部确认按钮 -->
+                    <div class="window-footer">
+                        <a-button class="fiddler-btn" type="primary" @click="save">OK</a-button>
+                        <a-button class="fiddler-btn">Cancel</a-button>
+                        <a-button class="fiddler-btn">Help</a-button>
+                    </div>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <!-- 引入 Vue 2 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <script>
+        // 注册 Antd 组件
+        Vue.use(antd);
+
+        // 初始化 Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'neutral',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 20
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    activeTab: 'https',
+                    https: {
+                        capture: true,
+                        decrypt: true,
+                        skipHosts: 'storage.live.com; login.live.com'
+                    },
+                    filters: {
+                        enabled: true,
+                        hostAction: 'show',
+                        hostList: 'api.weirch.com; *.google.com; 10.3.96.96',
+                        hide404: false,
+                        hide304: true
+                    }
+                };
+            },
+            methods: {
+                handleTabChange(key) {
+                    // Tab 切换时的回调函数
+                    console.log('切换到标签页: ', key);
+                    // 确保切换后重新渲染 mermaid 图表
+                    this.$nextTick(() => {
+                        mermaid.init();
+                    });
+                },
+                trustCert() {
+                    this.$notification.success({
+                        message: 'Fiddler Root Certificate',
+                        description: '已成功将 Fiddler 根证书添加到 Windows 信任存储中。',
+                        placement: 'bottomRight'
+                    });
+                },
+                save() {
+                    this.$message.loading({ content: '正在保存配置...', key: 'updatable' });
+                    setTimeout(() => {
+                        this.$message.success({ content: '配置已生效，请重启捕获以确保配置完整。', key: 'updatable', duration: 2 });
+                    }, 1000);
+                }
+            },
+            mounted() {
+                // 确保 DOM 加载后渲染 mermaid
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
