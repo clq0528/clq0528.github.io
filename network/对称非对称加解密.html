@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>现代加解密与安全传输架构全景图</title>
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --aes-color: #52c41a;
+            --rsa-color: #722ed1;
+            --sha-color: #fa8c16;
+            --cert-color: #eb2f96;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { 
+            background: var(--bg-gray); 
+            margin: 0; 
+            padding: 24px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue); 
+            font-weight: bold; 
+            margin-bottom: 20px; 
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; 
+            background: #fafafa; 
+            border: 1px solid #ebedf0; 
+            border-radius: 6px; 
+            padding: 20px; 
+            overflow-x: auto; 
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 8px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #fa8c16;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f6ffed;
+            border-left: 4px solid #b7eb8f;
+            color: #52c41a;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .ant-tabs-bar {
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .algo-aes { border-left: 4px solid var(--aes-color); }
+        .algo-rsa { border-left: 4px solid var(--rsa-color); }
+        .algo-sha { border-left: 4px solid var(--sha-color); }
+        .algo-cert { border-left: 4px solid var(--cert-color); }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">安全加密技术架构指南</h1>
+        <p style="color: #666; margin-top: 10px;">
+            基于 RSA、AES、SHA 算法与 X.509 证书体系，构建端到端加密通信模型。
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange">
+        
+        <!-- TAB 1: 核心算法组件 -->
+        <a-tab-pane key="1" tab="核心算法原理 (Algorithm Blocks)">
+            
+            <!-- 1. AES 对称加密 -->
+            <div class="section-card algo-aes">
+                <h2><span class="step-num">1</span> 对称加密：AES 逻辑 <span class="method-tag">AES-256-GCM</span></h2>
+                <div class="logic-desc">特点：加解密使用同一密钥。速度极快，适合大数据量加密，但密钥分发是痛点。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        P["明文数据 (Plaintext)"] --> E["AES 加密算法"]
+                        K["相同密钥 (Shared Key)"] --> E
+                        E --> C["密文 (Ciphertext)"]
+                        C --> D["AES 解密算法"]
+                        K --> D
+                        D --> P
+                        style K fill:#f6ffed,stroke:#52c41a
+                        style E fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. RSA 非对称加密 -->
+            <div class="section-card algo-rsa">
+                <h2><span class="step-num">2</span> 非对称加密：RSA 逻辑 <span class="method-tag">RSA-4096</span></h2>
+                <div class="logic-desc">特点：公钥加密/私钥解密。解决密钥交换问题，速度较慢，适合加密小量数据（如密钥）。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Msg["敏感数据/密钥"] --> PubE["公钥加密 (Public Key)"]
+                        PubE --> Secret["加密载体"]
+                        Secret --> PrivD["私钥解密 (Private Key)"]
+                        PrivD --> Msg
+                        style PubE fill:#f9f0ff,stroke:#722ed1
+                        style PrivD fill:#fff0f6,stroke:#eb2f96
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. SHA 哈希算法 -->
+            <div class="section-card algo-sha">
+                <h2><span class="step-num">3</span> 完整性校验：SHA 哈希 <span class="method-tag">SHA-256 / SHA-3</span></h2>
+                <div class="logic-desc">特点：不可逆映射。任何微小的明文变动都会导致巨大的哈希值差异。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Raw["原始文件"] --> Func["SHA-256 算法"]
+                        Func --> Hash["唯一指纹 (Digest)"]
+                        Raw2["微改后的文件"] --> Func
+                        Func --> Hash2["截然不同的指纹"]
+                        style Hash fill:#fff7e6,stroke:#fa8c16
+                        style Hash2 fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 2: 数字证书体系 -->
+        <a-tab-pane key="2" tab="数字证书与 CA 体系 (PKI System)">
+            
+            <div class="section-card algo-cert">
+                <h2><span class="step-num">1</span> 证书颁发流程 (CSR to CRT) <span class="method-tag">Certificate Lifecycle</span></h2>
+                <div class="logic-desc">如何证明“公钥确实属于你”？引入第三方权威机构 CA 进行背书。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        User["申请人"] --> KeyPair["生成 RSA 密钥对"]
+                        KeyPair --> CSR["创建申请书 (CSR)<br/>包含公钥+身份信息"]
+                        CSR --> CA["提交至 CA 中心"]
+                        CA -- "核实身份" --> Sign["CA 用其私钥进行签名"]
+                        Sign --> CRT["颁发证书 (.crt/.cer)"]
+                        style CA fill:#fff0f6,stroke:#eb2f96
+                        style CRT fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 信任链校验逻辑 <span class="method-tag">Trust Chain Verification</span></h2>
+                <div class="logic-desc">浏览器如何信任一个证书？逐级向上查找直到内置的根证书。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph TD
+                        Root["根证书 (Root CA)<br/>自签名/操作系统内置"] --> Inter["中间证书 (Intermediate CA)"]
+                        Inter --> End["最终实体证书 (Entity CRT)<br/>如: google.com"]
+                        Verify["验证逻辑:"] --> V1["用 Root 公钥验 Inter 签名"]
+                        V1 --> V2["用 Inter 公钥验 End 签名"]
+                        V2 --> Result(["证书合法, 建立信任"])
+                        style Root fill:#f6ffed,stroke:#52c41a
+                        style Result fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 3: 综合应用案例 (串联所有) -->
+        <a-tab-pane key="3" tab="综合案例：安全文件传输全流程">
+            
+            <!-- 发送端逻辑 -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 发送端 (Sender)：打包加密与签名 <span class="method-tag">Encrypt & Sign</span></h2>
+                <div class="logic-desc">组合拳：用 SHA 摘要，用 RSA 私钥签名，用 AES 加密正文，用 RSA 公钥加密 AES 密钥。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        subgraph Data_Process ["数据处理流"]
+                            File["原始大文件"] --> Hash["SHA-256 摘要"]
+                            Hash --> Sign["RSA 私钥签名 (数字签名)"]
+                        end
+                        
+                        subgraph Encrypt_Process ["加密流"]
+                            File --> AES_Enc["AES 加密正文"]
+                            AES_Key["临时 AES 密钥"] --> AES_Enc
+                            AES_Key --> RSA_Enc["接收者 RSA 公钥加密密钥"]
+                        end
+                        
+                        Sign & AES_Enc & RSA_Enc --> Package["打包发送：[密文+签名+加密后的密钥]"]
+                        style Sign fill:#fff0f6,stroke:#eb2f96
+                        style AES_Enc fill:#f6ffed,stroke:#52c41a
+                        style RSA_Enc fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div style="font-family: -apple-system, sans-serif; padding: 25px; border: 1px solid #e8e8e8; border-radius: 12px; background: #fff; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <style>
+                    .envelope-card { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+                    .envelope-item { flex: 1; min-width: 200px; padding: 15px; border-radius: 8px; border: 1px solid #f0f0f0; position: relative; }
+                    .icon-box { font-size: 24px; margin-bottom: 10px; }
+                    .tag-aes { color: #52c41a; background: #f6ffed; border: 1px solid #b7eb8f; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+                    .tag-rsa { color: #722ed1; background: #f9f0ff; border: 1px solid #d3adf7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+                    .tag-sha { color: #faad14; background: #fff7e6; border: 1px solid #ffe7ba; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+                </style>
+                <div style="font-size: 18px; font-weight: bold; color: #001529; border-left: 4px solid #1890ff; padding-left: 12px;">形象化理解：三位一体的包裹</div>
+                
+                <div class="envelope-card">
+                    <!-- 密文 -->
+                    <div class="envelope-item" style="border-top: 4px solid #52c41a;">
+                        <div class="icon-box">🔐</div>
+                        <div style="font-weight: bold; margin-bottom: 8px;">密文 (Ciphertext) <span class="tag-aes">AES</span></div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.5;">这是一个巨大的<b>保险箱</b>，里面装着你的大文件。它是用 AES 钥匙锁上的。</div>
+                    </div>
+                    <!-- 签名 -->
+                    <div class="envelope-item" style="border-top: 4px solid #faad14;">
+                        <div class="icon-box">🏷️</div>
+                        <div style="font-weight: bold; margin-bottom: 8px;">签名 (Signature) <span class="tag-sha">SHA + RSA</span></div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.5;">这是贴在保险箱上的<b>防伪封条</b>，由发送者私钥盖章，确保没被掉包。</div>
+                    </div>
+                    <!-- 加密后的密钥 -->
+                    <div class="envelope-item" style="border-top: 4px solid #722ed1;">
+                        <div class="icon-box">✉️</div>
+                        <div style="font-weight: bold; margin-bottom: 8px;">加密后的密钥 <span class="tag-rsa">RSA 加密</span></div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.5;">这是一个<b>小信封</b>，里面装着那把 <b>AES 钥匙</b>。它是用接收者的 RSA 公钥封死的。</div>
+                    </div>
+                </div>
+            </div>
+            <div style="font-family: -apple-system, sans-serif; padding: 25px; border: 1px solid #e8e8e8; border-radius: 12px; background: #fafafa; margin-bottom: 20px;">
+                <style>
+                    .reason-box { display: flex; gap: 15px; margin-top: 15px; }
+                    .reason-item { background: #fff; padding: 15px; border-radius: 8px; flex: 1; border: 1px solid #eee; }
+                    .check-mark { color: #52c41a; font-weight: bold; margin-right: 5px; }
+                </style>
+                <div style="font-size: 18px; font-weight: bold; color: #001529;">技术选型：追求速度与安全的平衡</div>
+                
+                <div class="reason-box">
+                    <div class="reason-item">
+                        <div style="color: #1890ff; font-weight: bold; margin-bottom: 10px;">⚡ 性能差距</div>
+                        <div style="font-size: 13px; color: #555; line-height: 1.6;">
+                            AES 极快，适合 GB 级文件。RSA 处理大文件会导致 CPU 飙升。
+                        </div>
+                    </div>
+                    <div class="reason-item">
+                        <div style="color: #1890ff; font-weight: bold; margin-bottom: 10px;">📏 长度限制</div>
+                        <div style="font-size: 13px; color: #555; line-height: 1.6;">
+                            RSA 只能加密比密钥还短的数据（例如 256 字节以内）。
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 12px; background: #e6f7ff; border-radius: 6px; font-size: 14px; color: #0050b3;">
+                    <span class="check-mark">✔</span> <b>结论：</b>用 <b>AES</b> 加密内容（求效率），用 <b>RSA</b> 加密 AES 钥匙（求安全分发）。
+                </div>
+            </div>
+            <div style="font-family: -apple-system, sans-serif; padding: 25px; border: 1px solid #e8e8e8; border-radius: 12px; background: #fff; margin-bottom: 20px;">
+                <style>
+                    .flow-step { position: relative; padding-left: 30px; margin-bottom: 15px; font-size: 14px; }
+                    .flow-step::before { content: '➔'; position: absolute; left: 0; color: #1890ff; }
+                    .summary-tip { margin-top: 20px; padding: 15px; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; }
+                </style>
+                
+                <div style="display: flex; gap: 30px;">
+                    <!-- 发送端 -->
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold; color: #f5222d; margin-bottom: 15px;">📤 发送端 (Sender)</div>
+                        <div class="flow-step">生成随机 <b>AES 密钥</b> (一次性)</div>
+                        <div class="flow-step">用 AES 密钥加密大文件 → <b>密文</b></div>
+                        <div class="flow-step">取出接收者的 <b>RSA 公钥</b></div>
+                        <div class="flow-step">用 RSA 公钥加密 AES 密钥 → <b>加密后的密钥</b></div>
+                        <div class="flow-step">打包：[密文 + 加密密钥 + 签名]</div>
+                    </div>
+                    
+                    <!-- 分割线 -->
+                    <div style="width: 1px; background: #eee;"></div>
+
+                    <!-- 接收端 -->
+                    <div style="flex: 1;">
+                        <div style="font-weight: bold; color: #52c41a; margin-bottom: 15px;">📥 接收端 (Receiver)</div>
+                        <div class="flow-step">取出自己的 <b>RSA 私钥</b></div>
+                        <div class="flow-step">解开“小信封” → 还原出 <b>AES 密钥</b></div>
+                        <div class="flow-step">用 AES 密钥开“保险箱” → 还原出 <b>原始文件</b></div>
+                        <div class="flow-step">验证签名 → 确认身份与数据完整性</div>
+                    </div>
+                </div>
+
+                <div class="summary-tip">
+                    <div style="font-weight: bold; color: #856404; margin-bottom: 5px;">核心总结：那个包裹里到底是什么？</div>
+                    <div style="font-size: 13px; line-height: 1.6;">
+                        • <b>本体：</b> AES 密钥 (它是解密正文的唯一钥匙)<br>
+                        • <b>外壳：</b> RSA 加密后的密文 (它是保护钥匙的防护罩)
+                    </div>
+                </div>
+            </div>
+
+            <!-- 接收端逻辑 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 接收端 (Receiver)：解密还原与验签 <span class="method-tag">Decrypt & Verify</span></h2>
+                <div class="logic-desc">逆向操作：先解出 AES 密钥，再解出正文，最后对比哈希值确认未被篡改。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Pkg["收到数据包"] --> K1["1. 用自己 RSA 私钥解出 AES 密钥"]
+                        K1 --> K2["2. 用 AES 密钥解密文件内容"]
+                        Pkg --> S1["3. 用发送者 RSA 公钥解开签名得到 Hash A"]
+                        K2 --> S2["4. 对解密后的内容做 SHA-256 得到 Hash B"]
+                        S1 & S2 --> Compare{"Hash A == Hash B ?"}
+                        Compare -- Yes --> Final(["文件完整且真实"])
+                        Compare -- No --> Warn(["数据被篡改!"])
+                        style Compare fill:#fff7e6,stroke:#faad14
+                        style Final fill:#f6ffed,stroke:#52c41a
+                        style Warn fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+
+            <div style="font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 25px; border: 1px solid #e8e8e8; border-radius: 12px; background: #fff; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); line-height: 1.6;">
+                <style>
+                    .source-title { font-size: 20px; font-weight: bold; color: #001529; margin-bottom: 18px; display: flex; align-items: center; }
+                    .source-title::before { content: ''; width: 4px; height: 22px; background: #1890ff; margin-right: 12px; border-radius: 2px; }
+                    .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 15px; }
+                    .method-card { background: #f9f9f9; padding: 16px; border-radius: 8px; border: 1px solid #f0f0f0; transition: all 0.3s; }
+                    .method-card:hover { border-color: #1890ff; background: #f0f7ff; }
+                    .method-icon { font-size: 20px; margin-bottom: 8px; }
+                    .method-name { font-weight: bold; color: #1890ff; margin-bottom: 6px; display: block; }
+                    .highlight-text { color: #f5222d; font-weight: bold; }
+                    .pki-tag { display: inline-block; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; padding: 0 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+                </style>
+
+                <div class="source-title">接收者的 RSA 公钥从何而来？</div>
+                
+                <div style="font-size: 15px; color: #444; margin-bottom: 15px;">
+                    在非对称加密体系中，接收者（Receiver）首先会在本地生成一对密钥：<b>私钥（自己藏好）</b>和<b>公钥（满世界宣告）</b>。发送者获取公钥主要有以下三种途径：
+                </div>
+
+                <div class="method-grid">
+                    <!-- 途径1：协议握手自动获取 -->
+                    <div class="method-card">
+                        <div class="method-icon">🤝</div>
+                        <span class="method-name">1. 协议握手自动获取</span>
+                        <div style="font-size: 13px; color: #666;">
+                            这是最常见的形式（如 HTTPS 访问）。当你访问网站时，服务器会<b>主动</b>把包含公钥的证书推送到你的浏览器，无需你提前索取。
+                        </div>
+                    </div>
+
+                    <!-- 途径2：数字证书与 CA 体系 -->
+                    <div class="method-card">
+                        <div class="method-icon">📜</div>
+                        <span class="method-name">2. 数字证书 (X.509) <span class="pki-tag">最安全</span></span>
+                        <div style="font-size: 13px; color: #666;">
+                            接收者将公钥交给权威机构（CA）签名，生成证书。发送者通过下载证书获取公钥，并能通过 CA 的签名确认该公钥确实属于“那个接收者”。
+                        </div>
+                    </div>
+
+                    <!-- 途径3：公开目录与服务器 -->
+                    <div class="method-card">
+                        <div class="method-icon">📂</div>
+                        <span class="method-name">3. 公开查询/密钥服务器</span>
+                        <div style="font-size: 13px; color: #666;">
+                            在 PGP 邮件加密中，接收者会把公钥上传到公共的 Key Server。发送者只需根据接收者的邮箱地址，就能在服务器上搜寻到对应的公钥。
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #fff7e6; border-radius: 8px; border-left: 4px solid #faad14;">
+                    <div style="font-weight: bold; color: #856404; margin-bottom: 5px;">⚠️ 关键点：公钥不需要保密</div>
+                    <div style="font-size: 13px; color: #666;">
+                        公钥的职责是“加密”，而解密的权限掌握在私钥手中。因此，公钥就像是接收者的<b>“银行账号”</b>或者<b>“收件地址”</b>，它是故意让全世界知道的。发送者获取公钥的过程<span class="highlight-text">不需要加密</span>，只需要确保公钥<span class="highlight-text">没被冒充</span>即可（这正是数字证书存在的意义）。
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 4: 内部方法交互流 -->
+        <a-tab-pane key="4" tab="系统方法调用栈 (Method Call Stack)">
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 核心 Security 工具类生命周期 <span class="method-tag">SecurityProvider Lifecycle</span></h2>
+                <div class="logic-desc">展示底层库（如 OpenSSL / BouncyCastle）的调用层级。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Init["Init Security Context"] --> Provider["Load Provider (BC/SunJCE)"]
+                        Provider --> KeyGen["KeyStore.Load() / KeyGenerator.init()"]
+                        
+                        subgraph Op_Loop ["操作循环"]
+                            KeyGen --> Cipher["Cipher.getInstance(ALGO/MODE/PADDING)"]
+                            Cipher --> CipherInit["cipher.init(ENCRYPT_MODE, key)"]
+                            CipherInit --> Update["cipher.update(buffer)"]
+                            Update --> Final["cipher.doFinal()"]
+                        end
+                        
+                        Final --> Clear["Zeroize Sensitive Memory"]
+                        style Op_Loop fill:#fafafa,stroke:#d9d9d9
+                        style Final fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> HTTPS 握手方法时序简化 <span class="method-tag">SSL/TLS Handshake Methods</span></h2>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        C["Client"] -- "ClientHello (CipherSuites)" --> S["Server"]
+                        S -- "ServerHello + Certificate" --> C
+                        C -- "verifyCertificate()" --> C
+                        C -- "generatePreMasterSecret()" --> C
+                        C -- "rsaEncrypt(PreMaster, SrvPubKey)" --> S
+                        S -- "rsaDecrypt(PreMaster, SrvPrivKey)" --> S
+                        S & C -- "deriveSessionKey(AES)" --> Session["加密会话开始"]
+                        style Session fill:#f6ffed,stroke:#52c41a,stroke-dasharray: 5 5
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 5: Git SSH和SSL、TLS -->
+        <a-tab-pane key="5" tab="Git SSH和SSL、TLS">
+            <div style="font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 25px; border: 1px solid #d1d5da; border-radius: 12px; background: #ffffff; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); line-height: 1.6; color: #24292e;">
+                <style>
+                    .git-title { font-size: 20px; font-weight: bold; color: #1b1f23; margin-bottom: 18px; display: flex; align-items: center; }
+                    .git-title svg { margin-right: 12px; fill: #f05032; }
+                    .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
+                    .logic-card { background: #f6f8fa; padding: 16px; border-radius: 8px; border: 1px solid #e1e4e8; }
+                    .logic-card b { color: #0366d6; display: block; margin-bottom: 6px; font-size: 15px; }
+                    .logic-card p { font-size: 13px; color: #586069; margin: 0; }
+                    .pair-box { margin-top: 20px; padding: 15px; background: #fff5f5; border: 1px solid #ffe3e3; border-radius: 8px; display: flex; align-items: center; gap: 15px; }
+                    .key-label { font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+                    .private-tag { background: #ff4d4f; color: white; }
+                    .public-tag { background: #52c41a; color: white; }
+                    .highlight-blue { color: #005cc5; font-weight: 600; }
+                </style>
+
+                <div class="git-title">
+                    <svg height="24" viewBox="0 0 24 24" width="24"><path d="M23.546 10.93L13.067.45a1.903 1.903 0 0 0-2.687 0L7.657 3.173 10.15 5.66a2.13 2.13 0 1 1 3.196 3.196l2.487 2.487a2.13 2.13 0 1 1-3.196 3.196l-2.487-2.487a2.13 2.13 0 1 1-2.903-2.903l-2.493-2.493-4.3 4.3a1.903 1.903 0 0 0 0 2.687l10.48 10.48a1.903 1.903 0 0 0 2.686 0l10.48-10.48a1.903 1.903 0 0 0 0-2.687z"/></svg>
+                    为什么 Git 需要在本地生成 SSH 密钥？
+                </div>
+
+                <p style="font-size: 14px;">当你使用 SSH 协议连接 GitHub/GitLab 时，本地生成的密钥对（Key Pair）扮演了“数字身份证”的角色。其核心目的在于解决以下三个问题：</p>
+
+                <div class="logic-grid">
+                    <!-- 理由1 -->
+                    <div class="logic-card">
+                        <b>1. 身份唯一性证明</b>
+                        <p>私钥保存在你本地电脑，公钥上传到服务器。通过非对称加密算法，服务器能确信：<span class="highlight-blue">提交代码的人确实是你</span>，而不是冒充者。</p>
+                    </div>
+                    <!-- 理由2 -->
+                    <div class="logic-card">
+                        <b>2. 告别频繁输密码</b>
+                        <p>相比 HTTPS 每次都要输入用户名和密码，SSH 通过后台的“挑战-响应”机制自动完成认证，极大提升了<span class="highlight-blue">操作效率</span>。</p>
+                    </div>
+                    <!-- 理由3 -->
+                    <div class="logic-card">
+                        <b>3. 极高的安全性</b>
+                        <p>你的密码永远不会在网络上传输。即使服务器被黑客攻破，黑客拿到的也只是你的公钥，<span class="highlight-blue">无法逆推</span>出你的私钥，也无法假冒你。</p>
+                    </div>
+                </div>
+
+                <div class="pair-box">
+                    <div style="flex: 1; text-align: center;">
+                        <div class="key-label private-tag">私钥 (id_rsa)</div>
+                        <div style="font-size: 11px; margin-top: 5px; color: #cf1322;">留在本地，严禁外传</div>
+                    </div>
+                    <div style="font-size: 20px;">🔒</div>
+                    <div style="flex: 1; text-align: center;">
+                        <div class="key-label public-tag">公钥 (id_rsa.pub)</div>
+                        <div style="font-size: 11px; margin-top: 5px; color: #389e0d;">上传服务器，公开分发</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px; padding: 12px; background: #fffbe6; border-left: 4px solid #faad14; font-size: 13px; color: #856404;">
+                    <b>💡 简单比喻：</b><br>
+                    这就像你在银行（GitHub）存了一个<b>特制的锁头（公钥）</b>。每次你要开保险箱时，你只需要在家里用你的<b>专属钥匙（私钥）</b>远程发一个指令，银行确认钥匙匹配后就会让你操作，而不需要你本人带着身份证和密码跑去柜台。
+                </div>
+            </div>
+
+            <div style="font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 25px; border: 1px solid #e8e8e8; border-radius: 12px; background: #fff; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); line-height: 1.6; color: #24292e;">
+                <style>
+                    .compare-title { font-size: 20px; font-weight: bold; color: #001529; margin-bottom: 20px; display: flex; align-items: center; }
+                    .compare-title::before { content: ''; width: 4px; height: 22px; background: #1890ff; margin-right: 12px; border-radius: 2px; }
+                    
+                    .relation-box { background: #f0f5ff; border: 1px solid #adc6ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                    .relation-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-right: 8px; }
+                    
+                    .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+                    .type-card { border: 1px solid #f0f0f0; border-radius: 8px; padding: 16px; transition: all 0.3s; }
+                    .type-card:hover { border-color: #1890ff; box-shadow: 0 2px 8px rgba(24,144,255,0.1); }
+                    .card-header { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; }
+                    .card-header span { margin-left: auto; font-size: 12px; opacity: 0.6; }
+
+                    .tag-blue { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+                    .tag-gray { background: #f5f5f5; color: #8c8c8c; border: 1px solid #d9d9d9; }
+                    .tag-navy { background: #001529; color: white; }
+
+                    .diff-list { font-size: 13px; color: #595959; margin: 0; padding-left: 18px; }
+                    .diff-list li { margin-bottom: 4px; }
+                    .highlight { font-weight: bold; color: #1890ff; }
+                </style>
+
+                <div class="compare-title">深度解析：SSL、TLS 与 SSH 的核心区别</div>
+
+                <!-- 关系澄清 -->
+                <div class="relation-box">
+                    <div style="font-weight: bold; color: #003a8c; margin-bottom: 5px;">🔄 历史演进关系：SSL ➔ TLS</div>
+                    <div style="font-size: 13px; color: #2e58a6;">
+                        SSL 是 TLS 的<b>前身</b>。它们是一类协议，只是版本不同。现在的“SSL 证书”本质上跑的都是 <b>TLS</b> 协议。
+                        <br><span style="color: #ff4d4f;">⚠️ 注意：SSL 协议由于漏洞已被强制废弃，请确保系统使用的是 TLS 1.2 或 1.3。</span>
+                    </div>
+                </div>
+
+                <div class="grid-container">
+                    <!-- TLS/SSL 介绍 -->
+                    <div class="type-card">
+                        <div class="card-header">
+                            🌐 SSL / TLS <span class="relation-tag tag-blue">主流标准</span>
+                        </div>
+                        <ul class="diff-list">
+                            <li><span class="highlight">全称：</span>传输层安全协议</li>
+                            <li><span class="highlight">主要用途：</span>保护 <span class="highlight">Web 流量</span> (HTTPS)、邮件发送 (SMTPS)。</li>
+                            <li><span class="highlight">身份验证：</span>基于 <span class="highlight">CA 数字证书</span>。你需要向 CA 机构证明你是网站主人。</li>
+                            <li><span class="highlight">典型端口：</span>443 (HTTPS)。</li>
+                        </ul>
+                    </div>
+
+                    <!-- SSH 介绍 -->
+                    <div class="type-card">
+                        <div class="card-header">
+                            💻 SSH <span class="relation-tag tag-navy">运维利器</span>
+                        </div>
+                        <ul class="diff-list">
+                            <li><span class="highlight">全称：</span>安全外壳协议</li>
+                            <li><span class="highlight">主要用途：</span>远程登录、<span class="highlight">服务器管理</span>、文件传输 (SFTP)。</li>
+                            <li><span class="highlight">身份验证：</span>基于 <span class="highlight">SSH 密钥对</span> 或 账号密码。</li>
+                            <li><span class="highlight">典型端口：</span>22。</li>
+                            <li><span class="highlight">特点：</span>更强调双向命令交互。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px; padding: 20px; background: #fafafa; border-radius: 8px;">
+                    <div style="font-weight: bold; color: #000; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ 核心区别总结表</div>
+                    <table style="width: 100%; font-size: 13px; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="color: #8c8c8c;">
+                                <th style="padding: 10px; border-bottom: 2px solid #eee;">维度</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #eee;">SSL / TLS</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #eee;">SSH</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">本质职责</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">加密现有的数据通道 (如 HTTP)</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">建立一个远程管理的执行环境</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">信任基础</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">公钥基础设施 (PKI / 证书)</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">本地存储的信任名单 (Known Hosts)</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">受众群体</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">普通互联网用户</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">系统管理员、开发人员</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">形象比喻</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">🔐 <b>银行柜台玻璃</b>（保护你的钱不被中间人抢走）</td>
+                                <td style="padding: 10px; border-bottom: 1px solid #eee;">🔑 <b>家门钥匙</b>（让你远程进入并操作自家的系统）</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 20px; font-size: 12px; color: #bfbfbf; text-align: center;">
+                    注：TLS 1.3 是目前最快、最安全的传输协议标准。
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    Vue.use(antd);
+
+    mermaid.initialize({ 
+        startOnLoad: false,
+        theme: 'neutral',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                activeKey: '1'
+            };
+        },
+        methods: {
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    // 重新解析当前可见的所有 mermaid 图表
+                    mermaid.init();
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>

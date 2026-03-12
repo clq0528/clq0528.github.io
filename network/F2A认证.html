@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>双因素认证 (2FA) 技术架构与流程指南</title>
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { 
+            background: var(--bg-gray); 
+            margin: 0; 
+            padding: 24px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue); 
+            font-weight: bold; 
+            margin-bottom: 20px; 
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; 
+            background: #fafafa; 
+            border: 1px solid #ebedf0; 
+            border-radius: 6px; 
+            padding: 20px; 
+            overflow-x: auto; 
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 8px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #fa8c16;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f6ffed;
+            border-left: 4px solid #b7eb8f;
+            color: #52c41a;
+        }
+
+        .warning-box {
+            margin: 10px 0;
+            padding: 12px;
+            background: #fff1f0;
+            border-left: 4px solid #ffa39e;
+            color: #cf1322;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .ant-tabs-bar {
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">双因素认证 (2FA) 核心技术全景图</h1>
+        <p style="color: #666; margin-top: 10px;">
+            基于身份认证三要素，拆解 TOTP 动态密码、硬件令牌及代理服务器的交互机制。
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange">
+        <!-- TAB 1: 2FA 核心概念 -->
+        <a-tab-pane key="1" tab="核心概念与架构 (Fundamental Concepts)">
+            
+            <!-- 1. 身份认证三要素 -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 身份认证三要素模型 <span class="method-tag">Authentication Factors</span></h2>
+                <div class="logic-desc">2FA 即从以下三个维度中任选两个维度进行组合，通常为“所知”+“所有”。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Factor1["1. 所知道的内容 (Knowledge)<br/>密码、PIN码、密保问题"]
+                        Factor2["2. 所拥有的物品 (Possession)<br/>手机、U盾、动态令牌"]
+                        Factor3["3. 所具备的特征 (Inherence)<br/>指纹、面部识别、虹膜"]
+                        
+                        Factor1 --- Combine["2FA 典型组合"]
+                        Factor2 --- Combine
+                        style Combine fill:#e6f7ff,stroke:#1890ff
+                        style Factor3 fill:#f5f5f5,stroke:#d9d9d9
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 传统静态密码风险 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 传统静态密码的安全隐患 <span class="method-tag">Static Password Vulnerability</span></h2>
+                <div class="warning-box">静态密码易受社工、撞库、字典攻击及窥视泄露，且用户倾向于设置简单易记的弱密码。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        User["用户习惯 (生日/电话)"] --> Easy["设置弱密码"]
+                        Easy --> Attack["攻击手段: 字典攻击/暴力激活成功教程"]
+                        Attack --> Breach["身份被冒用 / 财物损失"]
+                        style Breach fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 双因素认证通用解决方案架构 -->
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 2FA 解决方案三组件 <span class="method-tag">Solution Components</span></h2>
+                <div class="logic-desc">由令牌、代理软件、管理服务器协同工作，确保认证的动态性。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Token["1. 令牌 (Token)<br/>产生随机种子值"] --> Agent["2. 代理软件 (Agent)<br/>转发认证请求"]
+                        Agent --> Server["3. 管理服务器 (Server)<br/>同步算法校验"]
+                        Server -- "通过/拒绝" --> Agent
+                        style Token fill:#f6ffed,stroke:#52c41a
+                        style Agent fill:#e6f7ff,stroke:#1890ff
+                        style Server fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 2: TOTP 算法深度流程 -->
+        <a-tab-pane key="2" tab="TOTP 动态密码原理 (TOTP Mechanism)">
+            
+            <!-- 1. 密钥初始化流程 -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 初始注册：共享密钥分发 <span class="method-tag">Secret Provisioning</span></h2>
+                <div class="logic-desc">服务器生成唯一的种子密钥，并通过二维码等安全渠道告知客户端。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        SrvGen["服务器生成 Secret Key"] --> DB["存入数据库 (关联用户)"]
+                        SrvGen --> QR["生成包含密钥的二维码 (Base32)"]
+                        QR --> UserScan["用户使用 APP 扫描"]
+                        UserScan --> ClientStore["客户端本地安全存储密钥"]
+                        style QR fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 客户端生成动态码逻辑 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 客户端：动态验证码计算 <span class="method-tag">Code Generation Logic</span></h2>
+                <div class="logic-desc">基于时间戳和密钥，每30/60秒生成一个一次性哈希值。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Time["当前时间戳 (Unix Epoch)"] --> Step["步长计算: T = Floor(Time / 30)"]
+                        Step --> HMAC["HMAC-SHA1 (Secret, T)"]
+                        HMAC --> Truncate["动态截断 (Dynamic Truncation)"]
+                        Truncate --> Code["生成 6 位数字 OTP"]
+                        style HMAC fill:#f9f0ff,stroke:#722ed1
+                        style Code fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 服务端校验流 -->
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 服务端：同步与匹配校验 <span class="method-tag">Server Verification</span></h2>
+                <div class="logic-desc">服务器使用相同的算法计算，并考虑网络延迟导致的时间偏移。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Submit["用户提交 OTP"] --> Fetch["调取用户关联的 Secret"]
+                        Fetch --> Cal["计算当前时间窗口及前后 T±1 的 OTP"]
+                        Cal --> Match{"任意一个匹配成功?"}
+                        Match -- 是 --> OK["验证通过"]
+                        Match -- 否 --> Fail["验证失败 (尝试次数限制)"]
+                        style Match fill:#fff7e6,stroke:#faad14
+                        style OK fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; margin-bottom: 30px; line-height: 1.6;">
+                <style>
+                    .code-header { font-size: 13px; color: #24292e; margin-bottom: 8px; }
+                    .code-box { background: #2d333b; color: #adbac7; border-radius: 4px; padding: 12px; font-family: 'Consolas', 'Monaco', monospace; display: flex; font-size: 14px; }
+                    .line-num { color: #545d68; margin-right: 15px; border-right: 1px solid #444c56; padding-right: 10px; user-select: none; }
+                    .kw-hash { color: #dcbdfb; } /* 类似代码高亮色 */
+                    .kw-val { color: #76cce0; }
+                    .hash-tag { background: #f1f8ff; border: 1px solid #c8e1ff; padding: 1px 4px; border-radius: 3px; color: #0366d6; font-size: 13px; margin: 0 4px; }
+                </style>
+                <div class="code-header">代码语言：javascript</div>
+                <div class="code-box">
+                    <div class="line-num">TC = floor(unixtime(now) / 30)</div>
+                    <div><span style="color:#f69d50">TOTP</span> = <span class="kw-hash">HASH</span>(<span class="kw-val">SecretKey</span>, <span style="color:#f69d50">TC</span>)</div>
+                </div>
+                <div style="margin-top: 15px; font-size: 15px; color: #24292e;">
+                    上面代码中，<span class="hash-tag">HASH</span> 就是约定的 <span style="border-bottom: 1px dashed #0366d6; cursor: pointer;">哈希函数</span>，默认是 SHA-1。
+                </div>
+                <div style="margin-top: 8px; font-size: 15px; color: #24292e;">
+                    TOTP 有硬件生成器和软件生成器之分，都是采用上面的算法。
+                </div>
+            </div>
+            <div style="background: #fff; padding: 40px; border: 1px solid #ddd; border-radius: 12px; font-family: 'Segoe UI', sans-serif; position: relative; overflow: hidden;">
+                <style>
+                    .flex-container { display: flex; align-items: flex-start; justify-content: space-around; gap: 20px; }
+                    /* 手机框架 */
+                    .phone { width: 280px; height: 560px; background: #000; border-radius: 40px; padding: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); border: 2px solid #333; }
+                    .screen { background: #f2f2f2; height: 100%; border-radius: 30px; overflow: hidden; display: flex; flex-direction: column; }
+                    .status-bar { height: 25px; background: #fff; font-size: 11px; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; color: #555; }
+                    .app-header { background: #fff; padding: 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; font-size: 16px; color: #666; }
+                    .app-item { background: #fff; margin: 10px 10px 0; padding: 20px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
+                    .app-item h4 { margin: 0; font-size: 12px; color: #999; font-weight: normal; }
+                    .app-code { font-size: 38px; color: #3b82f6; font-weight: 500; margin: 5px 0; }
+                    /* 网页界面 */
+                    .web-ui { width: 380px; }
+                    .wp-header { text-align: center; margin-bottom: 20px; font-size: 36px; color: #23282d; font-weight: bold; font-family: 'Times New Roman', serif; }
+                    .login-box { border: 1px solid #ccd0d4; padding: 30px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+                    .form-group { margin-bottom: 20px; }
+                    .form-group label { display: block; font-size: 14px; color: #72777c; margin-bottom: 5px; }
+                    .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 18px; outline: none; }
+                    .login-btn { background: #0073aa; color: #fff; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; float: right; font-size: 14px; }
+                    /* 箭头符号 */
+                    .red-arrow { position: absolute; color: #ff4d4f; font-size: 30px; }
+                    .blue-arrow { position: absolute; color: #1890ff; font-size: 40px; top: 320px; left: 320px; z-index: 10; transform: rotate(-10deg); }
+                </style>
+
+                <div class="flex-container">
+                    <!-- 手机还原 -->
+                    <div class="phone">
+                        <div class="screen">
+                            <div class="status-bar">
+                                <span>●●●○○ HT HR</span>
+                                <span>22:01</span>
+                                <span>67% 🔋</span>
+                            </div>
+                            <div class="app-header">
+                                <span>ℹ️</span>
+                                <span>Authenticator</span>
+                                <span>✏️</span>
+                            </div>
+                            <div class="app-item">
+                                <h4>Test_WP</h4>
+                                <div class="app-code">636092</div>
+                                <div style="font-size:12px; color:#bbb;">gordan</div>
+                            </div>
+                            <div class="app-item">
+                                <h4>WP_dev_6</h4>
+                                <div class="app-code">579432</div>
+                                <div style="font-size:12px; color:#bbb;">gordan</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 网页还原 -->
+                    <div class="web-ui">
+                        <div class="wp-header">🅆 WORDPRESS</div>
+                        <div class="login-box">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" value="gordan">
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password">
+                            </div>
+                            <div class="form-group">
+                                <label>Google Authenticator OTP</label>
+                                <input type="text" style="border: 2px solid #eee; background: #fafafa;">
+                            </div>
+                            <button class="login-btn">Log In</button>
+                            <div style="clear:both"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 装饰性箭头 -->
+                <div class="red-arrow" style="top: 100px; left: 20px; transform: rotate(140deg);">➔</div>
+                <div class="red-arrow" style="bottom: 120px; left: 20px; transform: rotate(220deg);">➔</div>
+
+                <!-- 底部说明文字 -->
+                <div style="margin-top: 50px; border-top: 1px solid #eee; padding-top: 20px; color: #888; font-size: 13px;">
+                    (说明：Google Authenticator 是一个生成 TOTP 的手机 App)
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 3: 业务场景交互流 -->
+        <a-tab-pane key="3" tab="典型业务场景 (Business Scenarios)">
+            
+            <!-- 1. 移动 App 登录场景 (Google Authenticator) -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 场景：移动 App 2FA 登录 <span class="method-tag">App-based Login</span></h2>
+                <div class="logic-desc">最常见的互联网登录方式：密码 + 手机验证码。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        User["用户输入账号/密码"] --> Srv1["第一阶段验证"]
+                        Srv1 -- 成功 --> Prompt["提示输入 6 位验证码"]
+                        Prompt --> UserCheck["用户打开手机 App"]
+                        UserCheck --> Input["输入当前动态码"]
+                        Input --> Srv2["第二阶段验证"]
+                        Srv2 -- 成功 --> Session["登录成功"]
+                        style Srv1 fill:#e6f7ff,stroke:#1890ff
+                        style Srv2 fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 银行 U 盾/硬件令牌场景 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 场景：硬件令牌 (U盾) 交易验证 <span class="method-tag">Hardware Token</span></h2>
+                <div class="logic-desc">通过物理隔离的硬件设备产生验证码，安全性极高。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Trans["发起转账交易"] --> Hardware["按下硬件令牌按钮"]
+                        Hardware --> LocalCalc["内置时钟芯片计算 OTP"]
+                        LocalCalc --> Display["屏幕显示 6-8 位数字"]
+                        Display --> Submit["网页/APP 填入数字"]
+                        Submit --> BankSrv["银行后台校验算法"]
+                        style Hardware fill:#fff7e6,stroke:#faad14
+                        style BankSrv fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 灾难恢复流 -->
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 场景：手机丢失与账号找回 <span class="method-tag">Recovery Flow</span></h2>
+                <div class="warning-box"><strong>安全漏洞点：</strong>如果找回机制过于简单，2FA 将形同虚设。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Lost["丢失手机 (无 2FA)"] --> Backup["输入初始备份恢复码 (Recovery Key)"]
+                        Backup --> Reset["重置 2FA 密钥"]
+                        Lost -- 无备份码 --> Manual["人工审核 / 生物识别验证"]
+                        Manual --> Rebind["重新绑定新设备"]
+                        style Reset fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <div class="fa-block-container" style="margin-bottom: 30px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; background: #fff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <style>
+                    .fa-title { color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; font-size: 18px; font-weight: bold; margin-bottom: 15px; }
+                    .fa-desc { background: #f6ffed; border: 1px solid #b7eb8f; padding: 10px; border-radius: 4px; color: #52c41a; font-size: 14px; margin-bottom: 15px; }
+                </style>
+                <div class="fa-title">场景一：身份认证三要素逻辑</div>
+                <div class="fa-desc">原理：通过“知识”、“生物特征”、“物理持有”三种维度的排列组合实现多重安全防护。</div>
+                <div class="mermaid">
+                graph LR
+                    subgraph Factors ["认证维度"]
+                        K["1. 所知 (You Know)<br/>密码 / 密保"]
+                        A["2. 所在 (You Are)<br/>指纹 / 刷脸"]
+                        H["3. 所有 (You Have)<br/>手机 / U盾 / 令牌"]
+                    end
+                    K & A & H --> Combine["2FA 双因素组合"]
+                    Combine --> Security["极大提升攻击成本"]
+                    style Factors fill:#fafafa,stroke:#d9d9d9
+                    style Combine fill:#e6f7ff,stroke:#1890ff
+                </div>
+            </div>
+            <div class="fa-block-container" style="margin-bottom: 30px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; background: #fff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <div class="fa-title" style="color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; font-size: 18px; font-weight: bold; margin-bottom: 15px;">场景二：TOTP 密钥初始化 (离线同步)</div>
+                <div class="fa-desc" style="background: #e6f7ff; border: 1px solid #91d5ff; padding: 10px; border-radius: 4px; color: #0050b3; font-size: 14px; margin-bottom: 15px;">
+                    核心：服务器和手机 App 通过二维码交换“种子密钥 (Secret Key)”，此后双方无需联网即可计算出相同的动态码。
+                </div>
+                <div class="mermaid">
+                graph LR
+                    Server["服务器生成密钥 (Secret)"] --> DB["存入数据库"]
+                    Server --> QR["渲染二维码 (otpauth://...)"]
+                    User["用户打开 App 扫码"] --> App["App 解析并保存密钥"]
+                    App --> Sync["双方拥有同一把私钥"]
+                    style Server fill:#f9f0ff,stroke:#722ed1
+                    style App fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+            <div class="fa-block-container" style="margin-bottom: 30px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; background: #fff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <div class="fa-title" style="color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; font-size: 18px; font-weight: bold; margin-bottom: 15px;">场景三：30秒动态码循环校验</div>
+                <div class="fa-desc" style="background: #fff7e6; border: 1px solid #ffd591; padding: 10px; border-radius: 4px; color: #d46b08; font-size: 14px; margin-bottom: 15px;">
+                    关键：基于时间戳的算法。即使手机处于飞行模式，只要时间准确，就能生成与服务器一致的验证码。
+                </div>
+                <div class="mermaid">
+                graph LR
+                    Time["当前时间戳 / 30秒"] --> Algo["HMAC-SHA1 算法 (私钥+时间)"]
+                    Algo --> Code["生成 6 位动态码"]
+                    Code --> UserInput["用户在网页输入"]
+                    UserInput --> SrvCheck["服务器用同样算法比对"]
+                    SrvCheck -- "匹配 T 或 T±1" --> Pass["验证通过"]
+                    style Algo fill:#fff1f0,stroke:#ff4d4f
+                    style Pass fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+            <div class="fa-block-container" style="margin-bottom: 30px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; background: #fff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <div class="fa-title" style="color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; font-size: 18px; font-weight: bold; margin-bottom: 15px;">场景四：2FA 应用分类生态</div>
+                <div class="mermaid">
+                graph TD
+                    AppType["2FA 验证器类型"] --> Private["1. 独占类 (Proprietary)"]
+                    AppType["2FA 验证器类型"] --> Open["2. 开放类 (Open Standard)"]
+                    
+                    Private --> P_Example["如: QQ安全中心 / Steam令牌<br/>(仅限自家服务使用)"]
+                    Open --> O_Example["如: Google Authenticator / Microsoft Auth<br/>(基于 TOTP 标准, 支持万物)"]
+                    
+                    style Private fill:#fff1f0,stroke:#ff4d4f
+                    style Open fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+            <div class="fa-block-container" style="margin-bottom: 30px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; background: #fff; font-family: sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <div class="fa-title" style="color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; font-size: 18px; font-weight: bold; margin-bottom: 15px;">场景五：灾难恢复逻辑与风险</div>
+                <div class="fa-desc" style="background: #fff1f0; border: 1px solid #ffa39e; padding: 10px; border-radius: 4px; color: #cf1322; font-size: 14px; margin-bottom: 15px;">
+                    警示：如果找回流程只需验证邮箱，则 2FA 的安全强度会回退到邮箱的安全等级。
+                </div>
+                <div class="mermaid">
+                graph LR
+                    Lost["手机丢失 / 忘记密码"] --> Problem["无法完成 2nd Factor"]
+                    Problem --> Method1["路径A: 使用预留恢复码 (安全)"]
+                    Problem --> Method2["路径B: 找回密码流程 (潜在风险)"]
+                    Method2 --> Reset["绕过 2FA 直接重置"]
+                    Reset --> Risk["安全级别回落至单因素"]
+                    style Method1 fill:#f6ffed,stroke:#52c41a
+                    style Reset fill:#fff1f0,stroke:#ff4d4f
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 4: 安全评估与总结 -->
+        <a-tab-pane key="4" tab="安全总结与对比 (Security Assessment)">
+            
+            <!-- 1. 攻击防御对比 -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 攻防能力对比 <span class="method-tag">Security Matrix</span></h2>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph TD
+                        Attack1["暴力激活成功教程 (Brute Force)"] --> Res1["2FA: 极难 (动态变化, 窗口极短)"]
+                        Attack2["字典攻击 (Dictionary)"] --> Res2["2FA: 无效 (不依赖固定字符)"]
+                        Attack3["窥视攻击 (Shoulder Surfing)"] --> Res3["2FA: 单次有效 (30秒后过期)"]
+                        Attack4["网络监听 (Sniffing)"] --> Res4["2FA: 抵抗 (一次性使用)"]
+                        style Res1 fill:#f6ffed,stroke:#52c41a
+                        style Res2 fill:#f6ffed,stroke:#52c41a
+                        style Res3 fill:#fff7e6,stroke:#faad14
+                        style Res4 fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 优点与局限性 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 2FA 的利弊天平 <span class="method-tag">Pros & Cons</span></h2>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Pros["优点"] --> P1["抵御外部非法访问"]
+                        Pros --> P2["极大提升认证可靠性"]
+                        Pros --> P3["降低身份欺诈风险"]
+                        
+                        Cons["缺点/局限"] --> C1["操作多一步, 用户体验下降"]
+                        Cons --> C2["依赖硬件设备 (手机/令牌)"]
+                        Cons --> C3["不能防御 Cookie 劫持/Session 劫持"]
+                        
+                        style Pros fill:#f6ffed,stroke:#52c41a
+                        style Cons fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    // 注册 Antd 组件
+    Vue.use(antd);
+
+    // 初始化 Mermaid
+    mermaid.initialize({ 
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                activeKey: '1'
+            };
+        },
+        methods: {
+            // 当 Tab 切换时，重新运行 Mermaid 解析
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        },
+        mounted() {
+            // 初始加载
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>
