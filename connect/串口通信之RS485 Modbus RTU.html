@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modbus RTU (RS485) PLC 通讯架构全景图</title>
+    <!-- 引入 Ant Design Vue V1 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        /* :root {
+            --plc-blue: #1890ff;
+            --plc-green: #52c41a;
+            --plc-orange: #faad14;
+            --plc-red: #f5222d;
+            --industrial-gray: #f0f2f5;
+            --power-rail: #333;
+        }
+
+        body { background: var(--industrial-gray); margin: 0; padding: 24px; font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+
+        .header {
+            background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid var(--plc-blue);
+        }
+
+        .section-card { 
+            background: #fff; border-radius: 8px; margin-bottom: 40px; padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8; padding-bottom: 10px; color: #001529; 
+            font-weight: bold; margin-bottom: 20px; display: flex; align-items: center;
+        }
+        
+        h2::before {
+            content: ""; width: 4px; height: 20px; background: var(--plc-blue);
+            margin-right: 12px; border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; background: #fafafa; border: 1px solid #ebedf0; 
+            border-radius: 6px; padding: 20px; overflow-x: auto; margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace; background: #e6f7ff; padding: 2px 8px;
+            border: 1px solid #91d5ff; border-radius: 4px; color: #096dd9; margin-left: 10px; font-size: 0.85em;
+        }
+
+        .logic-desc {
+            margin: 10px 0; padding: 12px; background: #fffbe6;
+            border-left: 4px solid #ffe58f; color: #856404;
+        }
+
+        .step-num {
+            background: #001529; color: white; border-radius: 50%;
+            width: 24px; height: 24px; display: inline-flex; justify-content: center;
+            align-items: center; margin-right: 10px; font-size: 14px;
+        }
+
+        模拟梯形图专用样式 */
+
+        /* .ant-tabs-bar { background: #fff; padding: 0 20px; border-radius: 8px; margin-bottom: 24px; }
+        专门为梯形图容器增加的样式，增强母线感
+        .ladder-logic-container {
+            border-left: 5px solid #333 !important; /* 模拟左侧母线 */
+            /* padding-left: 10px !important;
+            background-color: #ffffff !important;
+        } */
+        /* 调整子图标题样式 */
+        /* .mermaid .subgraph-title {
+            font-weight: bold;
+            fill: #001529;
+        } */
+        :root { --plc-blue: #1890ff; --plc-green: #52c41a; --industrial-gray: #f0f2f5; }
+        body { background: var(--industrial-gray); margin: 0; padding: 24px; font-family: "Segoe UI", sans-serif; }
+        .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 24px; border-left: 6px solid var(--plc-blue); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .section-card { background: #fff; border-radius: 8px; margin-bottom: 40px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { border-bottom: 1px solid #e8e8e8; padding-bottom: 10px; color: #001529; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; }
+        h2::before { content: ""; width: 4px; height: 20px; background: var(--plc-blue); margin-right: 12px; border-radius: 2px; }
+        .chart-container { width: 100%; background: #fafafa; border: 1px solid #ebedf0; border-radius: 6px; padding: 20px; overflow-x: auto; margin-top: 15px; }
+        .logic-desc { margin: 10px 0; padding: 12px; background: #fffbe6; border-left: 4px solid #ffe58f; color: #856404; }
+        .step-num { background: #001529; color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; justify-content: center; align-items: center; margin-right: 10px; font-size: 14px; }
+        .method-tag { font-family: 'Consolas', monospace; background: #e6f7ff; padding: 2px 8px; border: 1px solid #91d5ff; border-radius: 4px; color: #096dd9; margin-left: 10px; font-size: 0.85em; }
+        .ladder-logic-container { border-left: 5px solid #333 !important; padding-left: 10px !important; background-color: #ffffff !important; }
+        #sim-container { width: 100%; height: 450px; background: #001529; border-radius: 8px; position: relative; overflow: hidden; margin-top: 15px; }
+        #joint-paper { width: 100%; height: 100%; }
+        #d3-monitor { position: absolute; top: 10px; right: 10px; width: 200px; height: 100px; background: rgba(0,0,0,0.6); border: 1px solid #333; pointer-events: none; }
+        /* 仿真界面美化 CSS */
+        .simulation-layout { background: #f0f2f5; padding: 10px; border-radius: 8px; }
+        .console-panel { height: 650px; display: flex; flex-direction: column; }
+        .sim-main { height: 650px; background: #001529 !important; position: relative; }
+
+        /* PLC 逻辑块样式 */
+        .plc-logic-steps { padding: 10px; }
+        .logic-block { 
+            border: 2px solid #d9d9d9; border-radius: 4px; padding: 8px; 
+            transition: all 0.3s; background: #fff;
+        }
+        .logic-block.active { 
+            border-color: #1890ff; background: #e6f7ff; 
+            box-shadow: 0 0 10px rgba(24,144,255,0.3); transform: scale(1.05);
+        }
+        .block-header { font-weight: bold; font-size: 13px; border-bottom: 1px solid #eee; margin-bottom: 5px; }
+        .block-body { font-size: 11px; color: #666; font-family: monospace; }
+        .logic-arrow { text-align: center; color: #1890ff; padding: 5px 0; }
+
+        /* 日志终端 */
+        .terminal-log { 
+            flex: 1; background: #000; color: #0f0; padding: 10px; 
+            font-family: 'Consolas', monospace; font-size: 12px; 
+            margin-top: 15px; border-radius: 4px; overflow-y: auto;
+        }
+        .log-time { color: #888; }
+
+        /* 画布与数据预览 */
+        #sim-canvas-container { height: 400px; position: relative; border: 1px solid #1a334d; border-radius: 4px; }
+        .data-preview { margin-top: 20px; }
+        .data-box { background: rgba(255,255,255,0.05); border: 1px solid #1a334d; padding: 10px; border-radius: 4px; text-align: center; }
+        .data-box .label { color: #888; font-size: 12px; margin-bottom: 5px; }
+        .data-box .value { color: #fff; font-size: 18px; font-family: 'Orbitron', sans-serif; }
+        .data-box .value.highlight { color: #52c41a; text-shadow: 0 0 5px #52c41a; }
+
+        /* 指示灯 */
+        .led-group { position: absolute; left: 160px; top: 220px; z-index: 10; display: flex; gap: 5px; }
+        .led { width: 25px; height: 15px; border-radius: 2px; font-size: 9px; line-height: 15px; text-align: center; background: #333; color: #111; font-weight: bold; }
+        .led.tx.active { background: #faad14; box-shadow: 0 0 8px #faad14; color: #fff; }
+        .led.rx.active { background: #52c41a; box-shadow: 0 0 8px #52c41a; color: #fff; }
+
+        /* 报文标签动画 */
+        .packet-frame {
+            position: absolute; padding: 2px 8px; background: #1890ff; color: #fff;
+            border-radius: 2px; font-size: 10px; font-weight: bold; z-index: 100;
+            pointer-events: none; white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .packet-frame.response { background: #52c41a; }
+        /* 报文解析器样式 */
+        .hex-stream {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            border: 1px dashed #1890ff;
+        }
+        .byte {
+            padding: 2px 8px;
+            border-radius: 2px;
+            color: #fff;
+            position: relative;
+        }
+        .byte::after {
+            content: attr(title);
+            position: absolute;
+            bottom: -18px;
+            left: 0;
+            font-size: 9px;
+            color: #555;
+            white-space: nowrap;
+        }
+        .byte.addr { background: #1d39c4; }
+        .byte.func { background: #08979c; }
+        .byte.data { background: #262626; border: 1px solid #434343; }
+        .byte.crc { background: #595959; transition: all 0.1s; }
+        .byte.crc.active { 
+            background: #874d00; 
+            color: #fff;
+            text-shadow: 0 0 5px #ffa940;
+        }
+        .structure-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+        /* 新增设备视觉样式 */
+        .device-card {
+            min-height: 93px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s;
+        }
+
+        .device-visual {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .visual-label {
+            font-size: 10px;
+            color: #555;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* PLC 图标样式 */
+        .plc-icon {
+            width: 60px;
+            height: 40px;
+            background: #333;
+            border-radius: 4px;
+            border: 1px solid #444;
+            position: relative;
+            overflow: hidden;
+        }
+        .plc-head {
+            font-size: 7px;
+            background: #1d39c4;
+            color: #fff;
+            padding: 2px;
+            text-align: center;
+        }
+        .led-strip {
+            display: flex;
+            gap: 3px;
+            padding: 5px;
+        }
+        .dot { width: 4px; height: 4px; background: #222; border-radius: 50%; }
+        .blink-orange { background: #faad14; box-shadow: 0 0 4px #faad14; animation: blink 0.5s infinite; }
+        .port-rs485 {
+            position: absolute; bottom: 2px; right: 5px;
+            font-size: 8px; color: #52c41a; font-weight: bold;
+        }
+
+        /* 传感器图标样式 */
+        .sensor-icon {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .gauge-mini {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2px solid #52c41a;
+            background: #111;
+            position: relative;
+        }
+        .needle {
+            width: 2px;
+            height: 12px;
+            background: #ff4d4f;
+            position: absolute;
+            left: 15px;
+            top: 5px;
+            transform-origin: bottom center;
+            transition: transform 0.5s;
+        }
+        .probe {
+            width: 20px;
+            height: 6px;
+            background: linear-gradient(90deg, #8c8c8c, #bfbfbf);
+            border-radius: 0 3px 3px 0;
+        }
+
+        /* 信号强度样式 */
+        .link-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .signal-bars {
+            display: flex;
+            gap: 2px;
+            align-items: flex-end;
+        }
+        .bar { width: 4px; background: #333; border-radius: 1px; }
+        .bar:nth-child(1) { height: 6px; }
+        .bar:nth-child(2) { height: 10px; }
+        .bar:nth-child(3) { height: 14px; }
+        .bar.active { background: #52c41a; box-shadow: 0 0 3px #52c41a; }
+
+        .flow-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 20px 0;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+
+        .flow-step {
+            flex: 1;
+            max-width: 300px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .step-header { margin-bottom: 12px; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
+
+        .address-box {
+            font-family: 'Consolas', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: #1890ff;
+            text-align: center;
+            background: #e6f7ff;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .address-box.active { color: #52c41a; background: #f6ffed; }
+
+        .memory-split {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .byte-cell {
+            border: 1px dashed #adc6ff;
+            padding: 4px;
+            font-size: 11px;
+            text-align: center;
+            background: #f0f5ff;
+        }
+
+        .flow-bridge {
+            padding: 0 20px;
+            text-align: center;
+        }
+        .instruction {
+            font-weight: bold;
+            color: #faad14;
+            font-family: serif;
+            font-size: 16px;
+        }
+        .arrow-line {
+            height: 2px;
+            background: #faad14;
+            width: 80px;
+            position: relative;
+            margin: 10px 0;
+        }
+        .arrow-head {
+            position: absolute;
+            right: -5px;
+            top: -4px;
+            border-left: 8px solid #faad14;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+        }
+        .reason { font-size: 11px; color: #999; }
+
+        .benefit-list {
+            list-style: none;
+            padding: 0;
+            font-size: 12px;
+            color: #666;
+            text-align: left;
+        }
+        .benefit-list li { margin-bottom: 4px; }
+        .desc { font-size: 11px; color: #aaa; font-style: italic; margin-top: 10px; }
+
+        .metaphor-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metaphor-title {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">S7-200 SMART Modbus RTU 通讯架构指南</h1>
+        <p style="color: #666; margin-top: 10px;">
+            基于 RS485 物理层的从站轮询机制、指令集调用流程及库存储区配置。
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange">
+        
+        <!-- TAB 1: 全局通讯链路 -->
+        <a-tab-pane key="1" tab="核心通讯链路 (Global Flow)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 系统级全周期流程 <span class="method-tag">Communication Lifecycle</span></h2>
+                <div class="logic-desc">从硬件初始化到数据轮询的完整闭环，展示了各子程序的调用顺序。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start((PLC 上电运行)) --> Init[MBUS_CTRL<br/>串口初始化]
+                        Init --> CheckInit{初始化成功?}
+                        CheckInit -- Yes --> MsgLoop[MBUS_MSG<br/>读写消息触发]
+                        CheckInit -- No --> ErrHandle[Error Handler<br/>错误诊断]
+                        MsgLoop --> Done{Done?}
+                        Done -- 完成 --> DataProc[数据处理/移动<br/>MOV_W]
+                        DataProc --> MsgLoop
+                        style Init fill:#e6f7ff,stroke:#1890ff
+                        style MsgLoop fill:#f6ffed,stroke:#52c41a
+                        style ErrHandle fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+
+            <!-- 修复后的梯形图逻辑段落 -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 梯形图逻辑架构模拟 (T型图) <span class="method-tag">Ladder Logic Structure</span></h2>
+                <div class="logic-desc">
+                    模拟 PLC 扫描周期中的网络结构。左侧模拟垂直母线，使用 [ ] 表示触点，{ P } 表示上升沿，( ) 表示线圈。
+                </div>
+                <div class="chart-container ladder-logic-container">
+                    <div class="mermaid">
+                        graph TD
+                            %% 定义通用样式类
+                            classDef box fill:#e6f7ff,stroke:#1890ff,stroke-width:2px;
+                            classDef contact fill:#fff,stroke:#333,stroke-width:1px;
+                            classDef rail fill:none,stroke:none,width:0px;
+                            classDef coil fill:#fff,stroke:#333,stroke-dasharray: 2 2;
+
+                            %% 网络 1
+                            subgraph Net1 ["Network 1: 通讯初始化 (MBUS_CTRL)"]
+                                direction LR
+                                R1_Bus[" "] --- R1_C1["[ SM0.1 ]"]
+                                R1_C1 -- "首次扫描" --> R1_Box["MBUS_CTRL"]
+                                R1_Box --- R1_Coil["( M0.0 )"]
+                            end
+
+                            %% 网络 2
+                            subgraph Net2 ["Network 2: 读写消息触发 (MBUS_MSG)"]
+                                direction LR
+                                R2_Bus[" "] --- R2_C1["[ SM0.5 ]"]
+                                R2_C1 --- R2_P["{ P }"]
+                                R2_P -- "脉冲触发" --> R2_Box["MBUS_MSG"]
+                                R2_Box --- R2_Coil["( M0.1 )"]
+                            end
+
+                            %% 网络 3
+                            subgraph Net3 ["Network 3: 数据传送 (MOV_W)"]
+                                direction LR
+                                R3_Bus[" "] --- R3_C1["[ SM0.0 ]"]
+                                R3_C1 -- "一直通" --> R3_Box["MOV_W"]
+                                R3_Box --- R3_Target["[ VW20 ]"]
+                            end
+
+                            %% 应用样式
+                            class R1_Bus,R2_Bus,R3_Bus rail;
+                            class R1_Box,R2_Box,R3_Box box;
+                            class R1_C1,R2_C1,R3_C1,R2_P contact;
+                            class R1_Coil,R2_Coil coil;
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 2: 指令深度解析 -->
+        <a-tab-pane key="2" tab="核心方法详解 (Methods Detail)">
+            
+            <!-- MBUS_CTRL -->
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 方法：MBUS_CTRL <span class="method-tag">主站初始化</span></h2>
+                <div class="logic-desc">该指令负责配置 CPU 端口为 Modbus RTU 模式。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph TD
+                        Input[输入参数设置] --> Mode["Mode: 1 (开启Modbus)"]
+                        Input --> Baud["Baud: 9600 (波特率)"]
+                        Input --> Port["Port: 0 (集成口)"]
+                        
+                        subgraph Internal_Process [内部配置逻辑]
+                        Mode & Baud & Port --> Config[分配 UART 中断 & 设置缓冲区]
+                        end
+                        
+                        Config --> Output[输出状态]
+                        Output --> Done["Done: 初始化完成"]
+                        Output --> Error["Error: 错误码 (V-Memory)"]
+                        
+                        style Internal_Process fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <!-- MBUS_MSG -->
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 方法：MBUS_MSG <span class="method-tag">读写执行指令</span></h2>
+                <div class="logic-desc">负责具体的一条 Modbus 报文请求。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Trigger["First (上升沿触发)"] --> Slave["Slave (站号: 3)"]
+                        Slave --> RW["RW (0:读 / 1:写)"]
+                        RW --> Addr["Addr (40009: 保持寄存器)"]
+                        
+                        subgraph Execution [执行阶段]
+                        Addr --> Pack["组建 RTU 报文帧"]
+                        Pack --> CRC["计算 CRC16 校验"]
+                        CRC --> Send["发送并等待回复 (Timeout=1s)"]
+                        end
+                        
+                        Send --> Parse["解析回复数据"]
+                        Parse --> DataPtr["DataPtr (&VB10 指针)"]
+                        DataPtr --> Success["Done = 1"]
+                        
+                        style Execution fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- MOV_W -->
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 方法：MOV_W <span class="method-tag">数据传送/监控</span></h2>
+                <div class="logic-desc">用于将接收缓冲区的数据移动到工作区，便于 HMI 或上位机查看。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Source["源地址: VW10<br/>(Modbus接收区)"] --> Copy["字传送逻辑"]
+                        Copy --> Target["目标地址: VW20<br/>(显示/逻辑区)"]
+                        style Copy fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 3: 配置与错误处理 -->
+        <a-tab-pane key="3" tab="库存储区与诊断 (Config & Error)">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 库存储区分配流程 <span class="method-tag">Library Memory Allocation</span></h2>
+                <div class="logic-desc">Modbus 库需要 286 个字节的全局 V 存储区。如果未分配，编译将报错。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        RightClick["右键指令树 '库'"] --> Menu["选择 '库存储区(Library Memory)'"]
+                        Menu --> Dialog["弹出地址分配对话框"]
+                        Dialog --> Suggest["点击 '建议地址(Suggest Address)'"]
+                        Suggest --> Check["检查与现有 V 区是否冲突"]
+                        Check -- 无冲突 --> Finish["点击确定 (分配如 VB0-VB285)"]
+                        style Suggest fill:#e6f7ff,stroke:#1890ff
+                        style Finish fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 错误诊断逻辑 <span class="method-tag">Error Code Diagnosis</span></h2>
+                <div class="logic-desc">当 Done=1 且 Error > 0 时，需要执行的诊断流程。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Err[Error Code] --> E3["3: 接收超时<br/>(检查线路/站号)"]
+                        Err --> E4["4: 参数错误<br/>(检查地址范围)"]
+                        Err --> E6["6: 指令忙<br/>(同一时间只能一个MSG)"]
+                        Err --> E101["101: 从站不支持<br/>(检查功能码)"]
+                        style E3 fill:#fff1f0,stroke:#f5222d
+                        style E6 fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 4: 通讯实时仿真 (重写版) -->
+        <a-tab-pane key="4" tab="工业级通讯仿真 (Full Lifecycle)">
+            <div class="simulation-layout">
+                <a-row :gutter="16">
+                    <!-- 左侧控制与状态监控 -->
+                    <a-col :span="7">
+                        <div class="section-card console-panel">
+                            <h3><a-icon type="dashboard" /> 指令执行状态</h3>
+                            
+                            <div class="plc-logic-steps">
+                                <div :class="['logic-block', simStep === 'ctrl' ? 'active' : '']">
+                                    <div class="block-header">MBUS_CTRL (初始化)</div>
+                                    <div class="block-body">Mode: 1 | Baud: 9600</div>
+                                </div>
+                                <div class="logic-arrow"><a-icon type="arrow-down" /></div>
+                                <div :class="['logic-block', simStep === 'write' ? 'active' : '']">
+                                    <div class="block-header">MBUS_MSG (写从站)</div>
+                                    <div class="block-body">Addr: 40001 | RW: 1</div>
+                                </div>
+                                <div class="logic-arrow"><a-icon type="arrow-down" /></div>
+                                <div :class="['logic-block', simStep === 'read' ? 'active' : '']">
+                                    <div class="block-header">MBUS_MSG (读从站)</div>
+                                    <div class="block-body">Addr: 40009 | RW: 0</div>
+                                </div>
+                            </div>
+
+                            <div class="control-btns" style="margin-top: 20px;">
+                                <a-button-group>
+                                    <a-button type="primary" :loading="simulating" @click="runFullSequence">启动完整序列</a-button>
+                                    <a-button type="danger" @click="resetSimulation">重置</a-button>
+                                </a-button-group>
+                            </div>
+
+                            <div class="terminal-log" id="sim-log">
+                                <div v-for="log in simLogs" :key="log.time">
+                                    <span class="log-time">[{{log.time}}]</span> {{log.msg}}
+                                </div>
+                            </div>
+                        </div>
+                    </a-col>
+
+                    <!-- 右侧仿真画布 -->
+                    <a-col :span="17">
+                        <div class="section-card sim-main">
+                            <div class="sim-header">
+                                <span class="status-indicator">
+                                    <a-badge :status="simulating ? 'processing' : 'default'" />
+                                    {{ statusText }}
+                                </span>
+                                <div class="monitor-mini" id="d3-chart"></div>
+                            </div>
+
+                            <div id="sim-canvas-container">
+                                <!-- TX/RX 灯光效果 -->
+                                <div id="master-led" class="led-group">
+                                    <div class="led tx">TX</div>
+                                    <div class="led rx">RX</div>
+                                </div>
+                                <div id="joint-paper-v2"></div>
+                            </div>
+
+                            <div class="data-preview">
+                                <a-row :gutter="10">
+                                    <a-col :span="8">
+                                        <div class="data-box">
+                                            <div class="label">发送缓冲区</div>
+                                            <div class="label">主站发出的请求</div>
+                                            <div class="value">{{ txBuffer }}</div>
+                                        </div>
+                                        <div class="device-visual">
+                                            <div class="plc-icon">
+                                                <div class="plc-head">S7-200 SMART</div>
+                                                <div class="plc-body">
+                                                    <div class="led-strip">
+                                                        <span :class="['dot', simulating ? 'blink-orange' : '']"></span>
+                                                        <span class="dot"></span>
+                                                        <span class="dot"></span>
+                                                    </div>
+                                                    <div class="port-rs485">RS485</div>
+                                                </div>
+                                            </div>
+                                            <div class="visual-label">核心控制器</div>
+                                        </div>
+                                    </a-col>
+                                    <a-col :span="8">
+                                        <div class="data-box">
+                                            <div class="label">接收缓冲区 (VW10)</div>
+                                            <div class="label">主站从从站读回来的结果</div>
+                                            <div class="value highlight">{{ liveData.vw10 }}</div>
+                                        </div>
+                                        <div class="data-box device-card slave-device">
+                                            <!-- 新增：仪表/传感器 视觉 -->
+                                            <div class="device-visual">
+                                                <div class="sensor-icon">
+                                                    <div class="gauge-mini">
+                                                        <div class="needle" :style="{ transform: `rotate(${liveData.vw10/100}deg)` }"></div>
+                                                    </div>
+                                                    <div class="probe"></div>
+                                                </div>
+                                                <div class="visual-label">温度/压力变送器</div>
+                                            </div>
+                                        </div>
+                                    </a-col>
+                                    <a-col :span="8">
+                                        <div class="data-box">
+                                            <div class="label">通讯错误码</div>
+                                            <div class="value">0 (None)</div>
+                                        </div>
+                                    </a-col>
+                                </a-row>
+                            </div>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+            <!-- 新增：报文帧深度解析块 -->
+            <div class="section-card protocol-analyzer" style="margin-top: 20px; background: #001529 !important; border: 1px solid #1a334d;">
+                <h3 style="color: #1890ff; border-bottom: 1px solid #1a334d; padding-bottom: 10px;">
+                    <a-icon type=" eye" /> 实时报文解析 (Protocol Analyzer)
+                </h3>
+                <div class="frame-dissector">
+                    <a-row :gutter="8">
+                        <!-- 动态变化的原始报文 -->
+                        <a-col :span="24">
+                            <div class="hex-stream">
+                                <span class="byte addr" title="从站地址">03</span>
+                                <span class="byte func" title="功能码">03</span>
+                                <span class="byte data" title="寄存器地址高">00</span>
+                                <span class="byte data" title="寄存器地址低">08</span>
+                                <span class="byte data" title="读取数量高">00</span>
+                                <span class="byte data" title="读取数量低">01</span>
+                                <!-- 这两个字节我们在逻辑中让它闪烁/变化 -->
+                                <span class="byte crc active" title="CRC校验低">{{ crcLow }}</span>
+                                <span class="byte crc active" title="CRC校验高">{{ crcHigh }}</span>
+                            </div>
+                        </a-col>
+                    </a-row>
+
+                    <!-- 报文结构分解说明 -->
+                    <div class="structure-legend" style="margin-top: 15px;">
+                        <a-tag color="blue">站号: 03</a-tag>
+                        <a-tag color="cyan">功能: 03 (Read)</a-tag>
+                        <a-tag color="orange">地址: 40009</a-tag>
+                        <a-tag color="purple">长度: 1 Word</a-tag>
+                        <a-tag color="green">状态: 校验通过</a-tag>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新增：数据流转深度解析块 -->
+            <div class="section-card data-flow-guide" style="margin-top: 20px; border-top: 4px solid #1890ff;">
+                <h3 style="color: #001529; margin-bottom: 20px;">
+                    <a-icon type="deployment-unit" /> 数据目的地：从“物理接收”到“逻辑工作区”
+                </h3>
+
+                <div class="flow-container">
+                    <!-- 步骤 1: 物理接收层 -->
+                    <div class="flow-step">
+                        <div class="step-header">
+                            <a-tag color="blue">第一站</a-tag> 
+                            <strong>通讯缓冲区 (Reception)</strong>
+                        </div>
+                        <div class="step-content">
+                            <div class="address-box">VB10 / VW10</div>
+                            <p>由 <code>MBUS_MSG</code> 指令的 <code>&VB10</code> 参数定义。</p>
+                            <div class="memory-split">
+                                <div class="byte-cell">VB10 <small>(高位字节)</small></div>
+                                <div class="plus">+</div>
+                                <div class="byte-cell">VB11 <small>(低位字节)</small></div>
+                            </div>
+                            <div class="desc">数据刚下“快递车”，暂时停留在公司前台。</div>
+                        </div>
+                    </div>
+
+                    <!-- 中间的传送指令箭头 -->
+                    <div class="flow-bridge">
+                        <div class="instruction">MOV_W</div>
+                        <div class="arrow-line">
+                            <div class="arrow-head"></div>
+                        </div>
+                        <div class="reason">“搬运”到安全区</div>
+                    </div>
+
+                    <!-- 步骤 2: 逻辑处理层 -->
+                    <div class="flow-step">
+                        <div class="step-header">
+                            <a-tag color="green">第二站</a-tag> 
+                            <strong>逻辑工作区 (Work Area)</strong>
+                        </div>
+                        <div class="step-content">
+                            <div class="address-box active">VW20</div>
+                            <p>由 <code>MOV_W</code> 指令的 <code>OUT</code> 参数定义。</p>
+                            <ul class="benefit-list">
+                                <li><a-icon type="check-circle" /> <strong>数据隔离：</strong> 防止通讯刷新干扰程序执行。</li>
+                                <li><a-icon type="check-circle" /> <strong>逻辑安全：</strong> 保证一个扫描周期内数值稳定。</li>
+                            </ul>
+                            <div class="desc">数据已进入办公室，准备好参与 PID 运算或 HMI 显示。</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部比喻块 -->
+                <div class="metaphor-box">
+                    <div class="metaphor-title"><a-icon type="bulb" /> 形象比喻：快递送货</div>
+                    <a-row :gutter="16">
+                        <a-col :span="6"><strong>传感器</strong><br/>发货工厂</a-col>
+                        <a-col :span="1">➔</a-col>
+                        <a-col :span="5"><strong>VB10</strong><br/>公司收货前台</a-col>
+                        <a-col :span="1">➔</a-col>
+                        <a-col :span="5"><strong>MOV_W</strong><br/>你自己搬上楼</a-col>
+                        <a-col :span="1">➔</a-col>
+                        <a-col :span="5"><strong>VW20</strong><br/>你的办公桌</a-col>
+                    </a-row>
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.4.1/backbone-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.6.5/joint.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/MotionPathPlugin.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/jsplumb.min.js"></script>
+
+<script>
+    // 注册 Antd 组件
+    Vue.use(antd);
+    // 关键修复 1: 必须注册 GSAP 插件
+    gsap.registerPlugin(MotionPathPlugin);
+
+    // 初始化 Mermaid
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: 'step' // 使用阶梯线，更符合电气图感
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                activeKey: '1',
+                simulating: false,
+                liveData: { vw10: 0, cycle: 0 },
+                // 内部非响应式变量
+                graph: null,
+                paper: null,
+                busLink: null,
+                simTimer: null,
+                d3Data: [],
+                simStep: 'idle', // idle, ctrl, write, read
+                simLogs: [],
+                statusText: '系统就绪',
+                txBuffer: '00 00 00',
+                simulating: false,
+                liveData: { vw10: 13525, cycle: 210 },
+                paperV2: null,
+                graphV2: null,
+                busLinkV2: null,
+                crcLow: '85',
+                crcHigh: 'E8'
+            };
+        },
+        methods: {
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    if (key === '1') mermaid.init();
+                    if (key === '2') mermaid.init();
+                    if (key === '3') mermaid.init();
+                    if (key === '4') this.initSimulation();
+                });
+            },
+            // --- 核心业务逻辑：启动序列 ---
+            async runFullSequence() {
+                if (this.simulating) return;
+                this.resetSimulation(); // 先重置
+                this.simulating = true;
+                this.addLog("启动自动化测试序列...");
+
+                // 1. 初始化指令
+                this.simStep = 'ctrl';
+                this.statusText = '正在初始化通讯端口...';
+                this.addLog("MBUS_CTRL: 设置 Mode=1, Baud=9600, Port=0");
+                await new Promise(r => setTimeout(r, 1500));
+                this.addLog("MBUS_CTRL: 初始化完成, Done=1");
+
+                // 2. 写指令
+                this.simStep = 'write';
+                this.statusText = '正在下发控制指令 (RW=1)...';
+                this.txBuffer = '03 06 00 01 03 E8';
+                this.addLog("发送写请求: Function 06 (Write Single Register)");
+                
+                await this.animateTelegram("CMD: WRITE 1000", true);
+                this.toggleLed('tx', true);
+                await new Promise(r => setTimeout(r, 500));
+                this.toggleLed('tx', false);
+                
+                await this.animateTelegram("ACK: OK", false);
+                this.toggleLed('rx', true);
+                this.addLog("写操作完成, 从站已更新设定值");
+                await new Promise(r => setTimeout(r, 800));
+                this.toggleLed('rx', false);
+
+                // 3. 进入读循环
+                this.simStep = 'read';
+                this.statusText = '周期性数据轮询中 (RW=0)...';
+                this.startPolling();
+            },
+
+            // --- 循环读逻辑 ---
+            async startPolling() {
+
+                if (!this.simulating) return;
+                // 1. 生成伪随机 CRC 字节（让视觉上有“数据在传输”的感觉）
+                this.crcLow = Math.floor(Math.random() * 255).toString(16).toUpperCase().padStart(2, '0');
+                this.crcHigh = Math.floor(Math.random() * 255).toString(16).toUpperCase().padStart(2, '0');
+                
+                // 2. 更新发送缓冲区显示
+                this.txBuffer = `03 03 00 08 00 01 ${this.crcLow} ${this.crcHigh}`;
+
+                // 3. 执行动画
+                await this.animateTelegram("REQ: READ 40009", true);
+                this.toggleLed('tx', true);
+                await new Promise(r => setTimeout(r, 200));
+                this.toggleLed('tx', false);
+
+                const val = Math.floor(13500 + Math.random() * 50);
+                await this.animateTelegram(`RES: ${val}`, false);
+                this.toggleLed('rx', true);
+                this.liveData.vw10 = val;
+                
+                // 如果你写了 updateMonitorChart 方法
+                if(this.updateMonitorChart) this.updateMonitorChart(val); 
+
+                await new Promise(r => setTimeout(r, 200));
+                this.toggleLed('rx', false);
+
+                // 递归调用实现循环
+                this.simTimer = setTimeout(() => {
+                    this.startPolling();
+                }, 1000);
+            },
+
+            // --- 动画核心方法 ---
+            animateTelegram(text, isRequest) {
+                return new Promise((resolve) => {
+                    const container = document.getElementById('sim-canvas-container');
+                    const el = document.createElement('div');
+                    el.className = `packet-frame ${isRequest ? '' : 'response'}`;
+                    el.innerText = text;
+                    container.appendChild(el);
+
+                    // 从 JointJS 纸张中查找连线的路径
+                    const path = document.querySelector('#joint-paper-v2 svg path.connection');
+                    
+                    if(!path) {
+                        console.error("未找到通讯电缆路径，请检查 JointJS 是否初始化");
+                        el.remove();
+                        resolve();
+                        return;
+                    }
+
+                    gsap.to(el, {
+                        duration: 1.2,
+                        motionPath: {
+                            path: path,
+                            align: path,
+                            alignOrigin: [0.5, 0.5],
+                            start: isRequest ? 0 : 1,
+                            end: isRequest ? 1 : 0
+                        },
+                        ease: "power1.inOut",
+                        onComplete: () => {
+                            el.remove();
+                            resolve();
+                        }
+                    });
+                });
+            },
+
+            // --- 辅助工具方法 ---
+            addLog(msg) {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                this.simLogs.unshift({ time, msg }); // 新日志放在最上面
+                if (this.simLogs.length > 50) this.simLogs.pop();
+            },
+            toggleLed(type, active) {
+                const led = document.querySelector(`.led.${type}`);
+                if(led) {
+                    active ? led.classList.add('active') : led.classList.remove('active');
+                }
+            },
+            resetSimulation() {
+                this.simulating = false;
+                this.simStep = 'idle';
+                this.statusText = '系统就绪';
+                this.simLogs = [];
+                clearTimeout(this.simTimer);
+            },
+            initSimulationV2() {
+                if (this.graphV2) return; // 避免重复创建
+                // ... 这里放之前写的 JointJS 初始化代码 ...
+                // 注意把生成的 graph 和 paper 赋值给 this.graphV2 和 this.paperV2
+            }
+        },
+        mounted() {
+            mermaid.initialize({ startOnLoad: true });
+            mermaid.init();
+        }
+    });
+</script>
+<style>
+    /* 模拟工业发光效果 */
+    #joint-paper {
+        filter: drop-shadow(0 0 5px rgba(24, 144, 255, 0.2));
+    }
+    /* 响应式画布调整 */
+    #joint-paper svg {
+        cursor: crosshair;
+    }
+</style>
+</body>
+</html>
