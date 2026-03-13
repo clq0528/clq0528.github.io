@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promise 链式调用技术全景图</title>
+<!-- 
+https://clq0528.github.io/vue/前端promise链式调用.html
+-->
+    <!-- 引入 Ant Design Vue V1 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { 
+            background: var(--bg-gray); 
+            margin: 0; 
+            padding: 24px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue); 
+            font-weight: bold; 
+            margin-bottom: 20px; 
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; 
+            background: #fafafa; 
+            border: 1px solid #ebedf0; 
+            border-radius: 6px; 
+            padding: 20px; 
+            overflow-x: auto; 
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 8px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #fa8c16;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #e6f7ff;
+            border-left: 4px solid #91d5ff;
+            color: #003a8c;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #ccc;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">Promise 异步编程全生命周期指南</h1>
+        <p style="color: #666; margin-top: 10px;">
+            从基础概述、内部机制到高级链式调用应用，深度拆解 JavaScript 异步处理核心逻辑。
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange">
+        <!-- TAB 1: 基础与语法 -->
+        <a-tab-pane key="1" tab="1. 基础概述与核心语法">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1</span> Promise 三大状态机 <span class="method-tag">State Machine</span></h2>
+                <div class="logic-desc">Promise 运行过程中不可逆的状态转换，是所有异步逻辑的基石。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        P["Pending (等待中)"] -- "resolve()" --> F["Fulfilled (已完成)"]
+                        P -- "reject()" --> R["Rejected (已失败)"]
+                        F --- Result(["返回数据 Value"])
+                        R --- Reason(["返回原因 Reason"])
+                        style P fill:#fff7e6,stroke:#faad14
+                        style F fill:#f6ffed,stroke:#52c41a
+                        style R fill:#fff1f0,stroke:#ff4d4f
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 链式调用基本结构 <span class="method-tag">Chaining Flow</span></h2>
+                <div class="logic-desc">通过 then、catch、finally 将分散的异步任务串联成逻辑流。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["new Promise"] --> T1["then(任务1处理)"]
+                        T1 --> T2["then(任务2处理)"]
+                        T2 --> C["catch(异常捕获)"]
+                        C --> Fin["finally(收尾工作)"]
+                        style Start fill:#e6f7ff,stroke:#1890ff
+                        style Fin fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 异步处理函数的作用 <span class="method-tag">Handler Functions</span></h2>
+                <div class="logic-desc">不同方法在链条中承担不同的职责。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph TD
+                        subgraph Handlers ["处理函数职责"]
+                        H1["then: 接收成功结果，向下传递新数据/Promise"]
+                        H2["catch: 监听整条链的错误，提供错误恢复能力"]
+                        H3["finally: 与状态无关，执行资源清理或UI关闭"]
+                        end
+                        style H1 fill:#f6ffed,stroke:#52c41a
+                        style H2 fill:#fff1f0,stroke:#ff4d4f
+                        style H3 fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 2: 内部机制深度解析 -->
+        <a-tab-pane key="2" tab="2. 链式调用内部机制">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 返回值包裹机制 <span class="method-tag">New Promise Return</span></h2>
+                <div class="logic-desc">核心机制：每次 then() 调用都会返回一个新的 Promise，无论回调返回的是值还是 Promise。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        In["then 回调执行"] --> Branch{"返回值类型?"}
+                        Branch -- "普通值/Undefined" --> Wrap["自动包裹为: Promise.resolve(值)"]
+                        Branch -- "Promise 对象" --> Wait["等待该 Promise 状态变更"]
+                        Wrap --> Next["流向下一个 then"]
+                        Wait --> Next
+                        style Branch fill:#fff7e6,stroke:#faad14
+                        style Wrap fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 错误穿透与捕获流 <span class="method-tag">Error Bubbling</span></h2>
+                <div class="logic-desc">如果任一环节失败，错误会跳过后续 then，顺着链条“向下漂流”直至被 catch 捕获。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        S1["Step 1: OK"] --> S2["Step 2: Error!"]
+                        S2 -- "跳过" --> S3["Step 3: Skip"]
+                        S3 -- "跳过" --> S4["Step 4: Skip"]
+                        S4 --> C["catch() 捕获并处理"]
+                        C --> Recovery["恢复链条或结束"]
+                        style S2 fill:#fff1f0,stroke:#ff4d4f
+                        style C fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 宏/微任务队列视角 <span class="method-tag">Event Loop</span></h2>
+                <div class="logic-desc">Promise 属于微任务（Microtask），在当前宏任务结束后、渲染前执行。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Script["当前同步代码"] --> Stack["执行栈清空"]
+                        Stack --> Micro["检查微任务队列 (Promise.then)"]
+                        Micro -- "循环执行" --> Micro
+                        Micro --> Render["页面渲染"]
+                        Render --> Macro["下一个宏任务 (setTimeout)"]
+                        style Micro fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 3: 场景化应用实战 -->
+        <a-tab-pane key="3" tab="3. 应用场景实战">
+            
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 顺序异步任务流 <span class="method-tag">Sequential Tasks</span></h2>
+                <div class="logic-desc">解决“回调地狱”，将嵌套请求转为水平的流式代码。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        F1["fetch API 1"] --> J1["解析 JSON 1"]
+                        J1 --> F2["fetch API 2 (依赖1的结果)"]
+                        F2 --> J2["解析 JSON 2"]
+                        J2 --> F3["fetch API 3"]
+                        F3 --> Final["展示最终汇总数据"]
+                        style F1 fill:#e6f7ff,stroke:#1890ff
+                        style F2 fill:#e6f7ff,stroke:#1890ff
+                        style F3 fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 错误恢复与容灾机制 <span class="method-tag">Error Recovery</span></h2>
+                <div class="logic-desc">在 catch 中返回默认值或缓存，确保主流程不会因为非核心请求失败而崩溃。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Req["请求服务器数据"] -- "网络失败" --> Fail["进入 catch"]
+                        Fail --> Cache["读取本地缓存/默认值"]
+                        Cache --> Continue["传递给下一个 then 正常渲染"]
+                        style Fail fill:#fff1f0,stroke:#ff4d4f
+                        style Cache fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 数据管道处理流程 <span class="method-tag">Data Pipeline</span></h2>
+                <div class="logic-desc">将数据通过“校验 -> 转换 -> 保存”的一系列异步工序。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Raw["原始数据"] --> V["validateData (校验)"]
+                        V --> T["transformData (转换)"]
+                        T --> S["saveData (持久化保存)"]
+                        S --> UI["通知 UI 流程结束"]
+                        style V fill:#e6f7ff,stroke:#1890ff
+                        style T fill:#e6f7ff,stroke:#1890ff
+                        style S fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 4: Promise 进阶与并发控制 -->
+        <a-tab-pane key="4" tab="4. Promise 并发控制 (Concurrency)">
+            <div style="padding: 10px;">
+                <!-- 1. Promise.all 逻辑 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 聚合执行：Promise.all() <span class="method-tag">All or Nothing</span></h2>
+                    <div class="logic-desc">
+                        <strong>核心逻辑：</strong> 接受一个 Promise 数组，只有当所有成员都成功时才返回成功数组；只要有一个失败，整体立即宣告失败。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                                Input["Promise 数组 [p1, p2, p3]"] --> Executor["Promise.all 调度器"]
+                                Executor --> P1["p1 (100ms)"]
+                                Executor --> P2["p2 (500ms)"]
+                                Executor --> P3["p3 (200ms)"]
+                                
+                                %% 全部成功的分支
+                                P1 & P2 & P3 -- "全部成功" --> Success(["[res1, res2, res3]"])
+                                
+                                %% 任一失败的分ize，使用分开指向来表达逻辑
+                                P1 -- "任一失败" --> Reject
+                                P2 -- "任一失败" --> Reject
+                                P3 -- "任一失败" --> Reject
+                                
+                                Reject(["立即触发 .catch()"])
+
+                                style Success fill:#f6ffed,stroke:#52c41a
+                                style Reject fill:#fff1f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Promise.race 逻辑 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 竞速模式：Promise.race() <span class="method-tag">Fastest Wins</span></h2>
+                    <div class="logic-desc">
+                        <strong>核心逻辑：</strong> 数组中哪个 Promise 先执行完（无论成功还是失败），就返回那个结果，其余结果被忽略。常用于请求超时控制。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Input["Promise 数组 [p1, p2]"] --> Race["赛道调度器"]
+                            Race --> P1["网络请求 (Slow)"]
+                            Race --> P2["超时定时器 (Fast)"]
+                            P2 -- "第一个胜出" --> Result(["返回 P2 的状态与数据"])
+                            style P2 fill:#fff7e6,stroke:#faad14
+                            style Result fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 5: async / await 深度解析 -->
+        <a-tab-pane key="5" tab="5. async / await 语法糖">
+            <div style="padding: 10px;">
+                <!-- 1. async 函数本质 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 函数包装：async 声明 <span class="method-tag">Function Wrapper</span></h2>
+                    <div class="logic-desc">
+                        使用 async 声明的函数会自动将返回值包装在一个 Promise 中。即使返回普通字符串，外部也要用 .then() 接收。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Start["调用 async 函数"] --> Exec["执行函数体逻辑"]
+                            Exec --> ReturnType{"返回什么?"}
+                            ReturnType -- "普通值 (String/Number)" --> Wrap["Promise.resolve(值)"]
+                            ReturnType -- "抛出异常 (Throw)" --> Err["Promise.reject(错误)"]
+                            Wrap --> Final["返回最终 Promise 对象"]
+                            Err --> Final
+                            style Wrap fill:#e6f7ff,stroke:#1890ff
+                            style Err fill:#fff1f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. await 执行流 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 暂停与恢复：await 机制 <span class="method-tag">Pause & Resume</span></h2>
+                    <div class="logic-desc">
+                        await 会暂停当前 async 函数的执行，等待 Promise 解决，获取结果后才继续往下走。它让异步代码在视觉上呈现同步顺序。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Call["进入函数体"] --> Step1["执行同步逻辑 A"]
+                            Step1 --> Await["遇到 await 关键字"]
+                            Await --> Yield["暂停执行，交出线程控制权"]
+                            Yield -- "Promise 状态变为 Fulfilled" --> Resume["恢复执行，获取 Result"]
+                            Resume --> Step2["执行后续逻辑 B"]
+                            style Await fill:#fff7e6,stroke:#faad14
+                            style Resume fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. try...catch 错误处理 -->
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 错误捕获：try...catch <span class="method-tag">Sync-like Error Handling</span></h2>
+                    <div class="logic-desc">
+                        无需多次 .catch()，直接使用传统的同步错误处理结构，代码逻辑更清晰。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Try["try 代码块"] --> Req["await 异步请求"]
+                            Req -- "状态: Rejected" --> Catch["catch 代码块捕获错误"]
+                            Req -- "状态: Fulfilled" --> Next["继续执行 try 内后续代码"]
+                            Catch --> Handler["统一错误日志/容错处理"]
+                            style Catch fill:#fff1f0,stroke:#ff4d4f
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- TAB 6: 模式对比与总结 -->
+        <a-tab-pane key="6" tab="6. 模式对比与场景选择">
+            <div style="padding: 10px;">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 编程风格演变 <span class="method-tag">Style Evolution</span></h2>
+                    <div class="logic-desc">从处理“回调地狱”到现在的“伪同步”写法。</div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            C1["Callback (回调函数): 嵌套深, 难维护"] --> C2["Promise (链式调用): 结构扁平, 但 then 较多"]
+                            C2 --> C3["async/await (同步写法): 极其简洁, 易于调试"]
+                            style C3 fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 决策指南：如何选择? <span class="method-tag">Decision Table</span></h2>
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 300px; border: 1px solid #d9d9d9; border-radius: 4px; padding: 15px;">
+                            <h4 style="color: #1890ff;">优先使用 Promise 的场景</h4>
+                            <ul style="line-height: 2;">
+                                <li>需要执行 **并发操作** (如 Promise.all)</li>
+                                <li>简单的一次性异步逻辑</li>
+                                <li>函数式编程风格的项目</li>
+                            </ul>
+                        </div>
+                        <div style="flex: 1; min-width: 300px; border: 1px solid #d9d9d9; border-radius: 4px; padding: 15px;">
+                            <h4 style="color: #52c41a;">优先使用 async/await 的场景</h4>
+                            <ul style="line-height: 2;">
+                                <li>有 **前后依赖** 的复杂异步流程</li>
+                                <li>复杂的错误处理逻辑 (try/catch 更直观)</li>
+                                <li>需要打断点单步调试异步代码</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        <!-- TAB 7: Promise 顺序链式执行深度拆解 (Reduce Pattern) -->
+        <a-tab-pane key="7" tab="7. Promise 顺序链式执行深度拆解">
+            <div style="padding: 10px;">
+                
+                <!-- 1. Reduce 构建异步链的宏观骨架 -->
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 宏观逻辑：从数组到 Promise 链 <span class="method-tag">Array.reduce Pattern</span></h2>
+                    <div class="logic-desc">
+                        <strong>语法解析：</strong> <code>reduce</code> 的初始值是 <code>Promise.resolve()</code>。在每次迭代中，我们把上一个 Promise (<code>chain</code>) 拿出来，用 <code>.then()</code> 挂载一个新的异步任务。这就像在修铁路，一节一节往后接。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Init["初始值: Promise.resolve()"] --> Link1["chain.then(Day 1)"]
+                            Link1 -- "等待 Day 1 完成" --> Link2["chain.then(Day 2)"]
+                            Link2 -- "等待 Day 2 完成" --> Link3["chain.then(Day 3)"]
+                            Link3 -- "..." --> Final["所有任务串行结束"]
+                            
+                            style Init fill:#f6ffed,stroke:#52c41a
+                            style Final fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 单次迭代的微观执行流 -->
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 微观执行：chain.then(() => ...) 的闭包机制 <span class="method-tag">Iteration Logic</span></h2>
+                    <div class="logic-desc">
+                        <strong>语法关键：</strong> <code>chain.then</code> 内部必须 <code>return</code> 一个新的 Promise（即 <code>fakeApiCall</code> 的返回结果），这样 <code>reduce</code> 的累加器才能接收到这个未完成的状态，从而实现“排队执行”。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            Input["当前日期参数 (param)"] --> Prev["上一个 Promise 状态 (chain)"]
+                            Prev -- "当状态变为 Fulfilled" --> Callback["触发 .then() 回调函数"]
+                            Callback --> API["执行 this.fakeApiCall(param)"]
+                            API -- "网络请求中..." --> Processing["处理数据 & 更新进度条 %"]
+                            Processing --> UpdateUI["this.$refs.modalForm.edit(...)"]
+                            UpdateUI --> Return["return 结果 (作为下一次的 chain)"]
+                            Return --> Next["进入下一次 reduce 循环"]
+                            
+                            style API fill:#f9f0ff,stroke:#722ed1
+                            style UpdateUI fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 数据流向与汇总机制 -->
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 终点汇总：allData 的归宿 <span class="method-tag">Final Aggregation</span></h2>
+                    <div class="logic-desc">
+                        <strong>逻辑说明：</strong> 所有的 <code>fakeApiCall</code> 结果都通过闭包被 <code>push</code> 进 <code>allData</code> 数组。当 reduce 彻底跑完，最后的 <code>.then()</code> 会拿到完整的 <code>allData</code> 进行汇总请求或导出。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                        graph LR
+                            subgraph Iteration ["异步迭代区间 (30~365次)"]
+                                D1["Day 1 Data"]
+                                D2["Day 2 Data"]
+                                DN["Day N Data"]
+                            end
+                            
+                            Iteration -- "push" --> Collector["allData 缓冲区"]
+                            Collector -- "串联结束" --> FinalCheck{"isExport?"}
+                            FinalCheck -- "Yes" --> Export["downloadExcel(allData)"]
+                            FinalCheck -- "No" --> Summary["finalApiCall(allData)"]
+                            
+                            Summary --> Render["更新表格 dataSource"]
+                            
+                            style Collector fill:#fff1f0,stroke:#ff4d4f
+                            style Render fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 技术代码解读 (对照组) -->
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 代码语法骨架解读 <span class="method-tag">Syntax Anatomy</span></h2>
+                    <div style="background-color: #282c34; color: #abb2bf; padding: 20px; border-radius: 8px; font-family: 'Consolas';">
+                        <p><span style="color: #c678dd;">return</span> dateParams.<span style="color: #61afef;">reduce</span>((<span style="color: #e06c75;">chain</span>, <span style="color: #e06c75;">param</span>) => {</p>
+                        <p style="padding-left: 20px;"><span style="color: #c678dd;">return</span> <span style="color: #e06c75;">chain</span>.<span style="color: #61afef;">then</span>(() => {</p>
+                        <p style="padding-left: 40px;"><span style="color: #6a9955;">// 这里的 return 是关键：它将 api 的 Promise 传给累加器</span></p>
+                        <p style="padding-left: 40px;"><span style="color: #c678dd;">return</span> <span style="color: #d19a66;">this</span>.<span style="color: #61afef;">fakeApiCall</span>(<span style="color: #e06c75;">param</span>).<span style="color: #61afef;">then</span>(<span style="color: #e06c75;">data</span> => { ... });</p>
+                        <p style="padding-left: 20px;">});</p>
+                        <p>}, <span style="color: #e5c07b;">Promise</span>.<span style="color: #61afef;">resolve</span>());</p>
+                    </div>
+                    <div class="logic-desc" style="margin-top: 15px; background-color: #fffbe6; border-left-color: #ffe58f; color: #856404;">
+                        <strong>为什么不用 Promise.all？</strong> 如果日期范围是一年（365天），<code>Promise.all</code> 会瞬间发出 365 个并发请求，导致浏览器挂起或后端网关限流。<code>reduce</code> 方案每次只发一个请求，用户能看到进度条一点点走动，体验极佳。
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    // 注册 Antd 组件
+    Vue.use(antd);
+
+    // 初始化 Mermaid
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        methods: {
+            // 当 Tab 切换时，重新运行 Mermaid 解析
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>
