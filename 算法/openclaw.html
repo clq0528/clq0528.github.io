@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 智能体全景配置与架构逻辑报告</title>
+<!-- 
+https://clq0528.github.io/算法/openclaw.html
+-->
+    <!-- 引入 Ant Design Vue V2 样式 (兼容Vue2) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #fa541c; /* 龙虾红/橙色 */
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { background: var(--bg-gray); padding: 24px; font-family: -apple-system, system-ui, sans-serif; }
+
+        .header {
+            background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; border-radius: 8px; margin-bottom: 30px; padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8; padding-bottom: 10px; color: var(--navy-blue); 
+            display: flex; align-items: center;
+        }
+        
+        h2::before {
+            content: ""; width: 4px; height: 20px; background: var(--primary-color);
+            margin-right: 12px; border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; background: #fafafa; border: 1px solid #ebedf0; 
+            border-radius: 6px; padding: 20px; margin: 15px 0;
+            overflow-x: auto;
+        }
+
+        .logic-desc {
+            margin: 10px 0; padding: 12px; background: #fff7e6;
+            border-left: 4px solid #fa541c; color: #873800; font-weight: 500;
+        }
+
+        .code-block {
+            background: #1d1d1d; color: #a9b7c6; padding: 15px; border-radius: 6px;
+            font-family: 'Consolas', monospace; font-size: 13px; overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        .keyword { color: #cc99cd; }
+        .string { color: #7cb305; }
+        .comment { color: #5c6370; font-style: italic; }
+
+        .step-num {
+            background: var(--primary-color); color: white; border-radius: 50%;
+            width: 24px; height: 24px; display: inline-flex;
+            justify-content: center; align-items: center; margin-right: 10px;
+        }
+
+        .ant-tabs-nav-container { font-size: 16px; font-weight: bold; }
+        .mermaid { background: transparent !important; }
+        .logic-block {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px;
+            padding: 20px; margin-bottom: 20px;
+        }
+
+        .role-tag {
+            padding: 2px 10px; border-radius: 12px; color: white; font-size: 12px; font-weight: bold;
+        }
+        .tag-client { background: var(--client-blue); }
+        .tag-gateway { background: var(--gateway-orange); }
+        .tag-runtime { background: var(--runtime-purple); }
+
+        .desc-text { color: #555; line-height: 1.6; margin-top: 10px; }
+        
+        /* 响应式调整 */
+        .ant-tabs-nav-container { font-size: 16px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">OpenClaw 🦞 智能体架构全景配置报告</h1>
+        <p style="color: #666; margin-top: 10px;">基于多渠道集成、自动化工具链与混合模型路由的分布式智能体系统</p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange" type="card">
+        
+        <!-- Tab 1: 核心身份与环境 -->
+        <a-tab-pane key="1" tab="🏗️ 基础与身份认证">
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 系统初始化与环境注入逻辑</h2>
+                <div class="logic-desc">系统启动时首先加载 <code>env</code> 变量与 <code>identity</code> 身份标识，决定 Agent 的行为基调。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["系统启动"] --> Config["加载 openclaw.json"]
+                        Config --> Identity["Identity 身份初始化 (Emoji/Theme)"]
+                        Config --> Env["Env 环境变量注入 (API_KEY)"]
+                        Env --> Shell["Shell 环境隔离 (Timeout/Enabled)"]
+                        Shell --> Ready["核心运行环境就绪"]
+                        
+                        style Identity fill:#fff7e6,stroke:#fa541c
+                        style Env fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 认证配置文件路由 (Auth Profiles)</h2>
+                <div class="logic-desc">支持 OAuth 与 API_KEY 的多级回退机制，确保模型调用的稳定性。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        ModelReq["模型调用请求"] --> AuthOrder{"认证优先级排序 (Order)"}
+                        AuthOrder -- "优先" --> OAuth["OAuth 订阅模式 (Email)"]
+                        AuthOrder -- "回退" --> APIKey["API_KEY 模式"]
+                        OAuth --> Validate{"校验有效性"}
+                        APIKey --> Validate
+                        Validate -- "FAIL" --> Retry["尝试下一个 Profile"]
+                        Validate -- "SUCCESS" --> Execution["执行模型推理"]
+
+                        style OAuth fill:#f6ffed,stroke:#52c41a
+                        style Retry fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 2: 运行时与模型路由 -->
+        <a-tab-pane key="2" tab="🧠 智能体运行时 (Agent)">
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 智能体决策与模型回退链路</h2>
+                <div class="logic-desc">Agent 采用 <code>primary + fallbacks</code> 架构，应对模型 API 停服或速率限制。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Task["接收用户指令"] --> Primary["主模型: Claude 3.5 Sonnet"]
+                        Primary -- "超时/报错" --> Fallback1["回退1: Claude 3 Opus"]
+                        Fallback1 -- "报错" --> Fallback2["回退2: GPT-5.2"]
+                        Fallback2 --> FinalResult["生成响应"]
+                        
+                        subgraph "模型流控 (Streaming Control)"
+                        FinalResult --> BlockStream{"分片渲染 (Chunk)"}
+                        BlockStream -- "800-1200字" --> HumanDelay["自然延迟模拟"]
+                        end
+
+                        style Primary fill:#e6f7ff,stroke:#1890ff
+                        style Fallback1 fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">4</span> 存储与记忆检索流 (Memory & Store)</h2>
+                <div class="logic-desc">基于 Gemini 向量化实现的记忆检索，支持多路径文档注入。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Query["用户提问"] --> Vector["Gemini Embedding 向量化"]
+                        Vector --> Search["Memory Search (本地+外部文档)"]
+                        Search --> Context["上下文增强 (RAG)"]
+                        Context --> Agent["Agent 推理"]
+                        Agent --> Session["Session 持久化 (Daily Reset)"]
+                        
+                        style Search fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+            
+            <div style="padding: 24px;">
+                <div class="logic-block" style="background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px;">
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 20px; color: #001529; display: flex; align-items: center;">
+                        <span style="width: 4px; height: 18px; background: #fa541c; margin-right: 10px; border-radius: 2px;"></span>
+                        OpenClaw 三位一体运行架构 (修复版)
+                    </div>
+
+                    <!-- 图表容器 -->
+                    <div class="mermaid-container" style="background: #fafafa; padding: 20px; border: 1px solid #f0f0f0; border-radius: 6px; overflow-x: auto;">
+                        <div class="mermaid">
+                        graph LR
+                            %% 1. 交互层
+                            subgraph Client_Layer
+                                C1[iOS and Android App]
+                                C2[macOS MenuBar]
+                                C3[Terminal CLI]
+                            end
+
+                            %% 2. 网关层
+                            subgraph Gateway_Layer
+                                G1[WS Server 18789]
+                                G2[Auth and ACL]
+                                G3[Session Manager]
+                            end
+
+                            %% 3. 运行时层
+                            subgraph Runtime_Layer
+                                R1[Agent Logic Core]
+                                R2[Tool Executor]
+                                R3[Docker Sandbox]
+                            end
+
+                            %% 4. 外部
+                            L1((Cloud LLM))
+
+                            %% 定义连接 (使用最稳妥的单线箭头)
+                            C1 --> G1
+                            C2 --> G1
+                            C3 --> G1
+                            G1 --> G2
+                            G2 --> G3
+                            G3 -.-> R1
+                            R1 <--> R2
+                            R2 --> R3
+                            R1 --- L1
+
+                            %% 节点染色 (去掉 subgraph 染色，只染节点)
+                            style C1 fill:#e6f7ff,stroke:#1890ff
+                            style C2 fill:#e6f7ff,stroke:#1890ff
+                            style C3 fill:#e6f7ff,stroke:#1890ff
+                            
+                            style G1 fill:#fff7e6,stroke:#fa541c
+                            style G2 fill:#fff7e6,stroke:#fa541c
+                            style G3 fill:#fff7e6,stroke:#fa541c
+                            
+                            style R1 fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                            style R2 fill:#f9f0ff,stroke:#722ed1
+                            style R3 fill:#fff1f0,stroke:#f5222d
+                            
+                            style L1 fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+
+                    <!-- 结论描述区 -->
+                    <div style="margin-top: 24px; padding: 15px; background: #f0f5ff; border-radius: 6px; border-left: 4px solid #1890ff;">
+                        <div style="margin-bottom: 10px; color: #003a8c; font-weight: bold;">🔍 架构逻辑纠正：</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                            <div style="font-size: 13px;">
+                                <b style="color: #1890ff;">1. Client (外部端)</b><br/>
+                                <b>身份：</b>UI 渲染器。<br/>
+                                <b>逻辑：</b>它不具备“思考”能力，只是通过 WS 协议将你的语音/文字发给网关，并把网关传回的流式文字显示出来。
+                            </div>
+                            <div style="font-size: 13px;">
+                                <b style="color: #fa541c;">2. Gateway (身体)</b><br/>
+                                <b>身份：</b>宿主服务器。<br/>
+                                <b>逻辑：</b>常驻后台。它负责“接线”，确保无论你从手机还是电脑连进来，都能找到对应的会话灵魂（Runtime）。
+                            </div>
+                            <div style="font-size: 13px;">
+                                <b style="color: #722ed1;">3. Runtime (大脑)</b><br/>
+                                <b>身份：</b>逻辑执行单元。<br/>
+                                <b>逻辑：</b>由 Gateway 动态创建。它负责分析 LLM 的回复，决定什么时候去跑代码（Sandbox），什么时候去读文件。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-block">
+                <a-table :pagination="false" :columns="columns" :data-source="data" bordered size="middle">
+                    <template slot="role" slot-scope="text">
+                        <span :class="['role-tag', text === 'Client' ? 'tag-client' : (text === 'Gateway' ? 'tag-gateway' : 'tag-runtime')]">{{ text }}</span>
+                    </template>
+                </a-table>
+            </div>
+            <div class="logic-block" style="background:#fff1f0; border-color:#ffa39e;">
+                <strong>💡 为什么要把它们分开？</strong><br>
+                如果把 Agent Runtime 放在 Client（比如手机里），当你关掉手机应用时，正在执行的 <code>npm install</code> 或 <code>Python 爬虫</code> 就会中断。通过 <strong>Gateway 托管 Runtime</strong>，你可以用手机下个指令，然后去睡觉，任务在服务器后台继续运行，明天早上用 Mac 连上去看结果。
+            </div>
+            <div class="logic-block">
+                <div style="font-weight:bold;">典型运行场景：你在外用手机（Client）让机器人处理服务器上的日志。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    sequenceDiagram
+                        participant C as Client (你的手机)
+                        participant G as Gateway (远程服务器)
+                        participant R as Agent Runtime (网关内的思考进程)
+                        participant D as Docker Sandbox (执行环境)
+
+                        C->>G: 发送指令 "分析 /var/log/syslog"
+                        G->>R: 唤醒对应会话的 Runtime
+                        R->>R: 思考：我需要使用 exec 工具
+                        R->>D: 启动容器并执行指令
+                        D-->>R: 返回 1000 行日志输出
+                        R-->>G: 将输出存入内存，准备总结
+                        G-->>C: 通过 WebSocket 实时推流显示 "正在读取日志..."
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+        
+
+        <!-- Tab 3: 多渠道集成 -->
+        <a-tab-pane key="3" tab="🌐 渠道集成 (Channels)">
+            <div class="section-card">
+                <h2><span class="step-num">5</span> 消息接入与权限网控</h2>
+                <div class="logic-desc">各平台独立配置，通过 <code>allowFrom</code> 和 <code>requireMention</code> 实现权限隔离。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        User["多端用户"] --> Channels{"渠道接入层"}
+                        Channels -- "WhatsApp" --> WA_Filter["白名单校验/DM策略"]
+                        Channels -- "Telegram" --> TG_Filter["BotToken验证"]
+                        Channels -- "Discord" --> DS_Filter["Guild/Channel 过滤"]
+                        Channels -- "Slack" --> SL_Filter["Slash Command 匹配"]
+                        
+                        WA_Filter & TG_Filter & DS_Filter & SL_Filter --> Router["消息路由 (Routing)"]
+                        Router --> Queue["采集队列 (Collect Mode)"]
+                        Queue --> Process["Agent 核心处理"]
+
+                        style Channels fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 4: 工具与沙箱扩展 -->
+        <a-tab-pane key="4" tab="🛠️ 工具与沙箱 (Tools)">
+            <div class="section-card">
+                <h2><span class="step-num">6</span> 工具调用与提权逻辑 (Elevated)</h2>
+                <div class="logic-desc">高危操作（如 Shell 执行）需通过 <code>elevated</code> 白名单校验。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        AgentCall["Agent 申请工具调用"] --> Check["Tool Allowlist 检查"]
+                        Check -- "普通 (read/write)" --> Exec["直接执行"]
+                        Check -- "高危 (exec/apply_patch)" --> Elevated{"提权校验"}
+                        Elevated -- "用户在名单中" --> Exec
+                        Elevated -- "不在名单" --> Deny["拒绝执行 (Deny)"]
+                        
+                        Exec --> Sandbox{"沙箱模式判定"}
+                        Sandbox -- "PerSession" --> Docker["Docker 容器隔离"]
+                        Sandbox -- "Main" --> MainProcess["主进程运行"]
+
+                        style Elevated fill:#fff1f0,stroke:#f5222d
+                        style Docker fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">7</span> 多媒体处理链路 (Media Processing)</h2>
+                <div class="logic-desc">音频/视频任务根据配置路由到专用处理模型。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Media["收到媒体文件"] --> Type{"文件类型判定"}
+                        Type -- "Audio" --> Whisper["Whisper/OpenAI 转译"]
+                        Type -- "Video" --> GeminiVideo["Gemini-Flash 视觉分析"]
+                        Whisper & GeminiVideo --> TextRef["转化为文本上下文"]
+                        TextRef --> MainModel["主模型推理"]
+
+                        style Whisper fill:#f6ffed,stroke:#52c41a
+                        style GeminiVideo fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 5: 系统集成与自动化 -->
+        <a-tab-pane key="5" tab="🔌 外部集成 (Hooks/Gateway)">
+            <div class="section-card">
+                <h2><span class="step-num">8</span> Webhook 触发与 Gmail 联动链路</h2>
+                <div class="logic-desc">外部事件通过 Webhook 进入系统，经过 Transform 转换为 Agent 指令。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Gmail["Gmail 新邮件"] --> PubSub["Google Pub/Sub"]
+                        PubSub --> HookEndpoint["/hooks/gmail (OpenClaw)"]
+                        HookEndpoint --> Transform["Transform (gmail.js)"]
+                        Transform --> Template["渲染 MessageTemplate"]
+                        Template --> WakeAgent["唤醒 Agent (WakeMode: now)"]
+                        WakeAgent --> Deliver["结果反馈至指定 Channel"]
+                        
+                        style Gmail fill:#fff1f0,stroke:#f5222d
+                        style Transform fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">9</span> 网关与远程控制层 (Gateway)</h2>
+                <div class="logic-desc">支持本地/远程混合模式，通过 Tailscale 实现内网穿透。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Admin["管理员"] --> UI["Control UI (Port 18789)"]
+                        UI --> Auth["Token 认证 / Tailscale 校验"]
+                        Auth --> Gateway["Gateway 核心"]
+                        Gateway --> Tailscale["Tailscale Funnel (公开访问)"]
+                        Gateway --> LocalAgent["本地 Agent 控制"]
+                        
+                        style Tailscale fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+            <div class="section-card">
+                <div class="step-title">Docker 容器分布架构 (1 + N)</div>
+                <div class="info-alert">
+                    OpenClaw 并非单一容器，它通过 <b>Docker-out-of-Docker (DooD)</b> 模式管理多个沙盒容器。
+                </div>
+                <div class="chart-box">
+                    <div class="mermaid">
+                    graph LR
+                        subgraph "宿主机 (Docker Host)"
+                            Main["OpenClaw Main Container<br/>(常驻进程)"]
+                            Main -- "Docker API / Socket" --> Daemon["Docker Daemon"]
+                            
+                            subgraph "动态沙盒池 (Dynamic Sandboxes)"
+                                Daemon --> SB1["Sandbox-Session-A<br/>(Ephemeral)"]
+                                Daemon --> SB2["Sandbox-Session-B<br/>(Ephemeral)"]
+                                Daemon --> SB3["Sandbox-Session-C<br/>(Ephemeral)"]
+                            end
+                        end
+                        
+                        User["用户消息"] --> Main
+                        SB1 & SB2 & SB3 -- "执行结果" --> Main
+                        
+                        style Main fill:#e6f7ff,stroke:#1890ff,stroke-width:2px
+                        style SB1,SB2,SB3 fill:#f9f0ff,stroke:#722ed1,stroke-dasharray: 5 5
+                    </div>
+                </div>
+                <div style="margin-top:20px;">
+                    <h3>组件清单：</h3>
+                    <a-list item-layout="horizontal" :data-source="containerData">
+                        <a-list-item slot="renderItem" slot-scope="item">
+                            <a-list-item-meta :description="item.desc">
+                                <span slot="title">{{ item.name }}</span>
+                            </a-list-item-meta>
+                            <a-tag :color="item.color">{{ item.type }}</a-tag>
+                        </a-list-item>
+                    </a-list>
+                </div>
+            </div>
+            <div class="section-card">
+                <div class="step-title">代码执行沙盒 (Sandbox) 运行流</div>
+                <div class="info-alert">
+                    当 Agent 收到 <code>exec</code> 指令时，它不会在主容器运行，而是启动一个全新的隔离容器。
+                </div>
+                <div class="chart-box">
+                    <div class="mermaid">
+                    graph LR
+                        Trigger["Agent 决定运行代码"] --> Create["调用 Docker API<br/>创建 Sandbox 容器"]
+                        Create --> Mount["挂载 Workspace<br/>(Read/Write)"]
+                        Mount --> Network["配置 Network: none<br/>(网络隔离)"]
+                        Network --> Exec["执行工具指令<br/>(Python/Shell)"]
+                        Exec --> Result["捕获 Stdout/Stderr"]
+                        Result --> Destroy["销毁容器<br/>(或根据 perSession 保留)"]
+                        
+                        style Network fill:#fff1f0,stroke:#f5222d
+                        style Destroy fill:#fafafa,stroke:#d9d9d9
+                    </div>
+                </div>
+            </div>
+            <div class="section-card">
+                <div class="step-title">Sandbox 配置项深度解析</div>
+                <div class="code-snippet">
+                    <span style="color:#d19a66;">sandbox</span>: {<br>
+                    &nbsp;&nbsp;<span style="color:#e06c75;">mode</span>: <span style="color:#98c379;">"non-main"</span>, <span style="color:#5c6370;">// 强制在非主进程执行</span><br>
+                    &nbsp;&nbsp;<span style="color:#e06c75;">perSession</span>: <span style="color:#d19a66;">true</span>, <span style="color:#5c6370;">// 每个会话独立一个 Docker 实例</span><br>
+                    &nbsp;&nbsp;<span style="color:#e06c75;">docker</span>: {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#e06c75;">image</span>: <span style="color:#98c379;">"openclaw-sandbox:bookworm-slim"</span>, <span style="color:#5c6370;">// 专用镜像</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#e06c75;">network</span>: <span style="color:#98c379;">"none"</span>, <span style="color:#5c6370;">// 关键：禁止沙盒访问互联网</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#e06c75;">readOnlyRoot</span>: <span style="color:#d19a66;">true</span>, <span style="color:#5c6370;">// 根文件系统只读，防止篡改镜像</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#e06c75;">user</span>: <span style="color:#98c379;">"1000:1000"</span> <span style="color:#5c6370;">// 以非 root 用户运行</span><br>
+                    &nbsp;&nbsp;}<br>
+                    }
+                </div>
+            </div>
+            <div class="section-card">
+                <div class="step-title">网关与通信流 通信路径：从用户到沙盒</div>
+                <div class="chart-box">
+                    <div class="mermaid">
+                    graph LR
+                        User["外部用户 (WhatsApp/Slack)"] -- "1. 消息输入" --> Main["OpenClaw Main"]
+                        Main -- "2. 模型判断需要工具" --> Agent["Agent Logic"]
+                        Agent -- "3. 启动沙盒" --> Sandbox[("Docker Sandbox")]
+                        Sandbox -- "4. 读写本地文件" --> Vol["Local Workspace"]
+                        Sandbox -- "5. 返回结果" --> Main
+                        Main -- "6. 响应用户" --> User
+                        
+                        subgraph "控制面 (Control Plane)"
+                            Gateway["Gateway UI / Tailscale"] -- "监控状态" --> Main
+                        end
+                    </div>
+                </div>
+            </div>
+            <div class="section-card" style="margin-top: 20px; border-top: 4px solid #fa541c;">
+                <h2>配置最佳实践示例 (JSON5)</h2>
+                <div class="code-block">
+                    <span class="comment">// 快速开始：最小 WhatsApp 机器人</span><br>
+                    {<br>
+                    &nbsp;&nbsp;<span class="keyword">agent</span>: { <span class="keyword">workspace</span>: <span class="string">"~/.openclaw/workspace"</span> },<br>
+                    &nbsp;&nbsp;<span class="keyword">channels</span>: {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">whatsapp</span>: { <span class="keyword">allowFrom</span>: [<span class="string">"+15555550123"</span>] }<br>
+                    &nbsp;&nbsp;}<br>
+                    }
+                </div>
+                <div style="margin-top: 15px; padding: 12px; background: #e6f7ff; border-left: 4px solid #1890ff;">
+                    <strong>架构提示：</strong>在生产环境下，建议开启 <code>sandbox.docker</code> 并通过 <code>tailscale</code> 进行网关加密，以确保执行本地脚本时的安全性。
+                </div>
+            </div>
+            <div class="tab-content">
+                <div class="logic-card">
+                    <div class="card-title">设备发现机制-多维度发现链路 (Discovery Ingress)</div>
+                    <div class="alert-info">设计目标：将所有发现/广播逻辑保留在 Gateway 进程中，客户端作为消费者进行发现。</div>
+                    <div class="chart-area">
+                        <div class="mermaid">
+                        graph LR
+                            GW["Node Gateway (网关)"] -- "1. Bonjour 广播" --> LAN["本地局域网 (LAN)"]
+                            GW -- "2. Tailnet 提示" --> Tailscale["Tailscale 虚拟网络 (WAN)"]
+                            GW -- "3. 静态配置" --> Manual["手动输入 / SSH 隧道"]
+                            
+                            LAN -- "mDNS 浏览" --> Client["客户端 (macOS/iOS/Android)"]
+                            Tailscale -- "MagicDNS 发现" --> Client
+                            Manual -- "127.0.0.1 转发" --> Client
+                            
+                            style GW fill:#fff7e6,stroke:#fa541c,stroke-width:2px
+                            style Client fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+
+                <div class="logic-card">
+                    <div class="card-title">Bonjour 服务信标 (Service Beacon) 详情</div>
+                    <div class="code-box">
+                        <span class="token-comment">// 服务类型: _openclaw-gw._tcp</span><br>
+                        {<br>
+                        &nbsp;&nbsp;<span class="token-key">"role"</span>: <span class="token-val">"gateway"</span>,<br>
+                        &nbsp;&nbsp;<span class="token-key">"lanHost"</span>: <span class="token-val">"hostname.local"</span>,<br>
+                        &nbsp;&nbsp;<span class="token-key">"gatewayPort"</span>: <span class="token-val">"18789"</span>, <span class="token-comment">// WS + HTTP 端口</span><br>
+                        &nbsp;&nbsp;<span class="token-key">"sshPort"</span>: <span class="token-val">"22"</span>, <span class="token-comment">// 远程回退端口</span><br>
+                        &nbsp;&nbsp;<span class="token-key">"tailnetDns"</span>: <span class="token-val">"magicdns-name"</span>, <span class="token-comment">// Tailscale 提示</span><br>
+                        &nbsp;&nbsp;<span class="token-key">"canvasPort"</span>: <span class="token-val">"18793"</span> <span class="token-comment">// 画布主机端口</span><br>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="tab-content">
+                <div class="logic-card">
+                    <div class="card-title">传输协议与策略 (Transport) 客户端传输选择算法 (Transport Strategy)</div>
+                    <div class="chart-area">
+                        <div class="mermaid">
+                        graph LR
+                            Start["客户端启动连接"] --> P1{"已配对直连端点<br/>且可达?"}
+                            P1 -- "是" --> DirectWS["使用直连 WS (最佳体验)"]
+                            P1 -- "否" --> P2{"Bonjour 发现<br/>同一 LAN 网关?"}
+                            P2 -- "是" --> OneClick["提供'一键使用'并保存端点"]
+                            P2 -- "否" --> P3{"Tailnet DNS/IP<br/>是否配置?"}
+                            P3 -- "是" --> TryTail["尝试 Tailnet 直连"]
+                            P3 -- "否" --> SSHFallback["回退到 SSH 端口转发 (通用方案)"]
+                            
+                            style DirectWS fill:#f6ffed,stroke:#52c41a
+                            style SSHFallback fill:#fff1f0,stroke:#f5222d
+                        </div>
+                    </div>
+                </div>
+
+                <div class="logic-card">
+                    <div class="card-title">为什么同时保留“直连”与 SSH？</div>
+                    <a-row :gutter="16">
+                        <a-col :span="12">
+                            <div style="padding:10px; border:1px solid #d9d9d9; border-radius:4px;">
+                                <strong style="color:var(--success-green)">直连 WS (Direct WS)</strong>
+                                <ul style="margin-top:10px; font-size:13px;">
+                                    <li>通过 Bonjour/Tailnet 自动发现</li>
+                                    <li>配对令牌 + ACL 细粒度管理</li>
+                                    <li>无需 Shell 访问，更安全可审计</li>
+                                </ul>
+                            </div>
+                        </a-col>
+                        <a-col :span="12">
+                            <div style="padding:10px; border:1px solid #d9d9d9; border-radius:4px;">
+                                <strong style="color:var(--link-blue)">SSH 回退 (SSH Fallback)</strong>
+                                <ul style="margin-top:10px; font-size:13px;">
+                                    <li>跨网络通用的终极回退方案</li>
+                                    <li>解决多播/mDNS 在复杂网络失效问题</li>
+                                    <li>无需开启额外入站端口</li>
+                                </ul>
+                            </div>
+                        </a-col>
+                    </a-row>
+                </div>
+            </div>
+            <div class="tab-content">
+                <div class="logic-card">
+                    <div class="card-title">配对认证流程 (Pairing Flow)</div>
+                    <div class="chart-area">
+                        <div class="mermaid">
+                        graph LR
+                            Node["移动节点 / 客户端"] -- "1. 发起配对请求" --> GW["Gateway (权威源)"]
+                            GW -- "2. 显示配对提示" --> Op["操作员 (批准/拒绝)"]
+                            Op -- "3. 批准" --> Auth["生成令牌/密钥对"]
+                            Auth -- "4. 存入 ACL" --> ACL["速率限制 & 权限控制"]
+                            ACL -- "5. 建立连接" --> Session["受信任会话"]
+                            
+                            style Auth fill:#f6ffed,stroke:#52c41a
+                            style Op fill:#fff7e6,stroke:#faad14
+                        </div>
+                    </div>
+                </div>
+
+                <div class="logic-card">
+                    <div class="card-title">各组件核心职责分配</div>
+                    <a-table :pagination="false" size="small" :columns="roleColumns" :data-source="roleData">
+                        <template slot="component" slot-scope="text">
+                            <a-tag color="blue">{{ text }}</a-tag>
+                        </template>
+                    </a-table>
+                </div>
+            </div>
+            <div class="desc">
+                <strong>核心场景：</strong>操作员控制、移动端节点接入。这些场景需要<strong>实时双向通信</strong>（如查看流式日志、发送输入）。
+            </div>
+            <div class="mermaid-box">
+                <div class="mermaid">
+                graph LR
+                    Client["macOS 菜单栏 / iOS 节点"] -- "WebSocket (Port 18789)" --> Gateway["OpenClaw Gateway"]
+                    Gateway -- "实时日志推流" --> Client
+                    Client -- "发送指令/stdin" --> Gateway
+                    
+                    style Client fill:#f9f0ff,stroke:#722ed1
+                    style Gateway fill:#fff7e6,stroke:#fa541c
+                </div>
+            </div>
+            <div class="desc">
+                <span class="protocol-tag ws">WebSocket</span> <strong>唯一选择：</strong> 用于传输流式输出（Streaming logs）和维持长连接。
+            </div>
+            <div class="desc">
+                <strong>核心场景：</strong>外部集成 (HTTP 为主)-调用 AI 模型、接收 Webhooks。这些场景通常是<strong>无状态的请求/响应</strong>。
+            </div>
+            <div class="mermaid-box">
+                <div class="mermaid">
+                graph LR
+                    Gateway["OpenClaw Gateway"] -- "HTTPS POST (REST)" --> AI["AI Providers (Anthropic/OpenAI)"]
+                    Gmail["Gmail / Webhooks"] -- "HTTP POST" --> Gateway
+                    
+                    style AI fill:#e6f7ff,stroke:#1890ff
+                    style Gateway fill:#fff7e6,stroke:#fa541c
+                </div>
+            </div>
+            <div class="desc">
+                <span class="protocol-tag http">HTTPS/REST</span> <strong>标准做法：</strong> 与云端服务交互时不使用 WS，而是标准的 API 调用。
+            </div>
+            <div class="desc">
+                <strong>核心场景：</strong>本地执行 (Pipe/Socket 为主)-运行本地脚本、操作 Docker 沙盒。
+            </div>
+            <div class="mermaid-box">
+                <div class="mermaid">
+                graph LR
+                    Gateway["OpenClaw Gateway"] -- "Unix Socket / Stdio" --> Docker["Docker Daemon / Sandbox"]
+                    Gateway -- "Spawn Process" --> Shell["Local Shell (Exec)"]
+                    
+                    style Docker fill:#f6ffed,stroke:#52c41a
+                    style Shell fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+            <div class="desc">
+                <span class="protocol-tag pipe">Stdio / Unix Socket</span> <strong>底层调用：</strong> 执行 <code>exec</code> 时，网关是通过操作系统管道（Pipe）或 Docker API 与子进程通信的。
+            </div>
+            <div style="background:#fff7e6; padding:15px; border-radius:8px; border:1px solid #ffe58f; margin-top:20px;">
+                <strong>总结：</strong>
+                <ul>
+                    <li><strong>WebSocket</strong> 仅用于 <b>Client <-> Gateway</b> 之间的“控制链路”。</li>
+                    <li><strong>HTTPS/REST</strong> 用于 <b>Gateway <-> 云端 AI / Webhooks</b> 之间的“数据链路”。</li>
+                    <li><strong>Pipe / Docker API</strong> 用于 <b>Gateway <-> 沙盒/操作系统</b> 之间的“执行链路”。</li>
+                </ul>
+            </div>
+        </a-tab-pane>
+        <!-- Tab 6: Exec 工具解析 -->
+        <a-tab-pane key="6" tab="🚀 Exec 工具 (任务发起)">
+            <div class="logic-card">
+                <div class="section-title">指令执行全链路流程图</div>
+                <div class="mermaid-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["收到 Shell 指令"] --> CheckPty{"是否需要 PTY?"}
+                        CheckPty -- "pty: true" --> TTY["创建虚拟终端"]
+                        CheckPty -- "false" --> Raw["普通进程流"]
+                        TTY & Raw --> ExecMode{"执行模式判定"}
+                        ExecMode -- "background: true" --> MoveBG["立即转入后台"]
+                        ExecMode -- "Default" --> Foreground["前台执行"]
+                        Foreground --> Wait{"超过 yieldMs?"}
+                        Wait -- "是" --> MoveBG
+                        Wait -- "否" --> Return["直接返回完整输出"]
+                        MoveBG --> Session["生成 SessionID"]
+                        Session --> Running["状态: running<br/>(保留内存末尾输出)"]
+                        
+                        style MoveBG fill:#fff7e6,stroke:#faad14,stroke-width:2px
+                        style Running fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <div class="section-title">关键参数说明</div>
+                <a-descriptions bordered :column="1" size="small">
+                    <a-descriptions-item label="command">待运行的 Shell 命令（必填）</a-descriptions-item>
+                    <a-descriptions-item label="yieldMs">自动转后台的延迟（默认 10000ms）。在此时间内的输出同步返回，超时则切后台。</a-descriptions-item>
+                    <a-descriptions-item label="background">若为 true，跳过前台等待，直接异步运行并返回 SessionID。</a-descriptions-item>
+                    <a-descriptions-item label="elevated">提权模式。若开启，指令将在 Docker 沙盒外的宿主机（Host）运行。</a-descriptions-item>
+                    <a-descriptions-item label="timeout">进程生命周期硬上限（默认 1800s）。</a-descriptions-item>
+                </a-descriptions>
+            </div>
+            <div class="logic-card">
+                <div class="section-title">后台会话控制逻辑</div>
+                <div class="mermaid-container">
+                    <div class="mermaid">
+                    graph LR
+                        Manager["Process 工具"] --> Action{"Action 类型"}
+                        Action -- "list" --> List["查看当前 Agent 所有活跃会话"]
+                        Action -- "poll" --> Poll["获取新增输出 + 状态更新"]
+                        Action -- "log" --> Log["读取历史聚合日志 (Offset/Limit)"]
+                        Action -- "write" --> Write["发送标准输入 (stdin)"]
+                        Action -- "kill/clear" --> Clean["终止进程或清理内存"]
+                        
+                        List & Poll & Log & Write & Clean --> MemoryPool[("内存会话池<br/>(非磁盘持久化)")]
+                        
+                        style MemoryPool fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div class="tip-box">
+                <strong>⚠️ 注意事项：</strong>
+                <ul>
+                    <li><strong>隔离性：</strong>Process 工具具有智能体隔离性，Agent A 无法操作 Agent B 的进程。</li>
+                    <li><strong>易失性：</strong>所有后台会话均在内存中，OpenClaw 进程重启后会全部丢失。</li>
+                    <li><strong>同步：</strong>只有运行 <code>poll</code> 或 <code>log</code> 且结果被记入聊天记录，输出才会被保存到历史数据库。</li>
+                </ul>
+            </div>
+            <div class="logic-card">
+                <div class="section-title">子进程信号转发架构</div>
+                <div class="mermaid-container">
+                    <div class="mermaid">
+                    graph LR
+                        Main["OpenClaw 主进程"] -- "Spawn" --> Helper["子进程桥接辅助器"]
+                        Helper -- "Watch" --> Target["目标 CLI / 进程"]
+                        Main -- "SIGINT / SIGTERM" --> Helper
+                        Helper -- "Forward" --> Target
+                        Target -- "Exit/Error" --> Helper
+                        Helper -- "Cleanup" --> Detach["分离监听器 (防孤儿进程)"]
+                        
+                        style Helper fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <div class="section-title">系统环境变量覆盖 (高级配置)</div>
+                <div class="code-window">
+                    <span class="json-key">PI_BASH_YIELD_MS</span>: <span class="json-num">10000</span> <span style="color:#5c6370;">// 默认 yield 毫秒数</span><br>
+                    <span class="json-key">PI_BASH_MAX_OUTPUT_CHARS</span>: <span class="json-num">100000</span> <span style="color:#5c6370;">// 内存保留输出字符上限</span><br>
+                    <span class="json-key">PI_BASH_JOB_TTL_MS</span>: <span class="json-num">3600000</span> <span style="color:#5c6370;">// 已完成任务保留时长 (1h)</span><br>
+                    <span class="json-key">tools.exec.notifyOnExit</span>: <span class="json-val">true</span> <span style="color:#5c6370;">// 后台任务结束时触发系统事件</span>
+                </div>
+            </div>
+            <div class="logic-card">
+                <div class="section-title">场景 A：执行耗时任务并轮询</div>
+                <div class="code-window">
+                    <span style="color:#5c6370;">// 第一步：发起任务，设置短 yield 使其迅速转入后台</span><br>
+                    { <br>
+                    &nbsp;&nbsp;<span class="json-key">"tool"</span>: <span class="json-val">"exec"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"command"</span>: <span class="json-val">"npm install"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"yieldMs"</span>: <span class="json-num">2000</span> <br>
+                    }<br><br>
+                    <span style="color:#5c6370;">// 第二步：使用 poll 获取进度</span><br>
+                    { <br>
+                    &nbsp;&nbsp;<span class="json-key">"tool"</span>: <span class="json-val">"process"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"action"</span>: <span class="json-val">"poll"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"sessionId"</span>: <span class="json-val">"sess_12345"</span> <br>
+                    }
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <div class="section-title">场景 B：交互式命令 (发送 stdin)</div>
+                <div class="code-window">
+                    <span style="color:#5c6370;">// 向正在等待确认的进程发送 'y' 和换行</span><br>
+                    { <br>
+                    &nbsp;&nbsp;<span class="json-key">"tool"</span>: <span class="json-val">"process"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"action"</span>: <span class="json-val">"write"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"sessionId"</span>: <span class="json-val">"sess_12345"</span>, <br>
+                    &nbsp;&nbsp;<span class="json-key">"data"</span>: <span class="json-val">"y\n"</span> <br>
+                    }
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    Vue.use(antd);
+
+    // Mermaid 初始化配置
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'default',
+        flowchart: { 
+            useMaxWidth: false, 
+            htmlLabels: true, 
+            curve: 'basis',
+            rankSpacing: 60,
+            nodeSpacing: 40
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                activeTab: '1',
+                containerData: [
+                    { name: 'openclaw-main', type: '常驻', color: 'blue', desc: '核心逻辑容器。处理 API、渠道（WhatsApp 等）、网关 UI 和 Agent 决策。' },
+                    { name: 'openclaw-sandbox', type: '动态/瞬时', color: 'purple', desc: '基于镜像创建的沙盒环境。用于执行 Python、执行脚本、处理文件。每个 Session 一个或按需创建。' },
+                    { name: 'redis (可选)', type: '辅助', color: 'green', desc: '如果配置了分布式存储，可能存在独立的 Redis 容器。' },
+                    { name: 'tailscale (可选)', type: '网络', color: 'cyan', desc: '用于内网穿透和网关安全访问的侧车容器。' }
+                ],
+                roleColumns: [
+                    { title: '组件名称', dataIndex: 'component', key: 'component', scopedSlots: { customRender: 'component' } },
+                    { title: '核心职责', dataIndex: 'duty', key: 'duty' }
+                ],
+                roleData: [
+                    { key: '1', component: 'Gateway (网关)', duty: '广播发现信标，拥有配对决策权，强制执行 ACL 和速率限制，托管 WS 端口。' },
+                    { key: '2', component: 'macOS 应用', duty: 'Gateway 管理前端。辅助选择网关，处理配对提示，并在直连失效时建立 SSH 隧道。' },
+                    { key: '3', component: 'iOS/Android 节点', duty: '利用 Bonjour 浏览实现便利连接，作为受信任节点接入 Gateway WebSocket。' }
+                ],
+                columns: [
+                    { title: '角色', dataIndex: 'role', key: 'role', scopedSlots: { customRender: 'role' }, width: '120px' },
+                    { title: '运行位置', dataIndex: 'location', key: 'location' },
+                    { title: '核心任务', dataIndex: 'task', key: 'task' },
+                    { title: '生命周期', dataIndex: 'life', key: 'life' }
+                ],
+                data: [
+                    { key: '1', role: 'Client', location: '你的 iPhone、Android、Mac 菜单栏', task: 'UI 展示、播放语音、收集语音输入', life: '随应用打开/关闭' },
+                    { key: '2', role: 'Gateway', location: 'Linux 服务器、NAS、或常开的 Mac', task: '网络穿透、管理 API Key、维护所有会话状态', life: '7x24 小时常驻' },
+                    { key: '3', role: 'Agent Runtime', location: 'Gateway 进程的子模块', task: '调用 LLM、执行 Shell 命令、管理工作区文件', life: '按需创建，任务完成后进入休眠' }
+                ]
+            };
+        },
+        methods: {
+            handleTabChange(key) {
+                this.activeTab = key;
+                // 切换 Tab 时延迟重新渲染 Mermaid，确保 DOM 已挂载
+                this.$nextTick(() => {
+                    this.renderCharts();
+                });
+            },
+            renderCharts() {
+                try {
+                    mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                } catch (e) {
+                    console.error("Mermaid 渲染失败:", e);
+                }
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                this.renderCharts();
+            });
+        }
+    });
+</script>
+</body>
+</html>
