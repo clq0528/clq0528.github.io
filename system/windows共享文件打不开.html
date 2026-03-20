@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>局域网共享访问障碍诊断与修复全景报告</title>
+<!-- 
+https://clq0528.github.io/system/windows共享文件打不开.html
+-->
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --error-color: #f5222d;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { background: var(--bg-gray); padding: 24px; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+        .header {
+            background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 24px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-left: 8px solid var(--error-color);
+        }
+
+        .section-card { 
+            background: #fff; border-radius: 8px; margin-bottom: 30px; padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8; padding-bottom: 12px; color: var(--navy-blue); 
+            display: flex; align-items: center; font-weight: 600;
+        }
+        
+        h2::before {
+            content: ""; width: 4px; height: 22px; background: var(--primary-color);
+            margin-right: 12px; border-radius: 2px;
+        }
+
+        .chart-container { 
+            width: 100%; background: #fafafa; border: 1px solid #ebedf0; 
+            border-radius: 8px; padding: 20px; margin: 15px 0; overflow-x: auto;
+        }
+
+        .desc-box {
+            margin: 15px 0; padding: 15px; border-radius: 6px; font-size: 14px; line-height: 1.6;
+        }
+        .desc-blue { background: #e6f7ff; border-left: 4px solid #1890ff; color: #003a8c; }
+        .desc-red { background: #fff1f0; border-left: 4px solid #f5222d; color: #a8071a; }
+        .desc-orange { background: #fff7e6; border-left: 4px solid #faad14; color: #873800; }
+
+        .step-num {
+            background: var(--navy-blue); color: white; border-radius: 50%;
+            width: 26px; height: 26px; display: inline-flex;
+            justify-content: center; align-items: center; margin-right: 10px; font-size: 14px;
+        }
+
+        code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; color: #c41d7f; font-family: Consolas, monospace; }
+        
+        .ant-tabs-nav-container { font-size: 16px; }
+        .status-tag { padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-left: 10px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #262626;">局域网共享访问障碍诊断报告</h1>
+        <p style="color: #595959; margin-top: 10px;">
+            目标地址：<code>\\192.168.233.132</code> | 错误类型：组织安全策略阻止来宾访问 (Insecure Guest Logons)
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange" type="card">
+        
+        <!-- Tab 1: 故障根因分析 -->
+        <a-tab-pane key="1" tab="🔍 故障根因全解析">
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 核心拦截链路：为什么会出现该报错？</h2>
+                <div class="desc-red">
+                    由于现代 Windows 系统（Win10 1709后）默认禁用了“不安全的来宾登录”，当访问目标服务器且未提供凭据时，系统会尝试以来宾身份进入。此时客户端系统的安全策略会直接熔断该连接。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Client["PC 客户端"] -- "1.发起 SMB 请求" --> Target["\\192.168.233.132"]
+                        Target -- "2.拒绝匿名登录" --> AuthReq["请求身份验证"]
+                        AuthReq -- "3.尝试 Guest 登录" --> PolicyCheck{"客户端策略检查"}
+                        PolicyCheck -- "拒绝 (默认策略)" --> ErrorMsg["❌ 组织策略阻止来宾访问"]
+                        PolicyCheck -- "允许 (已修改策略)" --> Success["✅ 进入文件夹"]
+                        
+                        style PolicyCheck fill:#fff1f0,stroke:#f5222d
+                        style ErrorMsg fill:#f5222d,color:#fff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 访问层级结构示意图</h2>
+                <div class="desc-blue">访问共享资源需要通过：物理链路 -> 网络类型 -> 协议握手 -> 策略过滤 四道关卡。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Link["物理连接 (Ping)"] --> NetType["网络类型 (专用/公用)"]
+                        NetType --> SMBLvl["SMB 协议版本匹配"]
+                        SMBLvl --> PolicyLvl["本地安全策略 (组策略)"]
+                        PolicyLvl --> CredLvl["凭据中心管理"]
+                        
+                        style PolicyLvl fill:#e6f7ff,stroke:#1890ff,stroke-width:2px
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 2: 客户端修复方案 -->
+        <a-tab-pane key="2" tab="💻 客户端 (发起方) 修复">
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 场景一：修改本地组策略 (彻底解决)</h2>
+                <div class="desc-orange">通过修改 <code>AllowInsecureGuestAuth</code> 键值，解除客户端对匿名访问的硬性拦截。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["运行 gpedit.msc"] --> Path["计算机配置 -> 管理模板 -> 网络 -> Lanman 工作站"]
+                        Path --> Setting["启用 '启用不安全的来宾登录'"]
+                        Setting --> Refresh["执行 gpupdate /force"]
+                        Refresh --> Final["尝试重新访问 192.168.233.132"]
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">4</span> 场景二：强制凭据介入</h2>
+                <div class="desc-blue">如果不修改策略，必须为目标 IP 明确指定一套有效的账号密码，避开来宾登录。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Box["打开凭据管理器"] --> Add["添加 Windows 凭据"]
+                        Add --> Input["输入 IP: 192.168.233.132"]
+                        Input --> User["输入目标主机用户名 (如 Administrator)"]
+                        User --> Pwd["输入目标主机密码"]
+                        Pwd --> Save["保存并重连"]
+                        
+                        style Save fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <!-- 复制此 div 到您的 <a-tab-pane> 内部 -->
+            <div id="gpo-analysis-container" style="padding: 20px; background: #fff; border-radius: 8px;">
+                
+                <!-- 内部局部样式 -->
+                <style>
+                    .gpo-wrapper { font-family: -apple-system, sans-serif; color: #333; }
+                    .gpo-header { border-left: 5px solid #1890ff; padding-left: 15px; margin-bottom: 25px; }
+                    .gpo-card { border: 1px dashed #d9d9d9; padding: 20px; border-radius: 8px; margin-bottom: 25px; background: #fafafa; }
+                    .gpo-title { font-size: 18px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                    .gpo-title::before { content: '⚙️'; margin-right: 8px; }
+                    .gpo-desc { background: #e6f7ff; border: 1px solid #91d5ff; padding: 12px; border-radius: 4px; margin: 10px 0; font-size: 14px; line-height: 1.6; }
+                    .gpo-danger-box { background: #fff1f0; border: 1px solid #ffa39e; padding: 12px; border-radius: 4px; margin: 10px 0; color: #cf1322; }
+                    .gpo-tag { background: #52c41a; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px; }
+                    .mermaid-box { background: #fff; border: 1px solid #e8e8e8; padding: 15px; overflow-x: auto; margin-top: 10px; }
+                    code { background: #f0f0f0; color: #c41d7f; padding: 2px 5px; border-radius: 3px; font-family: Consolas, monospace; }
+                </style>
+
+                <div class="gpo-wrapper">
+                    <div class="gpo-header">
+                        <h2 style="margin:0;">Windows 本地组策略 (gpedit.msc) 体系深度解析</h2>
+                        <p style="color: #666; margin-top: 5px;">涵盖计算机配置、用户配置及网络安全核心准入策略</p>
+                    </div>
+
+                    <!-- 1. 组策略整体逻辑架构 -->
+                    <div class="gpo-card">
+                        <div class="gpo-title">本地组策略编辑器层级结构 (GPO Hierarchy)</div>
+                        <div class="gpo-desc">
+                            组策略分为“计算机配置”（针对机器生效，优先级高）和“用户配置”（针对当前登录用户生效）。
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                            graph LR
+                                Root["本地组策略 (gpedit.msc)"] --> Comp["计算机配置 (优先)"]
+                                Root --> User["用户配置"]
+                                
+                                Comp --> Comp_Soft["软件设置"]
+                                Comp --> Comp_Win["Windows 设置 (安全/防火墙)"]
+                                Comp --> Comp_Adm["管理模板 (系统/网络/组件)"]
+                                
+                                User --> User_Adm["管理模板 (桌面/控制面板)"]
+                                
+                                style Comp fill:#e6f7ff,stroke:#1890ff,stroke-width:2px
+                                style User fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 网络共享与访问控制关键策略 -->
+                    <div class="gpo-card">
+                        <div class="gpo-title">网络共享核心安全准入项</div>
+                        <div class="gpo-desc">
+                            针对 <code>\\192.168.x.x</code> 无法访问的问题，以下三项是决定“连接生死”的关键路径。
+                        </div>
+                        
+                        <div class="gpo-desc" style="background: #fffbe6; border-color: #ffe58f;">
+                            <strong>关键路径 A：Lanman 工作站 (解决“来宾访问”拦截)</strong><br>
+                            <code>路径：计算机配置 -> 管理模板 -> 网络 -> Lanman 工作站 -> 启用不安全的来宾登录</code>
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                            graph LR
+                                Req["发起访问请求"] --> Policy{"不安全的来宾登录?"}
+                                Policy -- "已启用" --> Allow["✅ 允许以匿名/Guest身份握手"]
+                                Policy -- "未配置/禁用" --> Block["❌ 触发: 组织策略阻止访问"]
+                                
+                                style Block fill:#fff1f0,stroke:#f5222d,color:#f5222d
+                                style Allow fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+
+                        <div style="margin-top:20px;"></div>
+
+                        <div class="gpo-desc" style="background: #f9f0ff; border-color: #d3adf7;">
+                            <strong>关键路径 B：安全选项 (解决“账户枚举”拦截)</strong><br>
+                            <code>路径：计算机配置 -> Windows 设置 -> 安全设置 -> 本地策略 -> 安全选项</code>
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                            graph LR
+                                Check1["网络访问: 不允许匿名枚举 SAM 账户"] -- "需设为" --> V1["已禁用"]
+                                Check2["网络访问: 本地账户的共享和安全模型"] -- "需设为" --> V2["仅来宾 (或经典)"]
+                                Check1 --> Success["握手成功"]
+                                Check2 --> Success
+                                
+                                style Success fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 用户权利指派 -->
+                    <div class="gpo-card">
+                        <div class="gpo-title">用户权利指派 (User Rights Assignment)</div>
+                        <div class="gpo-danger-box">
+                            即使网络通了，如果此处的“黑名单”包含你，依然会被拒绝访问。
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                            graph LR
+                                Auth["身份认证通过"] --> Right1{"从网络访问此计算机?"}
+                                Right1 -- "包含 Everyone/Guest" --> Right2{"拒绝从网络访问这台计算机?"}
+                                Right2 -- "包含 Guest" --> Deny["❌ 最终拒绝访问"]
+                                Right2 -- "空/不包含" --> Pass["✅ 看到共享文件夹"]
+                                
+                                style Deny fill:#f5222d,color:#fff
+                                style Pass fill:#52c41a,color:#fff
+                            </div>
+                        </div>
+                        <div style="margin-top:10px; font-size:12px; color: #888;">
+                            * 路径：<code>计算机配置 -> Windows 设置 -> 安全设置 -> 本地策略 -> 用户权利指派</code>
+                        </div>
+                    </div>
+
+                    <!-- 4. 组策略刷新机制 -->
+                    <div class="gpo-card" style="border-bottom: none;">
+                        <div class="gpo-title">策略生效与刷新逻辑</div>
+                        <div class="gpo-desc">
+                            修改组策略后，系统不会立即刷新。必须强制拉取最新配置。
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                            graph LR
+                                Edit["修改 gpedit.msc"] --> CMD["打开 CMD/PowerShell"]
+                                CMD --> Exec["执行 gpupdate /force"]
+                                Exec --> Kernel["系统内核更新 Registry 键值"]
+                                Kernel --> Active["策略实时生效"]
+                                
+                                style Exec fill:#1890ff,color:#fff
+                            </div>
+                        </div>
+                        <div class="gpo-danger-box" style="background: #f6ffed; border-color: #b7eb8f; color: #389e0d;">
+                            <strong>小贴士：</strong> 如果 <code>gpupdate</code> 无效，请检查“Remote Registry”服务是否启动，或者尝试重启计算机。
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 注意：确保您的页面中已初始化 mermaid.init() -->
+            <!-- 复制此 div 块到您的 <a-tab-pane> 内部 -->
+            <div>-----------------------------------------------------------------------------------------</div>
+            <div class="sam-analysis-container" style="padding: 20px; font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6; background: #fff;">
+                
+                <!-- 内部样式表：确保样式独立，不污染外部 -->
+                <style>
+                    .sam-analysis-container .info-section {
+                        background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; margin-bottom: 24px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+                    .sam-analysis-container h3 {
+                        color: #001529; border-left: 4px solid #1890ff; padding-left: 12px; margin-bottom: 16px; font-weight: 600;
+                    }
+                    .sam-analysis-container .logic-card {
+                        background: #e6f7ff; border-left: 4px solid #1890ff; padding: 12px 15px; margin: 10px 0; border-radius: 0 4px 4px 0; font-size: 14px;
+                    }
+                    .sam-analysis-container .risk-card {
+                        background: #fff1f0; border-left: 4px solid #f5222d; padding: 12px 15px; margin: 10px 0; border-radius: 0 4px 4px 0; font-size: 14px; color: #a8071a;
+                    }
+                    .sam-analysis-container code {
+                        background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-family: 'Consolas', monospace; color: #c41d7f;
+                    }
+                    .sam-analysis-container .chart-bg {
+                        background: #fafafa; border: 1px solid #f0f0f0; border-radius: 6px; padding: 15px; margin: 15px 0; overflow-x: auto;
+                    }
+                    .sam-analysis-container .tag {
+                        display: inline-block; padding: 0 8px; border-radius: 4px; font-size: 12px; margin-right: 5px; vertical-align: middle;
+                    }
+                    .sam-analysis-container .tag-blue { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+                </style>
+
+                <!-- 第一部分：SAM 账户与远程桌面的关系 -->
+                <div class="info-section">
+                    <h3>1. SAM 账户与远程桌面 (RDP) 的绑定关系</h3>
+                    <div class="logic-card">
+                        <strong>核心逻辑：</strong>SAM (Security Accounts Manager) 是 Windows 的本地用户数据库。当你通过 RDP 登录远程电脑时，如果你使用的是<b>本地账号</b>（非域账号），系统本质上就是去查目标机的 SAM 文件。
+                    </div>
+                    <p>
+                        并不是所有的远程桌面都是通过 SAM 认证的，这取决于你的账户类型：
+                    </p>
+                    <ul style="padding-left: 20px;">
+                        <li><span class="tag tag-blue">本地登录</span> 使用 <code>C:\Windows\System32\config\SAM</code> 数据库中的哈希值比对。</li>
+                        <li><span class="tag tag-blue">域登录</span> 绕过本地 SAM，由域控制器 (Active Directory) 的 <code>ntds.dit</code> 数据库负责。</li>
+                    </ul>
+                    
+                    <!-- Mermaid: RDP 认证流 -->
+                    <div class="chart-bg">
+                        <div class="mermaid">
+                        graph LR
+                            User["用户发起 RDP 请求"] --> CheckType{"判断账户类型"}
+                            CheckType -- ".\username (本地)" --> SAM["访问本地 SAM 数据库"]
+                            CheckType -- "DOMAIN\user (域)" --> DC["请求域控制器 (AD)"]
+                            SAM --> HashMatch{"Hash 匹配?"}
+                            HashMatch -- "成功" --> Session["建立远程桌面会话"]
+                            HashMatch -- "失败" --> Deny["拒绝访问: 用户名或密码错误"]
+                            
+                            style SAM fill:#fff7e6,stroke:#faad14,stroke-width:2px
+                            style DC fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第二部分：SAM 协议介绍 -->
+                <div class="info-section">
+                    <h3>2. SAM 协议 (MS-SAMR) 深度介绍</h3>
+                    <div class="logic-card">
+                        <strong>定义：</strong>SAMR (Security Account Manager Remote Protocol) 是一套基于 RPC 的协议，允许远程管理本地 SAM 数据库中的用户、组和密码。
+                    </div>
+                    <p>
+                        当你从 A 电脑远程修改 B 电脑的用户密码，或者在域控上管理成员机账号时，调用的就是 SAMR 协议。
+                    </p>
+                    <div class="chart-bg">
+                        <div class="mermaid">
+                        graph TD
+                            Admin["管理端 (如计算机管理/命令行)"] -- "MS-SAMR 协议 (TCP 445/139)" --> RemoteSAM["目标机 SAM 接口"]
+                            RemoteSAM --> SAM_File["本地 SAM 注册表文件"]
+                            
+                            subgraph "协议核心能力"
+                            Ability1["枚举用户账户 (EnumUsers)"]
+                            Ability2["修改用户密码 (SetUserInfo)"]
+                            Ability3["查询用户所属组 (GetGroupsForUser)"]
+                            end
+                            
+                            RemoteSAM --- Ability1
+                            RemoteSAM --- Ability2
+                            RemoteSAM --- Ability3
+                        </div>
+                    </div>
+                    <div class="risk-card">
+                        <strong>安全红线：</strong>由于 SAMR 协议可以远程枚举账号名，它是内网渗透（如爆破、信息收集）的首选路径。
+                    </div>
+                </div>
+
+                <!-- 第三部分：核心本地组策略 (解决“来宾/认证”问题) -->
+                <div class="info-section">
+                    <h3>3. 影响共享与 RDP 的关键组策略 (secpol.msc)</h3>
+                    <p>
+                        要解决您遇到的“组织安全策略阻止来宾访问”以及 SAM 相关的认证问题，必须关注以下策略：
+                    </p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;">
+                        <tr style="background: #fafafa; text-align: left;">
+                            <th style="border: 1px solid #e8e8e8; padding: 10px;">策略名称</th>
+                            <th style="border: 1px solid #e8e8e8; padding: 10px;">对应设置项 (路径)</th>
+                            <th style="border: 1px solid #e8e8e8; padding: 10px;">业务影响</th>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px; font-weight: 500;">不准匿名枚举 SAM</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">网络访问: 不允许匿名枚举 SAM 账户</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">开启后，外部无法通过 SAMR 协议探测用户名。</td>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px; font-weight: 500;">不安全的来宾登录</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">管理模板 -> 网络 -> Lanman 工作站</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;"><b>图片报错根源。</b>需改为“已启用”以允许免密访问。</td>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px; font-weight: 500;">远程桌面访问控制</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">允许通过远程桌面服务登录</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">必须在此添加 SAM 中的本地用户或 Users 组。</td>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px; font-weight: 500;">账户锁定阈值</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">账户锁定策略 -> 账户锁定阈值</td>
+                            <td style="border: 1px solid #e8e8e8; padding: 10px;">防止 RDP 或 SMB 对 SAM 账户进行暴力破解。</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="info-section">
+                    <h3>4. 总结：如何判断当前是 SAM 还是域认证？</h3>
+                    <div class="logic-card">
+                        在命令行输入 <code>whoami</code>：<br>
+                        - 若结果为 <code>PC-NAME\username</code> → <b>SAM 本地账户认证</b><br>
+                        - 若结果为 <code>DOMAIN-NAME\username</code> → <b>Active Directory 域认证</b>
+                    </div>
+                </div>
+            </div>
+            <div>-----------------------------------------------------------------------------------------</div>
+            <!-- 复制以下 a-tab-pane 整个块即可 -->
+            <div style="padding: 24px; background: #fff; border-radius: 8px; font-family: -apple-system, sans-serif;">
+                
+                    <!-- 头部概览样式 -->
+                    <div style="background: #e6f7ff; border-left: 5px solid #1890ff; padding: 16px; margin-bottom: 25px; border-radius: 4px;">
+                        <h3 style="color: #003a8c; margin-bottom: 8px; font-weight: bold;">核心概念：身份验证的两大基石</h3>
+                        <p style="margin: 0; color: #002140; line-height: 1.6;">
+                            <b>SAM (Security Accounts Manager)</b> 是单机时代的“管家”，负责管理本地账户；<br>
+                            <b>域认证 (AD DS)</b> 是企业级的“中央司令部”，基于 Kerberos 协议实现多主机统一登录（SSO）。
+                        </p>
+                    </div>
+
+                    <!-- 第一部分：域认证全解析 -->
+                    <div style="margin-bottom: 35px; border: 1px solid #f0f0f0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h4 style="border-bottom: 2px solid #1890ff; display: inline-block; padding-bottom: 4px; margin-bottom: 15px;">1. 域认证核心：Kerberos 与 NTLM</h4>
+                        <div style="background: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                            <p style="font-size: 13px; color: #595959;"><b>Kerberos 流程（现代域控默认）：</b> 通过“票据”机制，避免在网络中传输明文密码或哈希。</p>
+                        </div>
+                        <!-- 域认证横向流程图 -->
+                        <div class="chart-container" style="background: #fff; border: 1px dashed #d9d9d9; padding: 10px; overflow-x: auto;">
+                            <div class="mermaid">
+                            graph LR
+                                Client["💻 客户端 (User)"] -- "1. 请求身份验证 (AS_REQ)" --> AS["🏢 域控 AS (验证服务)"]
+                                AS -- "2. 发放 TGT (认股权证)" --> Client
+                                Client -- "3. 拿 TGT 换票 (TGS_REQ)" --> TGS["🎫 域控 TGS (票据授权服务)"]
+                                TGS -- "4. 发放 ST (服务票据)" --> Client
+                                Client -- "5. 出示 ST 访问资源" --> Resource["📂 资源服务器 (SMB/App)"]
+                                
+                                style AS fill:#e6f7ff,stroke:#1890ff
+                                style TGS fill:#e6f7ff,stroke:#1890ff
+                                style Resource fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二部分：SAM 本地认证解析 -->
+                    <div style="margin-bottom: 35px; border: 1px solid #f0f0f0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <h4 style="border-bottom: 2px solid #faad14; display: inline-block; padding-bottom: 4px; margin-bottom: 15px;">2. SAM 本地认证：孤岛式管理</h4>
+                        <div style="background: #fff7e6; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                            <p style="font-size: 13px; color: #873800;"><b>本地 SAM：</b> 存储在 <code>C:\Windows\System32\config\SAM</code>，仅对自己这台电脑负责。</p>
+                        </div>
+                        <!-- SAM 认证横向流程图 -->
+                        <div class="chart-container" style="background: #fff; border: 1px dashed #d9d9d9; padding: 10px; overflow-x: auto;">
+                            <div class="mermaid">
+                            graph LR
+                                Input["👤 输入用户名/密码"] --> Winlogon["系统进程 (Winlogon.exe)"]
+                                Winlogon --> LSASS["认证子系统 (LSASS.exe)"]
+                                LSASS -- "提取密码哈希" --> SAM_DB[("💽 本地 SAM 数据库")]
+                                SAM_DB -- "对比成功" --> Token["生成 Access Token"]
+                                Token --> Desktop["进入桌面/访问本地资源"]
+                                
+                                style SAM_DB fill:#fff7e6,stroke:#faad14
+                                style Token fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第三部分：深度对比：哪个更好？ -->
+                    <div style="border: 1px solid #f0f0f0; padding: 20px; border-radius: 8px; background: #fafafa;">
+                        <h4 style="margin-bottom: 20px; color: #262626; text-align: center; font-weight: bold;">⚖️ 域认证 vs SAM 本地认证 (PK)</h4>
+                        
+                        <table style="width: 100%; border-collapse: collapse; background: #fff; font-size: 14px;">
+                            <thead>
+                                <tr style="background: #f5f5f5;">
+                                    <th style="border: 1px solid #e8e8e8; padding: 12px; text-align: left;">维度</th>
+                                    <th style="border: 1px solid #e8e8e8; padding: 12px; text-align: left; color: #1890ff;">域认证 (Enterprise)</th>
+                                    <th style="border: 1px solid #e8e8e8; padding: 12px; text-align: left; color: #faad14;">SAM 本地认证 (Standalone)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px; font-weight: bold; background: #fafafa;">管理成本</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>极低：</b>中央修改，万台机器同步生效。</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>极高：</b>每台机器都要手动改密码。</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px; font-weight: bold; background: #fafafa;">安全性</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>高：</b>支持 Kerberos 票据、双因子。</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>中：</b>易受本地提权、离线哈希破解。</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px; font-weight: bold; background: #fafafa;">便利性 (SSO)</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>一键登录：</b>登录系统后访问共享无需密码。</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>频繁弹窗：</b>每次访问共享都要输账号。</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px; font-weight: bold; background: #fafafa;">离线支持</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>弱：</b>断网后依赖缓存登录。</td>
+                                    <td style="border: 1px solid #e8e8e8; padding: 12px;"><b>强：</b>完全不依赖网络。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 最终结论 -->
+                        <div style="margin-top: 20px; padding: 15px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">
+                            <h5 style="color: #389e0d; margin-bottom: 8px;">🚩 结论：哪个更好？</h5>
+                            <ul style="margin: 0; padding-left: 20px; color: #237804; line-height: 1.8;">
+                                <li><b>企业/组织环境：域认证完胜。</b> 它是实现权限审计、统一管控、自动化运维的唯一手段。</li>
+                                <li><b>个人/家庭环境：SAM 更好。</b> 无需额外部署域控服务器，简单直接，不依赖网络连接。</li>
+                                <li><b>混合模式：</b> 建议域认证作为主选，SAM 作为“后门”维护账号（如 Administrator）仅在域控挂掉时应急。</li>
+                            </ul>
+                        </div>
+                    </div>
+            </div>
+            <div>-----------------------------------------------------------------------------------------</div>
+            <!-- 复制下方代码到您的 Vue 项目中 -->
+            <div class="custom-content-container" style="padding: 20px; background: #fff; border-radius: 8px;">
+                
+                <!-- 内部样式表：直接写在 div 里的 style 标签，确保复制即生效 -->
+                <style>
+                    .tech-box {
+                        margin-bottom: 25px;
+                        padding: 20px;
+                        border-radius: 8px;
+                        border: 1px solid #e8e8e8;
+                        background: #fafafa;
+                    }
+                    .tech-title {
+                        font-size: 18px;
+                        font-weight: 600;
+                        color: #001529;
+                        margin-bottom: 15px;
+                        display: flex;
+                        align-items: center;
+                        border-left: 5px solid #1890ff;
+                        padding-left: 12px;
+                    }
+                    .info-card {
+                        background: #e6f7ff;
+                        border-left: 4px solid #1890ff;
+                        padding: 12px;
+                        margin: 10px 0;
+                        color: #003a8c;
+                    }
+                    .vs-card {
+                        background: #fff7e6;
+                        border-left: 4px solid #faad14;
+                        padding: 12px;
+                        margin: 10px 0;
+                        color: #873800;
+                    }
+                    .mermaid-wrapper {
+                        background: #fff;
+                        border: 1px solid #d9d9d9;
+                        padding: 15px;
+                        margin-top: 10px;
+                        overflow-x: auto;
+                    }
+                    code {
+                        background: #f0f0f0;
+                        padding: 2px 5px;
+                        border-radius: 3px;
+                        color: #c41d7f;
+                        font-family: Consolas, monospace;
+                    }
+                </style>
+
+                <!-- 1. SMB 远程服务器知识全景 -->
+                <div class="tech-box">
+                    <div class="tech-title">1. SMB (Server Message Block) 核心协议栈</div>
+                    <div class="info-card">
+                        SMB 是典型的<b>客户端-服务器 (C/S) 协议</b>。它不仅用于文件共享，还是 Windows 远程管理 (RPC)、打印服务的基石。
+                    </div>
+                    <ul>
+                        <li><b>常用端口：</b> 现代 Windows 统一使用 <code>TCP 445</code>。老旧版本可能用到 UDP 137/138 和 TCP 139 (NetBIOS)。</li>
+                        <li><b>版本演进：</b>
+                            <ul>
+                                <li><b>SMB 1.0 (CIFS)：</b> 极度不安全（勒索病毒 WannaCry 利用的对象），建议禁用。</li>
+                                <li><b>SMB 2.1：</b> Win7 引入，极大地优化了高延迟网络下的性能。</li>
+                                <li><b>SMB 3.1.1：</b> Win10/11 核心，支持<b>强制加密</b>、多通道加速 (Multichannel)。</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <div class="mermaid-wrapper">
+                        <div class="mermaid">
+                        graph LR
+                            Client["客户端 (Win10)"] -- "TCP 445 握手" --> SMB_Srv["远程 SMB 服务器"]
+                            SMB_Srv -- "Negotiate (协议协商)" --> Client
+                            Client -- "Session Setup (带账号密码)" --> SMB_Srv
+                            SMB_Srv -- "验证权限 (NTLM/Kerberos)" --> Success["✅ 建立连接 (映射盘符)"]
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. SAM (安全账户管理器) 知识全景 -->
+                <div class="tech-box">
+                    <div class="tech-title">2. SAM (Security Accounts Manager) 本地鉴权中枢</div>
+                    <div class="info-card">
+                        SAM 是 Windows 的“户口登记本”，存储在 <code>C:\Windows\System32\config\SAM</code>，系统运行时该文件被强制锁定，无法直接读取。
+                    </div>
+                    <ul>
+                        <li><b>存储内容：</b> 本地用户名、组关系、以及最重要的 <b>NTLM 哈希值</b>（不存明文密码）。</li>
+                        <li><b>验证机制：</b> 当你通过 SMB 连接时，系统将你输入的密码计算出哈希，与 SAM 里的哈希对比，一致则通过。</li>
+                        <li><b>局限性：</b> SAM 仅针对<b>本地</b>账户。如果公司有几千台电脑，SAM 无法同步，必须升级到<b>域 (Active Directory)</b>。</li>
+                    </ul>
+                </div>
+
+                <!-- 3. SMB vs SAM 深度对比与协作逻辑 -->
+                <div class="tech-box">
+                    <div class="tech-title">3. 哪个更好？(协作与场景对比)</div>
+                    <div class="vs-card">
+                        <b>结论：</b> 这两者不是“竞争关系”，而是“协作关系”。SMB 是<b>传输方式</b>，SAM 是<b>本地验证手段</b>。
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <thead>
+                            <tr style="background: #fafafa;">
+                                <th style="border: 1px solid #d9d9d9; padding: 10px; text-align: left;">维度</th>
+                                <th style="border: 1px solid #d9d9d9; padding: 10px; text-align: left;">远程 SMB</th>
+                                <th style="border: 1px solid #d9d9d9; padding: 10px; text-align: left;">本地 SAM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px; font-weight: bold;">角色</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">搬运工 (传输协议)</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">门卫 (账号数据库)</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px; font-weight: bold;">存储位置</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">网络中的任何共享目录</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">服务器本地注册表/硬盘</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px; font-weight: bold;">安全性</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">靠 SMB 加密和访问限制 (ACL)</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">靠 NTLMv2 哈希和 SYSKEY 加密</td>
+                            </tr>
+                            <tr>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px; font-weight: bold;">适用范围</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">多机通信、文件交换</td>
+                                <td style="border: 1px solid #d9d9d9; padding: 10px;">单机登录、工作组共享验证</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 4. 为什么你会报错？(综合链路分析) -->
+                <div class="tech-box" style="border-color: #f5222d; background: #fff1f0;">
+                    <div class="tech-title" style="border-left-color: #f5222d; color: #a8071a;">4. 报错诊断：组织策略阻止来宾访问</div>
+                    <div style="padding: 10px;">
+                        <b>报错原因：</b> 
+                        你尝试通过 <b>SMB</b> 访问 <code>132</code> 服务器，但你没有提供服务器 <b>SAM</b> 数据库里有的账号，系统默认用“Guest (来宾)”去试。
+                        由于 Windows 安全加固，你的本地策略禁止了 SMB 带着这种匿名身份乱跑。
+                    </div>
+                    <div class="mermaid-wrapper">
+                        <div class="mermaid">
+                        graph LR
+                            Request["SMB 访问请求"] --> Check1{"有提供账号吗?"}
+                            Check1 -- "无" --> GuestAttempt["尝试 Guest (匿名) 登录"]
+                            Check1 -- "有 (本地SAM用户)" --> SAMCheck["查询服务器本地 SAM"]
+                            
+                            GuestAttempt --> Policy{"本地组策略: 启用不安全的来宾登录?"}
+                            Policy -- "已禁用 (默认)" --> Error["❌ 组织安全策略拦截 (你看到的报错)"]
+                            Policy -- "已启用" --> Success1["✅ 匿名访问成功 (高风险)"]
+                            
+                            SAMCheck -- "哈希匹配" --> Success2["✅ 正式访问成功"]
+                            SAMCheck -- "哈希不匹配" --> Deny["❌ 拒绝访问"]
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>-----------------------------------------------------------------------------------------</div>
+            <!-- Lanman 工作站核心知识库 Tab 内容开始 -->
+            <div id="lanman-knowledge-root" style="padding: 20px; background: #fdfdfd; border-radius: 8px;">
+                <!-- 内置局部样式：确保复制后样式不丢失 -->
+                <style>
+                    #lanman-knowledge-root .kb-section {
+                        background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+                        padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    }
+                    #lanman-knowledge-root h3 {
+                        color: #001529; border-left: 4px solid #1890ff; padding-left: 12px;
+                        margin-bottom: 15px; font-weight: 600; font-size: 18px;
+                    }
+                    #lanman-knowledge-root .kb-alert {
+                        padding: 12px 15px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; line-height: 1.6;
+                    }
+                    #lanman-knowledge-root .alert-info { background: #e6f7ff; border: 1px solid #91d5ff; color: #003a8c; }
+                    #lanman-knowledge-root .alert-warning { background: #fff7e6; border: 1px solid #ffd591; color: #873800; }
+                    #lanman-knowledge-root .alert-danger { background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; }
+                    
+                    #lanman-knowledge-root .kb-grid {
+                        display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;
+                    }
+                    #lanman-knowledge-root .kb-card {
+                        background: #fafafa; border: 1px dashed #d9d9d9; padding: 12px; border-radius: 6px;
+                    }
+                    #lanman-knowledge-root code {
+                        background: #f0f0f0; color: #c41d7f; padding: 2px 5px; border-radius: 3px; font-family: 'Consolas', monospace;
+                    }
+                    #lanman-knowledge-root .mermaid-box {
+                        background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; overflow-x: auto;
+                    }
+                </style>
+
+                <!-- 1. 定义与核心功能 -->
+                <div class="kb-section">
+                    <h3>1. 什么是 Lanman 工作站服务？</h3>
+                    <div class="kb-alert alert-info">
+                        <b>LanmanWorkstation (Workstation Service)</b> 是 Windows 操作系统中的一个核心服务（对应 <code>mrxsmb.sys</code> 驱动）。它充当“网络重定向器”，负责创建和维护到远程服务器（如文件共享、打印机）的客户端网络连接。
+                    </div>
+                    <div class="mermaid-box">
+                        <div class="mermaid">
+                        graph LR
+                            App["用户应用 (资源管理器/CMD)"] -- "请求 \\IP\Share" --> Redirector["LanmanWorkstation (重定向器)"]
+                            Redirector -- "SMB 协议封装" --> Driver["mrxsmb.sys (内核驱动)"]
+                            Driver -- "网络层 (TCP/445)" --> Remote["远程 SMB 服务器"]
+                            
+                            style Redirector fill:#e6f7ff,stroke:#1890ff,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 关键组策略 (解决报错的核心) -->
+                <div class="kb-section">
+                    <h3>2. 关键组策略设置 (Lanman Workstation)</h3>
+                    <div class="kb-alert alert-warning">
+                        您报错图片中的问题，本质上是由于 Windows 10/11 在 1709 版本后，为了防御勒索病毒，默认禁用了 <b>"不安全的来宾登录"</b>。
+                    </div>
+                    <div class="kb-grid">
+                        <div class="kb-card">
+                            <strong>启用不安全的来宾登录</strong><br>
+                            <small>AllowInsecureGuestAuth</small>
+                            <p style="margin-top:8px;">允许客户端在没有提供凭据的情况下，以来宾身份访问远程共享。修复“组织策略阻止”问题的唯一开关。</p>
+                        </div>
+                        <div class="kb-card">
+                            <strong>启用 SMB 签名</strong><br>
+                            <small>EnableSecuritySignature</small>
+                            <p style="margin-top:8px;">要求在数据包中包含数字签名，防止中间人篡改。开启后会略微降低传输性能。</p>
+                        </div>
+                        <div class="kb-card">
+                            <strong>启用硬化路径</strong><br>
+                            <small>HardenedPaths</small>
+                            <p style="margin-top:8px;">针对特定共享路径强制执行最高安全级别（如签名、加密），通常用于域控制器的 SYSVOL 共享。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. SMB 协议演进史 -->
+                <div class="kb-section">
+                    <h3>3. SMB 协议版本 (Lanman 底层驱动)</h3>
+                    <div class="mermaid-box">
+                        <div class="mermaid">
+                        graph LR
+                            V1["SMB 1.0 (弃用)"] -- "安全性极低" --> V2["SMB 2.x (Vista/Win7)"]
+                            V2 -- "性能提升/多路复用" --> V3["SMB 3.x (Win8/10/11)"]
+                            V3 -- "端到端加密/直通存储" --> V311["SMB 3.1.1 (当前主流)"]
+                            
+                            style V1 fill:#fff1f0,stroke:#f5222d
+                            style V311 fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                    <div style="margin-top:15px; font-size:13px; color:#666;">
+                        *注意：Lanman 工作站会根据目标服务器的能力自动协商版本。如果目标仅支持 SMB1.0，而客户端禁用了它，连接将失败。*
+                    </div>
+                </div>
+
+                <!-- 4. 常用维护命令 -->
+                <div class="kb-section">
+                    <h3>4. Lanman 工作站常用诊断命令</h3>
+                    <div class="kb-grid">
+                        <div class="kb-card">
+                            <strong>重启服务</strong><br>
+                            <code>net stop workstation /y</code><br>
+                            <code>net start workstation</code>
+                        </div>
+                        <div class="kb-card">
+                            <strong>查看当前连接会话</strong><br>
+                            <code>net use</code><br>
+                            <code>net session (服务端查看)</code>
+                        </div>
+                        <div class="kb-card">
+                            <strong>强制清理挂起的连接</strong><br>
+                            <code>net use * /del /y</code>
+                        </div>
+                        <div class="kb-card">
+                            <strong>检查服务状态</strong><br>
+                            <code>sc query lanmanworkstation</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 故障排查标准路径 -->
+                <div class="kb-section">
+                    <h3>5. 访问受阻排查流程图</h3>
+                    <div class="mermaid-box">
+                        <div class="mermaid">
+                        graph LR
+                            CheckService["1. 检查 LanmanWorkstation 服务启动状态"] --> CheckNetwork["2. Ping 目标 IP 是否连通"]
+                            CheckNetwork --> CheckPort["3. Telnet 目标 IP 445 端口"]
+                            CheckPort --> CheckPolicy["4. 组策略启用 '不安全的来宾登录'"]
+                            CheckPolicy --> CheckCreds["5. 凭据管理器清除旧缓存"]
+                            CheckCreds --> Success["✅ 访问成功"]
+                            
+                            style CheckPolicy fill:#fff7e6,stroke:#faad14,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Lanman 工作站核心知识库 Tab 内容结束 -->
+            <div>----------------------------------------------------------------------------------------</div>
+            <div style="padding: 20px; background: #fff; border-radius: 8px;">
+                <style>
+                    .cred-box { background: #fff7e6; border-left: 5px solid #faad14; padding: 15px; margin-bottom: 20px; }
+                    .cred-type { display: flex; gap: 10px; margin-bottom: 15px; }
+                    .cred-tag { background: #faad14; color: #fff; padding: 4px 10px; border-radius: 15px; font-size: 12px; }
+                </style>
+
+                <div class="cred-box">
+                    <h3 style="color: #873800; margin-top: 0;">凭据管理器 (Vault) 的自动登录机制</h3>
+                    <p>它是系统的“密码保险箱”，当你访问 <code>\\192.168.233.132</code> 时，系统会先来这里搜索有没有匹配的钥匙。</p>
+                </div>
+
+                <div style="background: #fafafa; border: 1px solid #ebedf0; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <div class="mermaid">
+                        graph LR
+                        Access["访问 \\IP"] --> CheckVault["系统检索凭据库"]
+                        CheckVault -- "有匹配记录" --> AutoAuth["自动填充并登录 (秒开)"]
+                        CheckVault -- "无记录" --> TryGuest["尝试匿名登录"]
+                        TryGuest --> GPO_Limit{"GPO是否允许来宾?"}
+                        GPO_Limit -- "不允许" --> Fail["❌ 组织策略报错"]
+                        style CheckVault fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+
+                <div class="cred-type">
+                    <span class="cred-tag">Web 凭据</span> <span>存储 Edge/IE 浏览器的网页登录信息。</span>
+                </div>
+                <div class="cred-type">
+                    <span class="cred-tag" style="background:#1890ff">Windows 凭据</span> <span>存储局域网共享、RDP远程桌面、Outlook的账户。</span>
+                </div>
+
+                <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-family: Consolas;">
+                    <strong>命令行管理 (cmdkey)：</strong><br>
+                    <span style="color: #888;"># 查看所有凭据：</span> cmdkey /list<br>
+                    <span style="color: #888;"># 手动添加共享凭据：</span> cmdkey /add:192.168.233.132 /user:admin /pass:123456
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 3: 服务端配置审计 -->
+        <a-tab-pane key="3" tab="🛡 服务端 (132主机) 审计">
+            <div class="section-card">
+                <h2><span class="step-num">5</span> 网络共享中心全局配置</h2>
+                <div class="desc-blue">服务端必须确保关闭了“密码保护的共享”或者开启了特定账号的访问权限。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Control["控制面板"] --> ShareCenter["网络和共享中心"]
+                        ShareCenter --> Advanced["高级共享设置"]
+                        Advanced --> AllNet["所有网络"]
+                        AllNet --> PasswordOff["关闭密码保护共享 (若要匿名访问)"]
+                        
+                        style PasswordOff fill:#fff7e6,stroke:#faad14
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">6</span> 文件夹 NTFS 权限 vs 共享权限</h2>
+                <div class="desc-orange">共享连接成功不代表能看到文件，还需要 NTFS 层级的权限许可。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Folder["文件夹属性"] --> ShareTab["共享选项卡 -> 权限"]
+                        ShareTab -- "添加 Everyone" --> SecurityTab["安全选项卡 -> 编辑"]
+                        SecurityTab -- "添加 Everyone" --> Final["双重权限生效"]
+                        
+                        style Final fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 4: 基础环境检查 -->
+        <a-tab-pane key="4" tab="🌐 基础环境与网络">
+            <div class="section-card">
+                <h2><span class="step-num">7</span> 网络配置文件判定 (Network Profile)</h2>
+                <div class="desc-red">如果当前网络被识别为“公用”，Windows 会自动应用最严格的防火墙规则，阻断一切 SMB 发现。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Check["检查网络图标"] -- "识别为: 公用" --> Block["防火墙关闭 445 端口"]
+                        Check -- "切换为: 专用 (Private)" --> Open["开启网络发现与共享"]
+                        Open --> Result["连通性恢复"]
+                        
+                        style Block fill:#fff1f0,stroke:#f5222d
+                        style Result fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">8</span> 端口与防火墙准入审计</h2>
+                <div class="desc-blue">SMB 协议主要依赖 TCP 445 端口。</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Port["Telnet 192.168.233.132 445"] -- "连接失败" --> FW{"防火墙拦截?"}
+                        FW -- "是" --> Policy["添加入站规则: 放行 445/TCP"]
+                        FW -- "否" --> Service["检查 Server 服务是否启动"]
+                        
+                        style FW fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<!-- 引入 Vue 和 Ant Design Vue JS -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    Vue.use(antd);
+
+    // Mermaid 初始化
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'default',
+        flowchart: { 
+            useMaxWidth: false, 
+            htmlLabels: true, 
+            curve: 'basis',
+            rankSpacing: 60,
+            nodeSpacing: 40
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        methods: {
+            handleTabChange() {
+                // 切换 Tab 时重新渲染 Mermaid 图表，确保横向布局不因隐藏容器而塌陷
+                this.$nextTick(() => {
+                    try {
+                        mermaid.init();
+                    } catch (e) {
+                        console.error("Mermaid 渲染异常:", e);
+                    }
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>
