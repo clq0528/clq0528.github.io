@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>盘感出市场节奏</title>
+<!--
+https://clq0528.github.io/stock/盘感出市场节奏.html
+-->
+    <!-- 引入 Ant Design Vue V2 样式 (兼容Vue2) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { background: var(--bg-gray); padding: 24px; font-family: -apple-system, system-ui, sans-serif; }
+
+        .header {
+            background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid var(--danger-color);
+        }
+
+        .section-card { 
+            background: #fff; border-radius: 8px; margin-bottom: 30px; padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8; padding-bottom: 10px; color: var(--navy-blue); 
+            display: flex; align-items: center; font-size: 20px;
+        }
+        
+        h2::before {
+            content: ""; width: 4px; height: 20px; background: var(--danger-color);
+            margin-right: 12px; border-radius: 2px;
+        }
+
+        .logic-desc {
+            margin: 10px 0; padding: 12px; background: #fff7e6;
+            border-left: 4px solid #faad14; color: #856404; font-weight: 500;
+        }
+
+        .chart-container { 
+            width: 100%; background: #fafafa; border: 1px solid #ebedf0; 
+            border-radius: 6px; padding: 20px; margin: 15px 0;
+            overflow-x: auto;
+        }
+
+        .step-num {
+            background: var(--navy-blue); color: white; border-radius: 50%;
+            width: 26px; height: 26px; display: inline-flex;
+            justify-content: center; align-items: center; margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .code-snippet {
+            background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 6px;
+            font-family: 'Consolas', monospace; font-size: 13px; overflow-x: auto;
+            line-height: 1.6; border-left: 5px solid #52c41a;
+        }
+
+        .highlight { color: #f5222d; font-weight: bold; }
+        .tech-tag { background: #e6f7ff; color: #1890ff; padding: 2px 8px; border-radius: 4px; border: 1px solid #91d5ff; font-size: 12px; }
+
+        .ant-tabs-nav-container { font-size: 16px; font-weight: bold; }
+        .mermaid { display: flex; justify-content: center; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;"><a-icon type="line-chart"></a-icon> 核心战法量化逻辑 (Wave Divergence & Sentiment Control)</h1>
+        <p style="color: #666; margin-top: 10px;">
+            <a-tag color="red">波背离</a-tag> <a-tag color="orange">竞价排名</a-tag> <a-tag color="blue">分时量能</a-tag> <a-tag color="green">龙头抱团</a-tag>
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" @change="handleTabChange" type="card">
+        <!-- Tab 1: 资金迁移与认知修复 -->
+        <a-tab-pane key="1" tab="板块轮动">
+            <div class="logic-card">
+                <h2><span class="step-tag">1</span> 资金迁移与价值锚点-资金迁移的动力源：性价比轮动</h2>
+                <div class="logic-desc">轮动本质是资金寻找性价比。当旧主线估值过高、涨幅放缓，主力资金会通过“认知差”修复，流向潜力洼地。</div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        High["高位主线 (估值过载)"] -- "获利盘回吐" --> Liquid["流动性溢出"]
+                        Liquid -- "寻找性价比" --> Deep["低位板块 (认知差形成)"]
+                        Deep -- "主力吸纳 (放量)" --> Entry["资金确认流入"]
+                        Entry -- "基本面/政策修复" --> Rotation["轮动正式开启"]
+                        style High fill:#fff1f0,stroke:#f5222d
+                        style Deep fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <!-- 2. 板块轮动与资金迁移 -->
+            <div class="section-title">2. 板块轮动之本质：资金性价比与认知差</div>
+            <div class="logic-box">
+                <b>核心逻辑：</b> 轮动是资金寻找性价比。当大金融/旧主线高位滞涨，资金转向<span class="highlight-text">认知差修复</span>板块。
+                <br><b>判定标准：</b> 换手率平稳下降（有序切换）+ 龙头股日线背驰触发第一买点。
+            </div>
+            <div class="chart-wrapper">
+                <div class="mermaid">
+                graph LR
+                    A[主线放量/估值过高] --> B{主力资金流向?}
+                    B -- 持续流入低位 --> C[板块启动先兆: 龙头异动]
+                    C --> D[联动效应: 关联板块同步]
+                    D --> E{换手率波动?}
+                    E -- 趋缓/平稳 --> F[真实轮动: 资金有序迁移]
+                    E -- 剧烈/放量滞涨 --> G[伪轮动: 资金派发]
+                    style F fill:#f6ffed,stroke:#52c41a
+                    style G fill:#fff1f0,stroke:#f5222d
+                </div>
+            </div>
+
+            <!-- 3. 超预期套利与联动补救 -->
+            <div class="section-title">3. 预期差套利：核心超预期后的“喝汤”逻辑</div>
+            <div class="logic-box">
+                <b>案例：</b> 悦心健康超预期 -> 先手资金抢版三胎板块 -> 核心没仓位？
+                <br><b>补救：</b> 套利300开头的（孩子王）或同板块低位（高乐股份）。<span class="highlight-text">买在谣言（吹风），卖在事实（出消息）。</span>
+            </div>
+            <div class="chart-wrapper">
+                <div class="mermaid">
+                graph LR
+                    S1[核心标的超预期一字] --> S2[板块情绪瞬间点燃]
+                    S2 --> S3{是否有仓位?}
+                    S3 -- 没上车 --> S4[寻找同概念补涨/分支]
+                    S4 --> S5[300弹性标的/主板低位套利]
+                    S5 --> S6[次日冲高兑现]
+                    style S1 fill:#fff7e6,stroke:#faad14
+                    style S6 fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <h2><span class="step-tag">2</span> 判断指标：流入真实性校验</h2>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Check["观察主力资金流入"] --> C1{"放量上涨?"}
+                        C1 -- 是 --> C2{"持续吸纳?"}
+                        C2 -- 是 --> Result["强劲流入 (真实轮动)"]
+                        C1 -- 否 --> Fake["诱多/纸老虎"]
+                        C2 -- 否 --> Fake
+                        style Result fill:#e6f7ff,stroke:#1890ff
+                        style Fake fill:#fafafa,stroke:#d9d9d9
+                    </div>
+                </div>
+            </div>
+            <div class="logic-card">
+                <h2><span class="step-tag">3</span>板块联动与龙头先行-联动效应：真正的轮动非“独狼”</h2>
+                <div class="logic-desc">真正的轮动具有强联动性。龙头股异动是先兆，相关概念板块同步跟涨是确认。</div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Leader["龙头股 (第一买点/背驰)"] --> Anomaly["盘中异动/封板"]
+                        Anomaly --> Peer["相关联概念板块跟进"]
+                        Peer --> Synergy["板块效应爆发"]
+                        Synergy --> Confirm["主线确立"]
+                        style Leader fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <h2><span class="step-tag">4</span> 技术特征：龙头股背驰判断</h2>
+                <div class="code-box">
+                    <span style="color: #7cb305;">// 龙头先行算法逻辑</span><br>
+                    if (板块指数.形成第一买点() || 龙头股.日线级别强力背驰()) {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;Monitor(板块内活跃品种); <span style="color: #666;">// 轮动启动先兆</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;UpdateState("进入观察期");<br>
+                    }
+                </div>
+            </div>
+            <div class="logic-card">
+                <h2><span class="step-tag">5</span> “高低切本质：避险与有序切换-大资金怕了”：高低切的底层心理</h2>
+                <div class="warning-desc">当高位龙头出现频繁震荡且换手率异常跳动时，证明大资金产生恐慌，寻求低位补涨或抱团。</div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Panic["高位震荡 (波动率激增)"] -- "避险情绪" --> Cut["高低切 (切换平稳性校验)"]
+                        Cut -- "波动趋缓/换手下降" --> Stable["有序切换 (可介入)"]
+                        Cut -- "剧烈抛售/连带大跌" --> Crash["板块退潮 (严禁追入)"]
+                        style Panic fill:#fff1f0,stroke:#f5222d
+                        style Stable fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <h2><span class="step-tag">6</span> 切换评估矩阵</h2>
+                <a-table :data-source="cutData" :pagination="false" size="small" bordered>
+                    <a-table-column title="维度" data-index="dimension" key="dimension" width="100px"></a-table-column>
+                    <a-table-column title="良性轮动 (可半路跟随)" data-index="good" key="good"></a-table-column>
+                    <a-table-column title="恶性轮动 (纸老虎/骗炮)" data-index="bad" key="bad"></a-table-column>
+                </a-table>
+            </div>
+            <div class="logic-card">
+                <h2><span class="step-tag">7</span> 实战决策：半路、跟随与禁忌-解决您的困惑：为什么有时不能跟随？</h2>
+                <div class="logic-desc">
+                    <span class="highlight-red">重点判断：</span> 轮动发生时，原强势板块是“横盘阴跌”还是“放量崩塌”？<br>
+                    1. 如果原主线放量崩塌，此时的轮动多为短线避险，<span class="highlight-red">龙头无持续性</span>，不可打板。<br>
+                    2. 如果原主线缩量横盘，资金有序流出，新板块出现<span class="highlight-red">认知差修复</span>，可半路追入。
+                </div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Trigger["新板块异动上涨"] --> Decision{"原板块状态?"}
+                        Decision -- "缩量良性调整" --> Follow["半路跟随/打首板"]
+                        Decision -- "放量大跌/恐慌踩踏" --> Wait["观望 (资金避险，无持续性)"]
+                        Decision -- "换手率突然爆增" --> Trap["警惕诱多纸老虎"]
+                        
+                        Follow --> Profit["认知差溢价"]
+                        Wait --> Save["避开高位分歧杀跌"]
+                        style Follow fill:#f6ffed,stroke:#52c41a
+                        style Wait fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+
+            <div class="logic-card">
+                <h2><span class="step-tag">8</span> 专家总结：穿透本质</h2>
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 4px; border-left: 5px solid #001529;">
+                    <ul style="margin-bottom: 0;">
+                        <li><b>纸老虎识别：</b> 上蹿下跳但成交量不持续放大。</li>
+                        <li><b>高低切时机：</b> 换手平稳下降是关键，剧烈波动说明资金在乱窜。</li>
+                        <li><b>认知差判断：</b> 是否有政策或基本面被市场忽视？如果有，轮动空间才大。</li>
+                    </ul>
+                </div>
+            </div>
+            <div>==========================================================================================</div>
+            <!-- 1. 消息与行情的时序博弈 -->
+            <div class="logic-card">
+                <h2><span class="step-tag">1</span> 信息流博弈：买在谣言，卖在事实</h2>
+                <div class="logic-desc">
+                    <b>核心发现：</b> 行情先于消息（聪明资金潜伏）能延续行情；消息先于行情（散户冲动）基本是一日游。
+                </div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Rumor["谣言阶段 (Rumor)"] -- "预期差/资金潜伏" --> Action["行情启动 (Action)"]
+                        Action -- "真相大白/利好兑现" --> Fact["事实阶段 (Fact)"]
+                        Fact -- "卖出信号" --> Exit["利好出尽即是利空"]
+                        
+                        subgraph "行情延续性判断"
+                        Action1["行情先于消息"] --> Prop1["主力提前控盘 (能走一波)"]
+                        News1["消息先于行情"] --> Prop2["散户被动追高 (一日游)"]
+                        end
+                        
+                        style Action fill:#fff1f0,stroke:#f5222d
+                        style Action1 fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 重组题材与流动性 -->
+            <div class="logic-card">
+                <h2><span class="step-tag">2</span> 题材定性：铁打的重组，流水的题材</h2>
+                <div class="info-desc">市场有钱（流动性充裕）时，重组逻辑最具爆发力。题材会更迭，但资产重组是永恒的造富引擎。</div>
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph LR
+                        Cash["市场流动性充裕"] -- "催化" --> Theme["重组预期 (M&A)"]
+                        Theme -- "估值重塑" --> Premium["高溢价/连板"]
+                        Theme -- "周期演变" --> Others["其他流水题材 (轮动)"]
+                        style Theme fill:#f9f0ff,stroke:#722ed1
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 尾盘选股与K线细节 -->
+            <div class="logic-card">
+                <h2><span class="step-tag">3</span> 盘中技战法：量比择时与十字星效用</h2>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div class="code-box">
+                            <span class="comment">// 2:30 PM 尾盘选股策略</span><br>
+                            <span class="keyword">function</span> <span style="color: #61afef;">selectStocks</span>() {<br>
+                            &nbsp;&nbsp;<span class="keyword">let</span> time = <span class="string">"14:30"</span>;<br>
+                            &nbsp;&nbsp;<span class="keyword">let</span> topList = getTop20ByVolumeRatio(); <span class="comment">// 选量比排名前20</span><br>
+                            &nbsp;&nbsp;<span class="keyword">return</span> evaluatePotential(topList);<br>
+                            }
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div class="code-box">
+                            <span class="comment">// 十字星(Doji)有效性法则</span><br>
+                            <span class="keyword">if</span> (starCount == 1) {<br>
+                            &nbsp;&nbsp;signal = <span class="string">"Valid/Change"</span>; <span class="comment">// 第1个有效</span><br>
+                            } <span class="keyword">else if</span> (starCount == 2) {<br>
+                            &nbsp;&nbsp;signal = <span class="string">"Invalid/Languid"</span>; <span class="comment">// 第2个无效</span><br>
+                            }
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+
+            <!-- 4. 不同行情下的操作策略 -->
+            <div class="logic-card">
+                <h2><span class="step-tag">4</span> 操作矩阵：根据市场形态动态应对</h2>
+                <div class="info-desc">做震荡等的是高低点、做突破等的是回踩、做趋势等的是回调、抢反弹等的是放量。</div>
+                <a-table :data-source="strategyData" :pagination="false" size="small" bordered>
+                    <a-table-column title="市场形态" data-index="mode" key="mode" width="120px">
+                        <template slot-scope="text"><b>{{text}}</b></template>
+                    </a-table-column>
+                    <a-table-column title="核心动作 (Wait for)" data-index="action" key="action"></a-table-column>
+                    <a-table-column title="实战类比" data-index="analogy" key="analogy"></a-table-column>
+                </a-table>
+                
+                <div class="chart-wrapper">
+                    <div class="mermaid">
+                    graph TD
+                        Condition{"行情分析"}
+                        Condition -- "震荡市" --> S1["低吸高抛 (做T)"]
+                        Condition -- "突破行情" --> S2["等待回踩确认"]
+                        Condition -- "趋势上涨" --> S3["等待回调买点"]
+                        Condition -- "抢反弹" --> S4["寻找放量节点"]
+                        
+                        style S1 fill:#e6f7ff,stroke:#1890ff
+                        style S2 fill:#f6ffed,stroke:#52c41a
+                        style S3 fill:#fff7e6,stroke:#faad14
+                        style S4 fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. 专家总结 -->
+            <div style="background: #fafafa; border: 1px dashed #d9d9d9; padding: 15px; border-radius: 6px;">
+                <p style="margin: 0; font-size: 13px; color: #595959;">
+                    <b>💡 交易心法：</b> 
+                    交易不在于多，而在于“等”。等一个谣言初起的潜伏，等一个突破后的回踩，等一个量比突增的尾盘。
+                    牢记重组是“铁打的”主旋律，在市场流动性充裕时，果断拥抱预期差。
+                </p>
+            </div>
+            <div>==========================================================================================</div>
+            <div class="trade-container">
+                <!-- 1. 交易的灵魂：确定性与防守 -->
+                <div class="logic-block">
+                    <div class="logic-title"><a-icon type="security-scan" style="margin-right:8px"></a-icon> 核心：确定性交易与防守逻辑</div>
+                    <p>买卖一定是<b>确定性</b>的。防守（如金种子酒）和抄底的逻辑一致：寻找资金抱团的避风港。</p>
+                    <div class="mermaid-card">
+                        <div class="mermaid">
+                            graph LR
+                            Certainty[确定性寻找] --> Analysis[个股不重要/逻辑最重要]
+                            Analysis --> Defensive[防守逻辑: 资金安全垫]
+                            Analysis --> Aggressive[进攻逻辑: 预期差共振]
+                            Defensive --> Result[基本不亏/冷静复盘]
+                        </div>
+                    </div>
+                </div>
+                <!-- 3. 实战：隔夜单分析 (昨日 vs 今日) -->
+                <div class="logic-block" style="border-color: #52c41a; background: #f6ffed;">
+                    <div class="logic-title" style="color: #237804;">🌙 隔夜单与开盘定乾坤</div>
+                    <div class="mermaid-card">
+                        <div class="mermaid">
+                            graph LR
+                            Pre915[9:15 隔夜封单量] -- "金额对比 (如中国医药84亿)" --> Direction[断定日内主攻方向]
+                            Direction -- "寻找关联报价 (如达嘉维康一字)" --> Selection[同属性补涨筛选]
+                            Selection -- "26分完胜指标共振" --> Order[下单秒板/海王生物]
+                        </div>
+                    </div>
+                    <div class="quote-box">
+                        <b>案例复盘：</b> 中国医药、美诺华（医药）vs 城地香江、黑牡丹（数字经济）。
+                        <br><span class="highlight-red">精髓：</span> 后面涨停留，不涨停坚决出局！
+                    </div>
+                </div>
+
+                <!-- 4. 实战：套利补救与抢筹逻辑 -->
+                <div class="logic-block" style="border-color: #faad14; background: #fffbe6;">
+                    <div class="logic-title" style="color: #ad8b00;">🎯 补救套利：不踏空的智慧</div>
+                    <p>当核心龙头（悦心健康）超预期，而你没买到时，寻找<b>同板块补救个股</b>喝汤。</p>
+                    <div class="mermaid-card">
+                        <div class="mermaid">
+                            graph LR
+                            Leader[核心龙头超预期] --> Money[资金抢筹同板块分支]
+                            Money --> Supplement[套利补救: 300个股或同属性标的]
+                            Supplement --> Example[如: 悦心健康 -> 美吉姆 -> 孩子王/高乐]
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 市场铁律：消息、量能与形态 -->
+                <div class="logic-block" style="border-color: #722ed1; background: #f9f0ff;">
+                    <div class="logic-title" style="color: #391085;">⚙️ 盘面交易硬规则</div>
+                    <a-descriptions bordered size="small" :column="1">
+                        <a-descriptions-item label="消息与行情">
+                            消息先于行情 = <span class="highlight-red">一日游</span>；行情先于消息 = <span class="highlight-green">一波主升</span>。
+                        </a-descriptions-item>
+                        <a-descriptions-item label="2:30 选股法">
+                            下午 2:30 筛选<b>量比排名前 20</b> 的个股，捕捉尾盘异动。
+                        </a-descriptions-item>
+                    </a-descriptions>
+                </div>
+
+                <div style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+                    © 作手流沙河短线逻辑系统 · 确定性是交易的唯一准则
+                </div>
+            </div>
+            <div>==========================================================================================</div>
+        
+            <!-- 1. 隔夜单与方向定音 -->
+            <div class="section-title">1. 隔夜单量化：9:25分的确定性信号</div>
+            <div class="logic-box">
+                <b>战例分析：</b> 2022.03.10 医药板块霸屏隔夜单（中国医药、美诺华、北大医药）。
+                <br><b>操作逻辑：</b> 前6只封单里占5只同板块 = <span class="highlight-text">绝对主线</span>。先手不涨停出局，后手寻共振。
+            </div>
+            <div class="chart-wrapper">
+                <div class="mermaid">
+                graph LR
+                    T1[9:15-9:25 观察隔夜单] --> T2[统计封单额排名]
+                    T2 --> T3{同板块集中度?}
+                    T3 -- 超过3只前十 --> T4[确定日内核心板块]
+                    T4 --> T5[寻找同概念共振标的]
+                    T5 --> T6[26分完胜数据确认]
+                    T6 --> T7[秒板下单/确定性介入]
+                    style T4 fill:#e6f7ff,stroke:#1890ff
+                    style T7 fill:#f6ffed,stroke:#52c41a
+                </div>
+            </div>
+
+            <!-- 2. 分时图解构：锯齿状 vs 流畅型 -->
+            <div class="section-title">2. 分时图形态解析：分歧与共识的博弈</div>
+            <a-row :gutter="16">
+                <a-col :span="12">
+                    <div class="logic-box" style="background:#f0f5ff; border-color:#adc6ff; color:#003a8c;">
+                        <b>📉 锯齿状分时（Jagged）</b><br>
+                        <b>特征：</b> 波动剧烈、频率极高、成交不连贯。<br>
+                        <b>原因：</b> <br>
+                        1. 预期存在极大分歧，多空博弈惨烈。<br>
+                        2. 流动性不足（小单也能砸出大坑）。<br>
+                        3. 市场环境不稳定（政策/新闻扰动）。
+                    </div>
+                </a-col>
+                <a-col :span="12">
+                    <div class="logic-box" style="background:#f6ffed; border-color:#b7eb8f; color:#237804;">
+                        <b>📈 流畅型分时（Smooth）</b><br>
+                        <b>特征：</b> 走势平滑、斜率稳定、波峰波谷圆润。<br>
+                        <b>原因：</b> <br>
+                        1. 预期达成高度一致，资金合力明显。<br>
+                        2. 流动性极佳，大资金有序吸筹/拉升。<br>
+                        3. 机构/大资金掌控节奏，情绪稳定。
+                    </div>
+                </a-col>
+            </a-row>
+            <div class="chart-wrapper">
+                <div class="mermaid">
+                graph LR
+                    Type[分时图形态] --> J[锯齿状: 分歧/低流动性]
+                    Type --> S[流畅型: 共识/合力强]
+                    J --> J1[散户市/乱战]
+                    S --> S1[庄家/机构/合力波]
+                    J1 --> JC[需等分歧转一致]
+                    S1 --> SC[顺势持有/主升浪]
+                    style J fill:#f5f5f5,stroke:#d9d9d9
+                    style S fill:#e6f7ff,stroke:#1890ff
+                </div>
+            </div>
+
+            <!-- 5. 综合实战技巧总结 -->
+            <div class="section-title">5. 盘中实战点睛：择时与细节</div>
+            <div class="logic-box" style="background:#fff1f0; border-color:#ffa39e; color:#a8071a;">
+                <b>⚠️ 避坑与精髓：</b>
+                <ul>
+                    <li><b>消息VS行情：</b> 消息先于行情 = 一日游；行情先于消息 = 大行情。</li>
+                    <li><b>2:30 选股：</b> 量比排名前20，寻找尾盘异动确定性。</li>
+                    <li><b>十字星：</b> 第一个有效（转折点），第二个无效（动力衰竭）。</li>
+                    <li><b>确定性：</b> 抄底金种子/医药是逻辑确定，个股不重要，逻辑才防守。</li>
+                </ul>
+            </div>
+        </a-tab-pane>
+        <a-tab-pane key="2" tab="龙虎榜与主线">
+            <!-- 1. 主线判定标准 -->
+            <div class="section-card">
+                <div class="sub-title"><a-icon type="compass" /> 第一维度：如何判断“真主线”？</div>
+                <div class="logic-note">
+                    <b>核心硬指标：</b> 只有满足 <b>[资金端+政策端]</b> 双重共振的才是主线，否则皆为“一日游”噪音。
+                </div>
+                <div class="chart-box">
+                    <div class="mermaid">
+                    graph LR
+                        Input[全市场热点] --> VolCheck{资金端: 近3日成交额?}
+                        VolCheck -- 持续放大 --> SeatCheck{席位: 2家以上一线游资?}
+                        VolCheck -- 萎缩/散乱 --> Noise[放弃: 弱热点]
+                        SeatCheck -- 深度介入 --> PolicyCheck{政策端: 1个月内核心利好?}
+                        SeatCheck -- 独木难支 --> Rebound[定义: 技术性反弹]
+                        PolicyCheck -- 经济赛道核心 --> Mainline[★ 核心主线: 坚定持有]
+                        PolicyCheck -- 边缘消息 --> Speculation[定义: 题材炒作]
+                        style Mainline fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+                        style Noise fill:#f5f5f5,stroke:#d9d9d9
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 游资节奏拆解 -->
+            <div class="section-card">
+                <div class="sub-title"><a-icon type="hourglass" /> 第二维度：游资操盘节奏（博弈周期）</div>
+                <div class="logic-note">
+                    通过龙虎榜连续性判断资金意图：<b>“买在分歧，卖在一致”</b>，观察持仓周期。
+                </div>
+                <div class="rhythm-grid">
+                    <div class="rhythm-item">
+                        <h4>🛡️ 长期主线 (3-7天+)</h4>
+                        <p style="font-size: 13px; color: #8c8c8c;">底部布局，捕捉核心赛道。波动平稳，适合中长线跟随。</p>
+                        <span class="data-tag tag-main">流动性佳</span>
+                    </div>
+                    <div class="rhythm-item" style="border-color: #fa8c16;">
+                        <h4>⚔️ 换仓短线 (~3天)</h4>
+                        <p style="font-size: 13px; color: #8c8c8c;">频繁换仓，游击战法。板块内高低切换，节奏极快。</p>
+                        <span class="data-tag tag-hot">风险中等</span>
+                    </div>
+                    <div class="rhythm-item" style="border-color: #f5222d;">
+                        <h4>⚡ 一日游 (1-2天)</h4>
+                        <p style="font-size: 13px; color: #8c8c8c;">利用消息拉抬，次日抛盘。收割跟风盘，常见于诱多行情。</p>
+                        <span class="data-tag tag-risk">极高风险</span>
+                    </div>
+                </div>
+                <div class="chart-box" style="margin-top: 20px;">
+                    <div class="mermaid">
+                    graph LR
+                        Entry[龙虎榜现身] --> Day1[第一日: 强势扫盘]
+                        Day1 --> Day2{是否连续上榜?}
+                        Day2 -- 是: 锁仓/加仓 --> Day3[进入主线节奏: 3-7天周期]
+                        Day2 -- 否: 席位消失 --> Exit[一日游离场: 警惕次日低开]
+                        Day3 --> Distribution[高位放量一致: 游资派发]
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 数据信号与风险警示 -->
+            <div class="section-card" style="border-top: 4px solid #faad14;">
+                <div class="sub-title"><a-icon type="warning" /> 第三维度：龙虎榜数据红线</div>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div style="background: #f6ffed; padding: 15px; border-radius: 6px;">
+                            <h4 style="color: #389e0d;"><a-icon type="check-circle" /> 资金健康信号 (买入)</h4>
+                            <ul style="font-size: 13px; line-height: 2;">
+                                <li><b>知名席位联动：</b> 华泰益田路 + 银河绍兴（抱团）。</li>
+                                <li><b>单笔数据：</b> 净买入金额 &gt; 1亿。</li>
+                                <li><b>占比指标：</b> 成交额占比超 15% 且净差率高。</li>
+                            </ul>
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div style="background: #fff1f0; padding: 15px; border-radius: 6px;">
+                            <h4 style="color: #cf1322;"><a-icon type="close-circle" /> 撤退风险信号 (卖出)</h4>
+                            <ul style="font-size: 13px; line-height: 2;">
+                                <li><b>买一独吞：</b> 筹码过于集中，次日抛压极大。</li>
+                                <li><b>机构出逃：</b> 卖五席位频繁出现“机构专用”。</li>
+                                <li><b>买一占比过高：</b> 超过全天成交 30%（属于接盘）。</li>
+                            </ul>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+
+            <!-- 4. 总结决策树 -->
+            <div class="section-card" style="background: #001529; color: #fff;">
+                <h3 style="color: #fff; margin-bottom: 12px;"><a-icon type="thunderbolt" /> 终极决策模型</h3>
+                <p style="font-size: 14px; opacity: 0.8;">
+                    判断主线的关键是看 <span style="color: #ff4d4f; font-weight: bold;">[资金集中度]</span>，龙虎榜则是观察这些资金如何在主线上进行 <span style="color: #ff4d4f; font-weight: bold;">[布局]</span> 与 <span style="color: #ff4d4f; font-weight: bold;">[出逃]</span> 的实时动态地图。
+                </p>
+                <div class="chart-box" style="background: rgba(255,255,255,0.05); border: none;">
+                    <div class="mermaid">
+                    graph LR
+                        A[观察龙虎榜] --> B{是否属于核心政策赛道?}
+                        B -- 否 --> C[轻仓/不参与]
+                        B -- 是 --> D{是否有2家以上一线席位?}
+                        D -- 否 --> E[定义为跟风/散户票]
+                        D -- 是 --> F{买一占比是否合理 <30% ?}
+                        F -- 否 --> G[存在收割风险: 观察]
+                        F -- 是 --> H[★ 确认为主线核心: 寻找低吸买点]
+                        style H fill:#cf1322,stroke:#fff,color:#fff
+                    </div>
+                </div>
+            </div>
+            <div>==========================================================================================</div>
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="global" /> 1. 核心政策赛道 (National Strategy)</div>
+                <div class="desc-box">
+                    <b>政策赛道核心精髓：</b> “国家意志”的长期投射，涉及国家安全、经济命脉与科技自立。区别于短期热点，具有长期确定性。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Strategy[国家重大战略] --> Feature{核心特征}
+                        Feature --> F1[刚性需求: 不受周期影响]
+                        Feature --> F2[政策护航: 财政补贴/税收]
+                        Feature --> F3[高壁垒: 技术/研发门槛]
+                        Feature --> F4[集中度: 头部公司占优]
+                        F1 & F2 & F3 & F4 --> Examples[半导体/AI/新能源/生物医药/数字经济]
+                        style Strategy fill:#f0f5ff,stroke:#1d39c4
+                        style Examples fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+            <!-- 2. 政策端：1个月内核心利好 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="thunderbolt" /> 2. 政策端：1个月核心利好 (Time Window)</div>
+                <div class="desc-box">
+                    <b>政策赛道时效判定：</b> 过去30天内发布的实质性提升消息。是资金从“观望”转向“进攻”的冲锋号。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        News[政府/部委文件] --> Window{30天窗口期}
+                        Window -->|利好特征| C1[明确性: 具体补贴/指标]
+                        Window -->|利好特征| C2[覆盖面: 行业普惠而非个股]
+                        Window -->|利好特征| C3[刚性: 具有行政约束力]
+                        Window -->|利好特征| C4[落地性: 资金迅速流入榜单]
+                        C1 & C2 & C3 & C4 --> Identify[查询: 国务院/发改委/工信部/产业基金]
+                        style Identify fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <!-- 3. 经济赛道核心 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="line-chart" /> 3. 经济赛道核心 (Economic Pillars)</div>
+                <div class="desc-box">
+                    <b>经济赛道产出驱动：</b> 支撑宏观经济增长的命脉行业。侧重于“实际产出”与“市场刚需”，是GDP的主要贡献者。
+                </div>
+                <a-row :gutter="16" style="margin-top: 15px;">
+                    <a-col :span="8">
+                        <div style="background:#fff; border:1px solid #d9d9d9; padding:10px; border-radius:4px;">
+                            <h4 style="color:#1890ff;">基建与制造</h4>
+                            <span class="tag-sector">水泥钢材</span> <span class="tag-sector">数控机床</span> <span class="tag-sector">工业机器人</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="8">
+                        <div style="background:#fff; border:1px solid #d9d9d9; padding:10px; border-radius:4px;">
+                            <h4 style="color:#1890ff;">原材料与化工</h4>
+                            <span class="tag-sector">基础化学品</span> <span class="tag-sector">特种化学品</span> <span class="tag-sector">新材料</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="8">
+                        <div style="background:#fff; border:1px solid #d9d9d9; padding:10px; border-radius:4px;">
+                            <h4 style="color:#1890ff;">物流与枢纽</h4>
+                            <span class="tag-sector">港口航运</span> <span class="tag-sector">跨境电商</span> <span class="tag-sector">铁路运输</span>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+            <!-- 4. 终极逻辑公式总结 -->
+            <div class="summary-formula">
+                <div style="font-size: 16px; margin-bottom: 15px; font-weight: bold; color: #40a9ff;">
+                    <a-icon type="reconciliation" /> 研判三位一体公式总结：
+                </div>
+                <div class="formula-item">
+                    核心政策赛道 = 重点扶持 + 长期刚需 + 高壁垒
+                </div>
+                <div class="formula-item">
+                    1个月内利好 = 官方发布 + 强制/奖励性 + 资金流入
+                </div>
+                <div class="formula-item">
+                    经济赛道核心 = GDP贡献 + 需求刚性 + 产业链基础
+                </div>
+            </div>
+            <div>==========================================================================================</div>
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="database" />同花顺热榜100数据获取与题材统计</div>
+                <div class="desc-box">
+                    <b>操作流程：</b> 登录同花顺 -> 行情 -> 涨幅榜/龙虎榜 -> 设置Top100 -> 导出Excel。
+                    <br><b>统计方法：</b> 结合“选股器-板块查询”，逐一匹配榜单股票，计算题材占比。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        A[同花顺客户端] --> B(行情 -> 涨幅/龙虎榜)
+                        B --> C{设置 Top100}
+                        C --> D[导出Excel]
+                        D --> E(Excel -> 选股器 -> 板块查询)
+                        E --> F[统计题材占比]
+                        style F fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Top10 vs Top20 vs Top100 题材分析 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="sliders" /> 2. 榜单层级分析：Top10、Top20、Top100</div>
+                <div class="desc-box">
+                    <b>Top10：</b> 题材爆发的<span class="highlight">“题材驱动”</span>阶段，资金短期攻击性强。
+                    <br><b>Top20：</b> 包含次级题材或追涨标的，<span class="highlight">“热度扩散”</span>。
+                    <br><b>Top100：</b> 市场全貌，题材分布广度，<span class="highlight">“市场情绪底板”</span>。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Top10[Top 10: 题材爆发] --> T1_Signal[资金攻击烈度高]
+                        Top20[Top 20: 热度扩散] --> T2_Signal[次级题材/追涨跟随]
+                        Top100[Top 100: 市场全貌] --> T100_Signal[全市场题材分布]
+                        
+                        subgraph "关键判断指标"
+                        T1_Signal --> Alpha1[净流入强度]
+                        T2_Signal --> Alpha2[配套资金性质]
+                        T100_Signal --> Alpha3[热度持续时间]
+                        end
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 板块持续性判断：资金与时间维度 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="area-chart" /> 3. 持续性判断：资金性质与热度周期</div>
+                <div class="desc-box">
+                    <b>核心：</b> 仅看占比无效，需结合<span class="highlight">资金性质（净流入/出）</span>与<span class="highlight">热度持续时间（日/周）</span>。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        A[题材在Top100占比高] --> B{是否持续净流入?}
+                        B -- 是 --> C{热度持续X日/周?}
+                        B -- 否 --> D[资金流出/撤退 风险]
+                        C -- 是: 基金/券商 --> E[★ 具备中长期潜力]
+                        C -- 否: 散户/一日游 --> F[短线轮动/快速回撤]
+                        style E fill:#f6ffed,stroke:#52c41a
+                        style F fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 综合操作建议 -->
+            <div class="summary-box">
+                <div class="summary-title"><a-icon type="bulb" /> 实战操作要点：</div>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div class="policy-item">
+                            <h4 style="color:#1890ff; margin-bottom: 5px;">✅ 重点关注</h4>
+                            <p style="font-size: 13px; color: #000; opacity: 0.9;">
+                                当一个题材在<span class="highlight-text">Top20占比极高</span>，且<span class="highlight-text">多个交易日</span>仍盘踞榜单前列，同时伴随<span class="highlight-text">机构/基金</span>的持续净流入，则该题材<span class="highlight-text">具备中长线潜力</span>。
+                            </p>
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div class="policy-item" style="background: #404040; border: 1px solid #606060;">
+                            <h4 style="color:#ffa39e; margin-bottom: 5px;">⚠️ 警惕风险</h4>
+                            <p style="font-size: 13px; color: #fff; opacity: 0.9;">
+                                题材频繁轮换，榜单<span class="highlight-text">只在Top10出现</span>，且<span class="highlight-text">净流入不稳定</span>，或<span class="highlight-text">卖五有机构出逃</span>，则为<span class="highlight-text">短线炒作</span>，风险极高。
+                            </p>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+            <div>==========================================================================================</div>
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="area-chart" /> 1. 连板天梯：市场的“节拍器”</div>
+                <div class="desc-box">
+                    <b>查看路径：</b> 同花顺PC版 -> 行情 -> 连板天梯；App版 -> 行情分类 -> 连板天梯。
+                    <br><b>核心价值：</b> 连板天梯是资金精气神的浓缩。通过<span class="highlight-text">“最高板高度”</span>和<span class="highlight-text">“连板家数分布”</span>，可以瞬间判断主力在进攻还是防御。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Step1[查看连板高度排序] --> Step2{观察最高板连板数}
+                        Step2 -->|8板以上| High[极度狂热: 随时防范系统性回撤]
+                        Step2 -->|3-7板| Mid[理性博弈: 寻找补涨或分歧机会]
+                        Step2 -->|0-2板| Low[冰点恐慌: 观察新热点种子萌芽]
+                        style High fill:#fff1f0,stroke:#f5222d
+                        style Low fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 板块共振：主力风向标 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="cluster" /> 2. 板块占比：捕捉主力攻击主线</div>
+                <div class="desc-box">
+                    <b>判定诀窍：</b> 如果某个板块（如半导体、人工智能）在连板天梯中<span class="highlight-text">占比突然上升</span>，说明资金已达成共识开始疯狂涌入，这是该行业进入主升浪的铁证。
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <span class="ladder-tag tag-high">最高板：主线总龙头、</span>
+                    <span class="ladder-tag tag-mid">中位板：中坚力量/板块强度、</span>
+                    <span class="ladder-tag tag-low">低位板：补涨新秀/热点种子</span>
+                </div>
+            </div>
+
+            <!-- 3. 周期判断：埋伏期 vs 退潮期 -->
+            <div class="section-card">
+                <div class="logic-title"><a-icon type="retweet" /> 3. 埋伏期与退潮期的深度识别</div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start[连板天梯动态观察] --> Condition1{连板数从0-2回暖?}
+                        Condition1 -- 是: 伴随成交量萎靡 --> Ambush[★ 埋伏期: 资金在磨刀, 寻找新热点]
+                        Condition1 -- 否 --> Condition2{最高板突然断板崩塌?}
+                        
+                        Condition2 -- 是: 跌幅榜家数大增 --> Ebb[★ 退潮期: 资金撤离, 执行防御清仓]
+                        Condition2 -- 否 --> Trending[主升/震荡期: 顺势而为]
+                        
+                        style Ambush fill:#e6f7ff,stroke:#1890ff
+                        style Ebb fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div style="background:#f0f5ff; padding:15px; border-radius:6px; border-left:4px solid #1890ff;">
+                            <b>🕵️ 埋伏期特征：</b><br>
+                            连板数量极少，市场暂时安静。但涨幅榜上已开始出现零星的同板块强势个股，这是资金在悄悄建仓的信号。
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div style="background:#fff1f0; padding:15px; border-radius:6px; border-left:4px solid #f5222d;">
+                            <b>🌊 退潮期特征：</b><br>
+                            连板高度锐减，成交量异常放大（卖单涌现）。市场从风险资产转向避险，高位股出现“A字杀”回撤。
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+
+            <!-- 4. 实战总结 -->
+            <div class="summary-dark">
+                <h4 style="color: #40a9ff; margin-bottom: 10px;"><a-icon type="bulb" /> 操盘手金律：</h4>
+                <ul style="font-size: 14px; line-height: 2; opacity: 0.9;">
+                    <li><b>节奏控制：</b> 连板天梯一旦失去高度，往往意味着老行情结束。</li>
+                    <li><b>信号确认：</b> 连板高度从“0-2”向“3-5”跨越，是埋伏成功的第一个进攻哨声。</li>
+                    <li><b>板块切换：</b> 盯死天梯中占比最高的板块，那才是主力资金驻扎的“真战场”。</li>
+                </ul>
+            </div>
+        </a-tab-pane>
+        <!-- Tab 3: 波背离核心技术 -->
+        <a-tab-pane key="3" tab="波背离战法核心">
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 波背离（Bo Bei Li）判定流程</h2>
+                <div class="logic-desc">
+                    <b>核心精髓：</b> 在极大波动时，方向与趋势相反。寻找强势股在回踩关键点位（主力加仓线）时的止跌信号。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["开始扫描 (通达信402)"] --> Filter1["3日内强力拉升"]
+                        Filter1 --> Filter2["急跌/急回踩 (背离形成)"]
+                        Filter2 --> Check1{"关键支撑不破?"}
+                        Check1 -- 否 --> Drop["放弃 (跌的不看)"]
+                        Check1 -- 是 --> Check2{"量能状态?"}
+                        Check2 -- "量窒息/绿盘/极小量" --> Signal["★ 核心波背离点"]
+                        Check2 -- "出5日连量" --> Signal
+                        Signal --> Confirm["配合主力加仓线/成本线"]
+                        
+                        style Signal fill:#fff1f0,stroke:#f5222d,stroke-width:2px
+                        style Start fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 竞价排名与波背离的耦合逻辑</h2>
+                <div class="logic-desc">
+                    开盘前5分钟竞价排名衡量买入力度。高排名 + 波背离方向反转 = 确定性买点。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Auction["前5分钟竞价"] --> Rank{"竞价排名靠前?"}
+                        Rank -- 否 --> Observation["弱势观望"]
+                        Rank -- 是 --> LogicMatch{"符合波背离形态?"}
+                        LogicMatch -- 是 --> StrongBuy["力度增强 (预期差买入)"]
+                        LogicMatch -- 否 --> Fail["诱多风险"]
+                        
+                        subgraph "选股公式"
+                        StrongBuy --> Combine["排名 + 趋势背离 + 关键位支撑"]
+                        end
+                        
+                        style StrongBuy fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+            <div class="section-card" style="margin-top: 20px; border-top: 5px solid #1890ff;">
+                <h2><a-icon type="bulb"></a-icon> 系统总结与核心纪律</h2>
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div class="code-snippet">
+                            <span style="color: #7cb305;">// 波背离选股核心算法伪代码</span><br>
+                            <span style="color: #cc99cd;">if</span> (Stock.VolumeRatio > 1.5 && Stock.Price跌至(主力加仓线)) {<br>
+                            &nbsp;&nbsp;<span style="color: #cc99cd;">if</span> (Stock.IsStrong && Stock.WaitReversal()) {<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;Log(<span style="color: #7ec699;">"波背离买点触发"</span>);<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;ExecuteBuy(<span style="color: #7ec699;">"绿盘低吸"</span>);<br>
+                            &nbsp;&nbsp;}<br>
+                            }
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <ul style="line-height: 2;">
+                            <li><span class="tech-tag">选股逻辑</span> <b>调整时间短的优先，量窒息为加分项。</b></li>
+                            <li><span class="tech-tag">择时逻辑</span> <b>出货顺情绪（高开），吸筹逆情绪（低开/底背离）。</b></li>
+                            <li><span class="tech-tag">打板节奏</span> <b>分歧后看支撑，不破支撑找波背离。</b></li>
+                            <li><span class="tech-tag">风控逻辑</span> <b>那种一直跌的不看，只在强势股里找背离。</b></li>
+                        </ul>
+                    </a-col>
+                </a-row>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 4: 分时量柱与情绪判定 -->
+        <a-tab-pane key="4" tab="分时量柱与情绪监控">
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 分时红绿柱的情绪语言</h2>
+                <div class="logic-desc">
+                    买绿不买红。绿高红低代表压单（底背离吸筹），红高绿低代表托单（出货嫌疑）。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Volume["实时分时量柱"] --> V1{"绿高红低?"}
+                        V1 -- 是 --> State1["情绪压单 (底背离)"]
+                        State1 --> Action1["逆情绪吸筹 (低吸点)"]
+                        
+                        Volume --> V2{"红高绿低?"}
+                        V2 -- 是 --> State2["情绪托单"]
+                        State2 --> Action2["防范拆弹出货"]
+                        
+                        Volume --> V3{"夹板隐藏单?"}
+                        V3 -- 是 --> Action3["主力正在洗盘/吸筹"]
+                        
+                        style Action1 fill:#f6ffed,stroke:#52c41a
+                        style Action2 fill:#fff1f0,stroke:#f5222d
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">4</span> 庄家画图与合力股识别</h2>
+                <div class="logic-desc">
+                    通过9:45前的堆量柱识别庄家意图。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Time1["9:45 前"] --> Pattern1["低开 + 红色堆量"]
+                        Pattern1 --> Logic1["庄家画图手法"]
+                        Logic1 --> Tail["尾盘找确定性低吸"]
+                        
+                        Time2["日内第二波"] --> Pattern2["拉升4-5点 + 堆量"]
+                        Pattern2 --> Logic2["打造合力股信号"]
+                        Logic2 --> Future["后续大涨预期"]
+                        
+                        style Logic2 fill:#e6f7ff,stroke:#1890ff
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 5: 超短预期差（打针） -->
+        <a-tab-pane key="5" tab="💉 超短打针逻辑">
+            <div class="section-card">
+                <h2><span class="step-num">5</span> 预期差抢跑与打针战法</h2>
+                <div class="logic-desc">
+                    核心关注产业股逻辑，尤其是20亿左右的小盘股。-8个点的深针是绝佳的反抽机会。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Case1["尾盘资金抢跑下杀"] --> Expect1["次日高开预期 (预期差)"]
+                        
+                        Case2["产业逻辑股"] --> Action2["执行打针 (非事件驱动)"]
+                        
+                        Case3["双涨停后"] --> Action3["快针 (深水区吸筹)"]
+                        
+                        Case4["底部涨停+大跌"] --> Action4["次日反抽逻辑"]
+                        
+                        subgraph "打针参数"
+                        Cap["20亿小盘"] --- Needle["-8个点针"]
+                        end
+                        
+                        style Action3 fill:#f6ffed,stroke:#52c41a
+                        style Action4 fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 6: 龙头不死与黑天鹅 -->
+        <a-tab-pane key="6" tab="龙头博弈与黑天鹅应对">
+            <div class="section-card">
+                <h2><span class="step-num">6</span> 黑天鹅环境下的“不死龙头 (抱团)”逻辑</h2>
+                <div class="logic-desc">
+                    当大盘因黑天鹅下跌，寻找“不死”的龙头，形成资金抱团。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Swan["黑天鹅 (如疫情数据)"] --> Pan["大势普跌"]
+                        Pan --> Strong["不死龙头 (抱团)"]
+                        Strong --> CaseA["医药拉升 (河化/中国医药)"]
+                        Strong --> CaseB["白酒拉升 (金种子酒)"]
+                        
+                        CaseA --> Logic["'何化不一定死' - 大量不破"]
+                        Logic --> Rule["绕过'太上皇'找分支强力补涨"]
+                        
+                        style Strong fill:#fff1f0,stroke:#f5222d,stroke-width:2px
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><span class="step-num">7</span> 散户执行步骤总结</h2>
+                <a-table :data-source="executionSteps" :pagination="false" bordered size="small">
+                    <a-table-column title="步骤" data-index="step" key="step" width="80px"></a-table-column>
+                    <a-table-column title="操作工具" data-index="tool" key="tool"></a-table-column>
+                    <a-table-column title="核心指标" data-index="target" key="target"></a-table-column>
+                    <a-table-column title="业务意义" data-index="meaning" key="meaning"></a-table-column>
+                </a-table>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+<script>
+    Vue.use(antd);
+
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'neutral',
+        flowchart: { 
+            useMaxWidth: false, 
+            htmlLabels: true, 
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                executionSteps: [
+                    { step: '01', tool: '通达信', target: '402选股 / 3日强', meaning: '锁定市场核心强势票' },
+                    { step: '02', tool: '隔夜单', target: '开盘换手 / 竞价排名', meaning: '判断资金攻击烈度' },
+                    { step: '03', tool: '同花顺', target: '晋级梯度 / 情绪周期', meaning: '看龙虎榜与高度板连板情绪' },
+                    { step: '04', tool: '分时图', target: '波背离 / 红绿量柱', meaning: '寻找日内低吸或加仓精确点' }
+                ],
+                cutData: [
+                    { dimension: '换手率', good: '稳步下降/缩量横盘', bad: '急剧爆量/频繁跳动' },
+                    { dimension: '波动率', good: '趋于平缓 (资金有序)', bad: '上蹿下跳 (资金惶恐)' },
+                    { dimension: '持续性', good: '龙头连板/梯队完整', bad: '一日游/首板即终点' },
+                    { dimension: '资金流', good: '主力持续净流入', bad: '主力进一退二' }
+                ],
+                strategyData: [
+                    { mode: '震荡市', action: '等待高低点位', analogy: '类似于日内做T' },
+                    { mode: '突破行情', action: '等待回踩支撑', analogy: '确认假突破风险' },
+                    { mode: '趋势行情', action: '等待缩量回调', analogy: '顺势而为，不追高' },
+                    { mode: '反弹行情', action: '等待量能激增', analogy: '放量是反弹的灵魂' }
+                ]
+            }
+        },
+        methods: {
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+            });
+        }
+    });
+</script>
+</body>
+</html>
