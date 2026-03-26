@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>概率分布技术白皮数：深度解析泊松分布</title>
+<!--
+https://clq0528.github.io/统计/统计学2.html
+-->
+    <!-- 引入 Ant Design Vue V2 样式 (兼容Vue2) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --poisson-color: #722ed1;
+            --bg-gray: #f0f2f5;
+            --navy-blue: #001529;
+        }
+
+        body {
+            background: var(--bg-gray);
+            padding: 24px;
+            font-family: -apple-system, system-ui, sans-serif;
+        }
+
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid var(--poisson-color);
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue);
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--poisson-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 15px;
+            background: #f9f0ff;
+            border-left: 4px solid #722ed1;
+            color: #531dab;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        .chart-container {
+            width: 100%;
+            background: #fafafa;
+            border: 1px solid #ebedf0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 15px 0;
+            overflow-x: auto;
+            text-align: center;
+        }
+
+        .step-num {
+            background: var(--navy-blue);
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 12px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .tech-tag {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .tag-logic { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+        .tag-math { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+
+        .mermaid { display: flex; justify-content: center; }
+        .code-block { background: #001529; color: #a6e22e; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; margin: 10px 0; }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <h1 style="margin: 0; color: #001529;">泊松分布技术白皮书：稀有事件的统计建模</h1>
+            <p style="color: #666; margin-top: 10px;">
+                从数学极限到工业应用的离散概率推断逻辑分析
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange" type="card">
+            <a-tab-pane key="1" tab="统计假设">
+                <div>================================================================================================</div>
+                <div>=================================组间方差与组内方差===============================================================</div>
+                <!-- 统计推断底层逻辑：方差、信号与相关性的本质 - 独立分段 -->
+                <div id="variance-correlation-deep-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式定义 -->
+                    <style>
+                        .theory-section { margin-bottom: 35px; border-left: 5px solid #722ed1; padding-left: 20px; }
+                        .theory-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .theory-header span { background: #722ed1; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 16px; }
+                        .logic-desc { margin: 10px 0; padding: 15px; background: #f9f0ff; border-left: 4px solid #722ed1; color: #531dab; font-weight: 500; line-height: 1.6; }
+                        .math-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+                        .math-card { background: #fafafa; border: 1px solid #d9d9d9; padding: 18px; border-radius: 8px; }
+                        .math-card h4 { color: #722ed1; font-weight: bold; margin-bottom: 10px; border-bottom: 1px dashed #d3adf7; padding-bottom: 5px; }
+                        .mermaid-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+                        .highlight-blue { color: #1890ff; font-weight: bold; }
+                        .highlight-orange { color: #fa8c16; font-weight: bold; }
+                    </style>
+
+                    <!-- 1. 核心原理：方差分解逻辑 -->
+                    <div class="theory-section">
+                        <div class="theory-header"><span>1</span> 逻辑真相：相关性是“被解释的方差”</div>
+                        <div class="logic-desc">
+                            你说得很对！ANOVA 的核心逻辑就是将 <b>总变异 (SST)</b> 拆解。当我们说两个变量有“关系”时，本质上是在说：<b>“由于分组（自变量）变化带来的差异，远大于随机波动带来的差异”。</b>
+                        </div>
+                        <div class="math-grid">
+                            <div class="math-card">
+                                <h4>组间方差 (SSB) - <span class="highlight-blue">信号 Signal</span></h4>
+                                <p style="font-size: 13px;">代表由于你改变了自变量（如更换了工艺、调整了温度）而产生的收益或变化。这是我们想要的<b>“相关性证据”</b>。</p>
+                            </div>
+                            <div class="math-card">
+                                <h4>组内方差 (SSW) - <span class="highlight-orange">噪声 Noise</span></h4>
+                                <p style="font-size: 13px;">代表同组内部由于测量误差、环境随机波动产生的不稳定。这是干扰我们判断的<b>“背景噪声”</b>。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 拟物化视角：收音机调频 -->
+                    <div class="theory-section" style="border-left-color: #1890ff;">
+                        <div class="theory-header"><span style="background: #1890ff;">2</span> 拟物化比喻：收音机听歌</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                A["总波动 (SST)"] --> B["组间差异 (信号)"]
+                                A --> C["组内波动 (底噪)"]
+                                B -- "除以" --> C
+                                C --> D{F-值: 信噪比}
+                                D -- "F 很大" --> E["捕捉到清晰旋律 (显著相关)"]
+                                D -- "F 接近 1" --> F["全是滋滋声 (无显著关系)"]
+                                style E fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                                style F fill:#fff1f0,stroke:#f5222d
+                            </div>
+                        </div>
+                        <p style="font-size: 14px; color: #666;">
+                            <b>结论：</b> 我们通过 F-检验（ANOVA）找相关性，其实就是在测<b>“信噪比”</b>。
+                        </p>
+                    </div>
+
+                    <!-- 3. 统计学统一模型：相关性系数与方差的统一 -->
+                    <div class="theory-section" style="border-left-color: #fa8c16;">
+                        <div class="theory-header"><span style="background: #fa8c16;">3</span> 进阶视点：T/ANOVA 与 Pearson 的统一</div>
+                        <div class="logic-desc" style="background: #fff7e6; border-left-color: #fa8c16; color: #874d00;">
+                            虽然双样本 T/ANOVA 用于 <b>分类 vs 连续</b>，Pearson 相关用于 <b>连续 vs 连续</b>，但在机器学习视角下它们是统一的。
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #fafafa; text-align: left;">
+                                    <th style="border: 1px solid #f0f0f0; padding: 12px;">分析工具</th>
+                                    <th style="border: 1px solid #f0f0f0; padding: 12px;">如何量化“相关性”</th>
+                                    <th style="border: 1px solid #f0f0f0; padding: 12px;">底层方差逻辑</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px; font-weight: bold;">T-检验 / ANOVA</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;">F-统计量 (方差比)</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;">比较“由于分组产生的方差”是否显著。</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px; font-weight: bold;">相关性系数 (R)</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;">协方差 / 标准差积</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;">衡量“两个变量同步变动的方差”比例。</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px; font-weight: bold;">回归分析 (R²)</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;">决定系数 (R-squared)</td>
+                                    <td style="border: 1px solid #f0f0f0; padding: 12px;"><b>本质相同：</b> 代表总方差中被模型解释掉的百分比。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 4. 架构师总结 -->
+                    <div class="theory-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="theory-header">总结：寻找确定性的艺术</div>
+                        <div class="logic-desc" style="background: #f6ffed; border-left-color: #52c41a; color: #237804;">
+                            <b>核心奥义：</b> <br>
+                            当你看到数据在跳动（方差）时，统计学家的第一反应是：<br>
+                            1. 有多少跳动是<b>“有主人的”</b>（由组间、相关变量引起）？<br>
+                            2. 有多少跳动是<b>“野生的”</b>（由随机噪声、不可控因素引起）？<br>
+                            <b>只要“有主人的方差”足够大，我们就宣布：这两个事物之间存在相关性。</b>
+                        </div>
+                    </div>
+                </div>
+                <div>================================================================================================</div>
+                <div>===================================协方差=============================================================</div>
+                <!-- 协方差深度解析：变量间的同步律 - 独立分段 -->
+                <div id="covariance-logic-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式定义 -->
+                    <style>
+                        .cov-section { margin-bottom: 35px; border-left: 5px solid #fa8c16; padding-left: 20px; }
+                        .cov-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .cov-header span { background: #fa8c16; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 16px; }
+                        .logic-desc { margin: 10px 0; padding: 15px; background: #fff7e6; border-left: 4px solid #fa8c16; color: #874d00; font-weight: 500; line-height: 1.6; }
+                        .math-box { background: #fafafa; border: 1px solid #d9d9d9; padding: 15px; border-radius: 6px; font-family: 'Cambria', serif; font-size: 16px; text-align: center; margin: 15px 0; }
+                        .analogy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 20px 0; }
+                        .analogy-card { background: #fafafa; border: 1px solid #eee; padding: 18px; border-radius: 8px; }
+                        .analogy-card h4 { color: #fa8c16; font-weight: bold; margin-bottom: 8px; }
+                        .mermaid-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+                    </style>
+
+                    <!-- 1. 核心定义：从方差到协方差 -->
+                    <div class="cov-section">
+                        <div class="cov-header"><span>1</span> 物理本质：共同波动的“趋势”</div>
+                        <div class="logic-desc">
+                            <b>方差 (Variance)</b> 衡量的是一个变量<b>自己</b>跳得有多高。<br>
+                            <b>协方差 (Covariance)</b> 衡量的是两个变量<b>是否一起</b>跳，以及跳的方向是否一致。
+                        </div>
+                        <div class="math-box">
+                            Cov(X, Y) = E[ (X - μₓ)(Y - μᵧ) ]
+                        </div>
+                        <p style="font-size: 14px;">
+                            它的核心逻辑是：<b>偏离值的乘积</b>。如果 X 向上偏离时 Y 也向上偏离，乘积为正；如果一个升一个降，乘积为负。
+                        </p>
+                    </div>
+
+                    <!-- 2. 拟物化逻辑：双人舞的默契度 -->
+                    <div class="cov-section" style="border-left-color: #1890ff;">
+                        <div class="cov-header"><span style="background: #1890ff;">2</span> 拟物化比喻：双人舞步</div>
+                        <div class="analogy-grid">
+                            <div class="analogy-card">
+                                <h4>正协方差 (Positive)</h4>
+                                <p style="font-size: 13px;"><b>夫唱妇随：</b> X 往前走，Y 也跟着往前走。两者的步调是<b>同步</b>的（如同：身高与体重）。</p>
+                            </div>
+                            <div class="analogy-card">
+                                <h4>负协方差 (Negative)</h4>
+                                <p style="font-size: 13px;"><b>你进我退：</b> X 往前走，Y 反而往后退。两者的步调是<b>反向</b>的（如同：运动时间与体脂率）。</p>
+                            </div>
+                            <div class="analogy-card">
+                                <h4>零协方差 (Zero)</h4>
+                                <p style="font-size: 13px;"><b>互不搭理：</b> X 往前走，Y 却在原地转圈或乱跳。两者的动向<b>没有线性关系</b>。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 演进链路：为什么协方差不够“完美”？ -->
+                    <div class="cov-section" style="border-left-color: #722ed1;">
+                        <div class="cov-header"><span style="background: #722ed1;">3</span> 逻辑演进：从协方差到相关系数 (R)</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                A["协方差 Cov(X, Y)"] -- "缺点: 受量纲影响" --> B["无法直观判断相关强度<br/>(比如: 100和0.01可能代表同等相关性)"]
+                                B -- "除以标准差之积" --> C["相关系数 Pearson R"]
+                                C -- "优点: 归一化 [-1, 1]" --> D["纯粹的默契值 (不带单位)"]
+                                style C fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. 架构师总结 -->
+                    <div class="cov-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="cov-header">总结：协方差是相关性的“原始胚胎”</div>
+                        <div class="logic-desc" style="background: #f0f5ff; border-left-color: #1890ff; color: #003a8c;">
+                            <b>核心奥义：</b> <br>
+                            协方差决定了相关性的<b>方向</b>（正负号）。它在计算回归系数、资产组合风险（量化金融）中至关重要。但如果你想在业务报表中直接展示“这两个指标关系大不大”，请务必将协方差“脱掉单位的外壳”，转化成<b>相关系数 (R)</b>。
+                        </div>
+                    </div>
+                </div>
+                <div>================================================================================================</div>
+                <div>===================================统计假设=============================================================</div>
+                <!-- 统计假设检验白皮书：工业界降噪与决策引擎 - 独立分段 -->
+                <div id="statistical-hypothesis-testing-hub" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式定义 -->
+                    <style>
+                        .stat-section { margin-bottom: 35px; border-left: 5px solid #1890ff; padding-left: 20px; }
+                        .stat-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .stat-header span { background: #1890ff; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 16px; }
+                        .logic-desc { margin: 10px 0; padding: 15px; background: #f0f5ff; border-left: 4px solid #1890ff; color: #003a8c; font-weight: 500; line-height: 1.6; }
+                        .scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+                        .scenario-card { background: #fafafa; border: 1px solid #d9d9d9; padding: 18px; border-radius: 8px; transition: all 0.3s; }
+                        .scenario-card:hover { border-color: #1890ff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+                        .scenario-card h4 { color: #1890ff; font-weight: bold; margin-bottom: 10px; border-bottom: 1px dashed #d9d9d9; padding-bottom: 5px; }
+                        .tool-tag { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+                        .mermaid-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+                        .decision-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+                        .decision-table th { background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-anchor: left; }
+                        .decision-table td { padding: 12px; border: 1px solid #f0f0f0; }
+                        .highlight-red { color: #f5222d; font-weight: bold; }
+                    </style>
+
+                    <!-- 1. 核心逻辑：统计学是业务的降噪仪 -->
+                    <div class="stat-section">
+                        <div class="stat-header"><span>1</span> 为什么需要统计假设？</div>
+                        <div class="logic-desc">
+                            统计假设的核心目标是<b>“过滤噪声”</b>。在工业和研发场景下，由于抽样误差的存在，我们观察到的“好转”或“恶化”可能是随机运气。假设检验提供了一套标准化的逻辑：<br>
+                            <b>先假设世界是平庸的（H0），只有当证据极其罕见（p < 0.05）时，我们才承认规律的存在。</b>
+                        </div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                A["观测到差异 (Delta)"] --> B{是偶然还是规律?}
+                                B -- "噪声/随机" --> C["接受 H0: 没有真实改变"]
+                                B -- "显著信号" --> D["拒绝 H0: 效果真实存在"]
+                                style D fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                                style C fill:#fff1f0,stroke:#f5222d
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 五大经典应用场景 -->
+                    <div class="stat-section">
+                        <div class="stat-header"><span>2</span> 工业与业务实战场景</div>
+                        <div class="scenario-grid">
+                            <!-- 场景 1 -->
+                            <div class="scenario-card">
+                                <h4>A/B 测试：比高低</h4>
+                                <p style="font-size: 13px;"><b>例子：</b>新旧设备合格率对比。<br><b>目标：</b>证明均值发生了显著位移。</p>
+                                <span class="tool-tag">双样本 T 检验 / ANOVA</span>
+                            </div>
+                            <!-- 场景 2 -->
+                            <div class="scenario-card">
+                                <h4>相关性：找关系</h4>
+                                <p style="font-size: 13px;"><b>例子：</b>车间湿度影响不良率吗？<br><b>目标：</b>证明两个变量非相互独立。</p>
+                                <span class="tool-tag">Correlation Test / 回归</span>
+                            </div>
+                            <!-- 场景 3 -->
+                            <div class="scenario-card">
+                                <h4>一致性：比波动</h4>
+                                <p style="font-size: 13px;"><b>例子：</b>不同供应商的零件稳定性。<br><b>目标：</b>证明方差或变异系数的差异。</p>
+                                <span class="tool-tag">F-test / Levene 检验</span>
+                            </div>
+                            <!-- 场景 4 -->
+                            <div class="scenario-card">
+                                <h4>拟合优度：对比例</h4>
+                                <p style="font-size: 13px;"><b>例子：</b>故障类型分布符合历史吗？<br><b>目标：</b>证明实际频数分布与预期一致。</p>
+                                <span class="tool-tag">卡方检验 (Chi-Square)</span>
+                            </div>
+                            <!-- 场景 5 -->
+                            <div class="scenario-card">
+                                <h4>等效性：证“没区别”</h4>
+                                <p style="font-size: 13px;"><b>例子：</b>廉价原材料替代测试。<br><b>目标：</b>证明差异在可接受的微小区间内。</p>
+                                <span class="tool-tag">TOST 检验</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 决策矩阵 -->
+                    <div class="stat-section">
+                        <div class="stat-header"><span>3</span> 统计决策矩阵：我该选哪种工具？</div>
+                        <table class="decision-table">
+                            <thead>
+                                <tr>
+                                    <th>你的需求</th>
+                                    <th>典型例子</th>
+                                    <th>统计假设的具体目标</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>比高低</b></td>
+                                    <td>新工艺比旧工艺好吗？</td>
+                                    <td>证明均值有显著位移</td>
+                                </tr>
+                                <tr>
+                                    <td><b>比波动</b></td>
+                                    <td>新机器比旧机器更稳定吗？</td>
+                                    <td>证明方差有显著减小</td>
+                                </tr>
+                                <tr>
+                                    <td><b>找关系</b></td>
+                                    <td>温度越高，坏品越多吗？</td>
+                                    <td>证明相关系数不等于 0</td>
+                                </tr>
+                                <tr>
+                                    <td><b>对比例</b></td>
+                                    <td>现在的故障分布和以前一样吗？</td>
+                                    <td>证明实际分布与预期分布一致</td>
+                                </tr>
+                                <tr>
+                                    <td><b>测准度</b></td>
+                                    <td>仪器读数和标准块有偏差吗？</td>
+                                    <td>证明样本均值与目标值无显著差异</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 4. 架构师总结 -->
+                    <div class="stat-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="stat-header">总结：数据驱动决策的终极保险</div>
+                        <div class="logic-desc" style="background: #f6ffed; border-left-color: #52c41a; color: #237804;">
+                            <b>核心奥义：</b> <br>
+                            统计假设检验不仅是学术工具，更是大规模工业生产的<b>质量防火墙</b>。它防止我们因为一次“运气好”的抽样就投入巨资更换工艺（避免第一类错误），也确保我们不会放过那些虽然微小但具有统计学确定性的改进机会。
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <!-- Tab 2: 回归分析 -->
+            <a-tab-pane key="2" tab="回归分析 (Regression)">
+                <div class="section-card">
+                    <h2><span class="step-num">5</span> 线性回归原理：最小二乘法</h2>
+                    <div class="logic-desc">
+                        通过回归线预测反应变量值与实际值之差的平方和最小时，得到最佳拟合线。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            X[解释变量 x] -- "线性方程 y = b0 + b1x" --> Y[预测变量 ŷ]
+                            Error[实际值 y - 预测值 ŷ] -- "平方求和" --> Min[最小化 SSE]
+                            Min -- "求解参数" --> Params[b0 截距 / b1 斜率]
+                            style Min fill:#e6fffb,stroke:#13c2c2
+                        </div>
+                    </div>
+                    <div class="code-snippet">
+                        <pre>
+<span style="color: #6a9955;"># 使用 statsmodels 拟合线性回归</span>
+<span style="color: #569cd6;">import</span> statsmodels.api <span style="color: #569cd6;">as</span> sm
+df[<span style="color: #ce9178;">'intercept'</span>] = <span style="color: #b5cea8;">1</span> <span style="color: #6a9955;"># 手动添加截距</span>
+lm = sm.OLS(y, X)
+result = lm.fit()
+<span style="color: #569cd6;">print</span>(result.summary())
+                        </pre>
+                    </div>
+                </div>
+                <div>=========================================================================================================</div>
+                <div>====================通过回归线预测反应变量值与实际值之差的平方和最小时，得到最佳拟合线=====================================================================================</div>
+                <!-- 最小二乘法 (OLS) 拟合机制深度解析 - 独立分段 -->
+                <div id="ols-mechanism-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式 -->
+                    <style>
+                        .ols-section { margin-bottom: 35px; border-left: 5px solid #1890ff; padding-left: 20px; }
+                        .ols-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .ols-header span { background: #1890ff; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; margin-right: 12px; font-size: 16px; }
+                        .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin: 20px 0; }
+                        .logic-card { background: #f0f5ff; border: 1px solid #adc6ff; padding: 18px; border-radius: 8px; }
+                        .logic-card h4 { color: #003a8c; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #d6e4ff; padding-bottom: 5px; }
+                        .formula-box { background: #fafafa; border: 1px solid #d9d9d9; padding: 15px; border-radius: 6px; font-family: 'Cambria', serif; font-size: 16px; text-align: center; margin: 15px 0; }
+                        .highlight-box { background: #fff7e6; border-left: 4px solid #ffa940; padding: 15px; color: #874d00; font-size: 14px; margin: 15px 0; }
+                        .mermaid-box { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 20px; text-align: center; }
+                    </style>
+
+                    <!-- 1. 残差的定义：理论与现实的温差 -->
+                    <div class="ols-section">
+                        <div class="ols-header"><span>1</span> 物理基础：什么是残差 (Residual)？</div>
+                        <div class="logic-grid">
+                            <div class="logic-card">
+                                <h4>观测值 (y)</h4>
+                                <p style="font-size: 13px;">数据集中的真实发生值，代表了现实中的不规则性和噪音。</p>
+                            </div>
+                            <div class="logic-card" style="background: #f6ffed; border-color: #b7eb8f;">
+                                <h4 style="color: #237804;">预测值 (ŷ)</h4>
+                                <p style="font-size: 13px; color: #237804;">回归线上的坐标点。它代表了我们认为的“规律性趋势”。</p>
+                            </div>
+                        </div>
+                        <div class="formula-box">
+                            <b>残差 (eᵢ) = 实际值 (yᵢ) - 预测值 (ŷᵢ)</b>
+                        </div>
+                        <p style="font-size: 14px;">残差就是回归线没能解释的那部分波动。残差越大，说明模型离现实越远。</p>
+                    </div>
+
+                    <!-- 2. 为什么要“平方”？：消除正负，放大误差 -->
+                    <div class="ols-section">
+                        <div class="ols-header"><span>2</span> 数学博弈：为什么要选择“平方和”？</div>
+                        <div class="highlight-box">
+                            <b>架构思考：</b> 为什么不直接求残差之和？因为正偏差和负偏差会相互抵消（1 + -1 = 0），即使模型烂透了，总和也可能为零。
+                        </div>
+                        <div class="logic-grid">
+                            <div class="logic-card" style="background: #fafafa; border-color: #d9d9d9;">
+                                <h4>消除符号干扰</h4>
+                                <p style="font-size: 12px;">平方能把所有负值转化为正值，确保误差只能被<b>“累加”</b>而不能被“抵消”。</p>
+                            </div>
+                            <div class="logic-card" style="background: #fafafa; border-color: #d9d9d9;">
+                                <h4>惩罚大离群点</h4>
+                                <p style="font-size: 12px;">平方具有“放大效应”。如果残差是 2，平方是 4；如果残差是 10，平方就是 100。这强制回归线必须尽可能靠近那些偏离极远的点。</p>
+                            </div>
+                            <div class="logic-card" style="background: #fafafa; border-color: #d9d9d9;">
+                                <h4>求导便利性</h4>
+                                <p style="font-size: 12px;">在微积分中，平方函数是平滑且可导的，这使得计算机能通过求导轻松找到那个“最小值的坑”。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 最佳拟合的逻辑链路 -->
+                    <div class="ols-section">
+                        <div class="ols-header"><span>3</span> 逻辑推导：从残差平方和 (SSE) 到最优解</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                Line[假设一条回归线: y = b0 + b1x] --> Calc[计算每个点到线的残差 e]
+                                Calc --> Square["平方并求和: SSE = ∑(y - ŷ)²"]
+                                Square --> Minimize{求最小值: min SSE}
+                                Minimize -- "偏导数为 0" --> Solution[求解回归系数 b0 和 b1]
+                                Solution --> BestLine[得到最佳拟合回归线]
+
+                                style Minimize fill:#fff7e6,stroke:#ffa940,stroke-width:2px
+                                style BestLine fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. 架构师终极洞察 -->
+                    <div class="ols-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="ols-header"><span>4</span> 总结：什么是“最佳”？</div>
+                        <div class="highlight-box" style="background: #e6f7ff; border-left-color: #1890ff; color: #003a8c;">
+                            <b>核心奥义：</b> <br>
+                            所谓的“最佳拟合线”，本质上是在寻找一个<b>“平衡点”</b>。由于数据点的分布通常是不规则的，我们无法穿过每一个点，因此最小二乘法选择了让所有点对这条线的<b>“集体不满程度（平方和）”达到最低</b>。 <br><br>
+                            这就好比在闹市中心选一个基站位置，虽然不能让所有人都紧贴基站，但我们要让所有人距离基站的<b>“痛苦指数（距离平方）”之和最小</b>。这就是回归分析中“稳健性”与“拟合度”的终极平衡。
+                        </div>
+                    </div>
+                </div>
+                <div>==========================================================================================================</div>
+                <div>===========================回归线是通过最小二乘法求出来的，而不是先画出回归线的是不===============================================================================</div>
+                <!-- 回归拟合先后顺序逻辑深度解析 - 独立分段 -->
+                <div id="regression-order-logic-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式 -->
+                    <style>
+                        .order-section { margin-bottom: 35px; border-left: 5px solid #722ed1; padding-left: 20px; }
+                        .order-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .order-header span { background: #722ed1; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 16px; }
+                        .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+                        .logic-card { background: #f9f0ff; border: 1px solid #d3adf7; padding: 18px; border-radius: 8px; }
+                        .logic-card h4 { color: #531dab; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #efdbff; padding-bottom: 5px; }
+                        .highlight-box { background: #fff7e6; border-left: 4px solid #ffa940; padding: 15px; color: #874d00; font-size: 14px; margin: 15px 0; }
+                        .mermaid-box { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
+                    </style>
+
+                    <!-- 1. 核心观点：计算决定形态 -->
+                    <div class="order-section">
+                        <div class="order-header"><span>1</span> 逻辑定位：计算是“因”，直线是“果”</div>
+                        <div class="highlight-box">
+                            <b>深度澄清：</b> 没错！在统计学中，回归线<b>绝对不是</b>先画出来再调整的，而是通过严密的数学计算直接“锁定”其位置的。
+                        </div>
+                        <div class="logic-grid">
+                            <div class="logic-card">
+                                <h4>直觉画线 (Intuition)</h4>
+                                <p style="font-size: 13px;">人类用肉眼观察散点图，尝试画一条“看起来在中间”的线。这叫<b>主观估计</b>，每个人画出来的可能都不一样。</p>
+                            </div>
+                            <div class="logic-card" style="background: #f6ffed; border-color: #b7eb8f;">
+                                <h4 style="color: #237804;">数学拟合 (Least Squares)</h4>
+                                <p style="font-size: 13px; color: #237804;">算法不需要“看”图。它直接读取所有坐标点 (x, y)，通过<b>偏导数方程组</b>求出唯一的截距 $b_0$ 和斜率 $b_1$。这叫<b>客观最优解</b>。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 算法推导链路：从数据到参数 -->
+                    <div class="order-section" style="border-left-color: #1890ff;">
+                        <div class="order-header"><span style="background: #1890ff;">2</span> 生产链路：回归线诞生的三部曲</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                A[原始散点数据 x, y] -- "Step 1: 建立目标函数" --> B["损失函数 SSE = ∑(y - (b0 + b1x))²"]
+                                B -- "Step 2: 求解极值 (求导)" --> C["正规方程组 (Normal Equations)"]
+                                C -- "Step 3: 计算出唯一系数" --> D["锁定参数 b0 和 b1"]
+                                D -- "最终形态" --> E["生成回归线 y = b0 + b1x"]
+
+                                style D fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                                style E fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 架构师视点：为什么顺序不能错？ -->
+                    <div class="order-section" style="border-left-color: #faad14;">
+                        <div class="order-header"><span style="background: #faad14;">3</span> 深度洞察：顺序决定了“唯一性”</div>
+                        <div class="logic-grid">
+                            <div class="logic-card" style="background: #fff7e6; border-color: #ffe58f;">
+                                <h4>排除人为干扰</h4>
+                                <p style="font-size: 13px; color: #874d00;">如果先画线，你会受到离群点（异常值）的视觉干扰。而最小二乘法通过平方权重，精准地计算出每个点对线的“拉力”，确保拟合结果是<b>全局最优</b>。</p>
+                            </div>
+                            <div class="logic-card" style="background: #fff7e6; border-color: #ffe58f;">
+                                <h4>预测的必然性</h4>
+                                <p style="font-size: 13px; color: #874d00;">只有先计算出精确的参数 $b_0$ 和 $b_1$，我们才敢对未来的 $x$ 对应的 $y$ 值进行预测。没有计算，线只是一张毫无根据的“画”。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. 结论总结 -->
+                    <div class="order-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="order-header"><span>4</span> 结论</div>
+                        <div class="highlight-box" style="background: #f0f5ff; border-left-color: #1890ff; color: #003a8c;">
+                            <b>核心奥义：</b> <br>
+                            在推论统计学的机器学习流程中：<br>
+                            1. <b>数据输入</b> 是原料；<br>
+                            2. <b>最小二乘法</b> 是加工逻辑（寻找残差平方和最小的数学解）；<br>
+                            3. <b>回归系数</b> 是输出的核心资产；<br>
+                            4. <b>画出回归线</b> 只是为了向人类展示“计算结果”的一种可视化手段。
+                        </div>
+                    </div>
+                </div>
+                <div>==========================================================================================================</div>
+                <div class="section-card">
+                    <h2><span class="step-num">6</span> 多重共线性分析 (VIF)</h2>
+                    <div class="logic-desc">
+                        自变量彼此相关会导致系数偏离。VIF > 10 提示存在较强多重共线性。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Diag[诊断方法] --> Scatter[散点图: sns.pairplot]
+                            Diag --> VIF[方差膨胀因子: VIF]
+                            VIF -- "> 10" --> Action[去除冗余变量]
+                        </div>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <h2><span class="step-num">7</span> 逻辑回归：二分类预测</h2>
+                    <div class="logic-desc">
+                        使用 Sigmoid 函数将结果映射到 [0, 1] 空间，预测事件发生的机会比 (Odds Ratio)。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            X["线性输入"] -- "Sigmoid 转换" --> Prob["预测概率 p"]
+                            Prob -- "Logit 转换" --> Odds["log(p/1-p)"]
+                            Interpret["系数解释"] -- "e^coef" --> Meaning["单位增加对应的几率倍数"]
+                            style Prob fill:#e6fffb,stroke:#13c2c2
+                        </div>
+                    </div>
+                    <div class="code-snippet">
+                        <pre>
+<span style="color: #6a9955;"># 使用 Logit 拟合分类变量</span>
+lm = sm.Logit(y, X)
+result = lm.fit()
+<span style="color: #6a9955;"># 解释系数：np.exp(result.params)</span>
+                        </pre>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <h2><span class="step-num">8</span> 统计学路线图</h2>
+                    <a-table :data-source="summaryData" :pagination="false" bordered size="middle">
+                        <a-table-column title="分析需求" data-index="need" key="need" width="20%"></a-table-column>
+                        <a-table-column title="对应方法" data-index="method" key="method">
+                            <template slot-scope="text"><span class="tech-tag tag-stat">{{text}}</span></template>
+                        </a-table-column>
+                        <a-table-column title="核心关注指标" data-index="key" key="key"></a-table-column>
+                    </a-table>
+                </div>
+
+                <div class="section-card" style="border-left: 6px solid #52c41a;">
+                    <h2 style="color: #52c41a;">架构师建议</h2>
+                    <a-row :gutter="24">
+                        <a-col :span="12">
+                            <a-alert message="统计推断原则" type="info" show-icon>
+                                <div slot="description">
+                                    始终关注 P 值与 α (0.05) 的对比。置信区间越宽，虽然可靠性高，但指导意义可能变弱。
+                                </div>
+                            </a-alert>
+                        </a-col>
+                        <a-col :span="12">
+                            <a-alert message="机器学习建模" type="success" show-icon>
+                                <div slot="description">
+                                    线性回归关注 R-squared (拟合优度)；多元回归务必检查 VIF 以防过度拟合。
+                                </div>
+                            </a-alert>
+                        </a-col>
+                    </a-row>
+                </div>
+            </a-tab-pane>
+            <!-- Tab 3: 核心定义与数学架构 -->
+            <a-tab-pane key="3" tab="核心架构与数学模型">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 泊松分布的核心逻辑流</h2>
+                    <div class="logic-desc">
+                        泊松分布解决的是“给定平均发生率，在特定区间内发生 k 次的概率”问题。其本质是二项分布在样本量无穷大时的极限表现。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            A[泊松过程假设] --> B{三个前提}
+                            B -- "固定速率" --> C1[λ: Lambda 固定]
+                            B -- "事件独立" --> C2[无记忆性]
+                            B -- "稀有性" --> C3[极短时间内仅一次]
+                            
+                            C1 & C2 & C3 --> D[概率质量函数 PMF]
+                            D --> E["P(X=k) = (e^-λ * λ^k) / k!"]
+                            
+                            style D fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 泊松分布的统计特性</h2>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Prop[泊松分布特性] --> E[期望 E_X = λ]
+                            Prop --> V[方差 Var_X = λ]
+                            Prop --> L[极限转换]
+                            L -- "n很大, p很小" --> Binom[二项分布近似]
+                            
+                            style E fill:#e6f7ff,stroke:#1890ff
+                            style V fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                </div>
+                <!-- 泊松分布动态可视化与业务场景解析 - 独立分段 -->
+                <div id="poisson-visual-logic-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 引入外部 CDN (GSAP 动画库) -->
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+                    <!-- 内部样式定义 -->
+                    <style>
+                        .poisson-section { margin-bottom: 35px; border-left: 5px solid #722ed1; padding-left: 20px; }
+                        .poisson-header { font-size: 22px; font-weight: bold; color: #391085; margin-bottom: 15px; display: flex; align-items: center; }
+                        .canvas-area { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 8px; padding: 20px; text-align: center; position: relative; }
+                        .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 20px 0; }
+                        .logic-card { background: #f9f0ff; border: 1px solid #d3adf7; padding: 18px; border-radius: 8px; }
+                        .logic-card h4 { color: #531dab; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #efdbff; padding-bottom: 5px; }
+                        .control-panel { background: #f0f5ff; border: 1px solid #adc6ff; padding: 15px; border-radius: 6px; margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 20px; }
+                        .stat-badge { background: #722ed1; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+                        .formula-text { font-family: 'Cambria', 'Times New Roman', serif; font-size: 18px; color: #000; text-align: center; margin: 15px 0; }
+                    </style>
+
+                    <!-- 1. 动态建模展示 -->
+                    <div class="poisson-section">
+                        <div class="poisson-header">1. 动态建模：$\lambda$ 驱动的概率形态演变</div>
+                        <div class="formula-text">
+                            $P(X=k) = \frac{e^{-\lambda} \lambda^k}{k!}$
+                        </div>
+                        <p style="font-size: 14px; color: #666;">
+                            下方 Canvas 展示了单位时间内事件发生次数 $k$ 的概率分布。通过调整 $\lambda$（平均发生率），观察分布如何从<b>高度右偏</b>转变为<b>近似正态</b>。
+                        </p>
+
+                        <div class="canvas-area">
+                            <canvas id="poissonCanvas" width="700" height="320"></canvas>
+                            
+                            <div class="control-panel">
+                                <span style="font-size: 14px; font-weight: bold;">平均发生率 $\lambda$: </span>
+                                <input type="range" id="lambdaSlider" min="1" max="20" step="0.1" value="4" style="width: 200px; cursor: pointer;">
+                                <span id="lambdaVal" style="font-family: monospace; font-weight: bold; color: #722ed1; font-size: 18px;">4.0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 业务应用场景映射 -->
+                    <div class="poisson-section">
+                        <div class="poisson-header">2. 逻辑映射：泊松分布的典型生产场景</div>
+                        <div class="logic-grid">
+                            <div class="logic-card">
+                                <span class="stat-badge">排队论</span>
+                                <h4>呼叫中心/急诊室</h4>
+                                <p style="font-size: 13px;">用于预测特定时间窗口内（如每小时）接到的求助电话数量。帮助管理者决定需要配置多少坐席以防止系统过载。</p>
+                            </div>
+                            <div class="logic-card">
+                                <span class="stat-badge">可靠性</span>
+                                <h4>工业缺陷检测</h4>
+                                <p style="font-size: 13px;">描述单位长度布匹或单位面积钢板上的疵点数量。在 $\lambda$ 极低的情况下，泊松分布是“稀有事件”建模的黄金法则。</p>
+                            </div>
+                            <div class="logic-card">
+                                <span class="stat-badge">交通流</span>
+                                <h4>路口流量分析</h4>
+                                <p style="font-size: 13px;">统计红绿灯周期内通过路口的车辆数。是城市交通规划中计算等待时间与拥堵概率的基础模型。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 技术总结 -->
+                    <div class="poisson-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="poisson-header">3. 核心推断逻辑总结</div>
+                        <div style="background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 6px; color: #237804; font-size: 14px;">
+                            <b>架构师笔记：</b> 泊松分布体现了“无记忆性”的随机过程。当 $n$ 很大且 $p$ 很小时，它是二项分布的极限近似。在系统设计中，我们通常关注其<b>累计分布 (CDF)</b>，以确定在 $95\%$ 置信度下，系统需要预留的峰值处理能力。
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 4: 互联网与呼叫中心场景 -->
+            <a-tab-pane key="4" tab="排队论：呼叫中心场景">
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 运营分析逻辑流：坐席容量评估</h2>
+                    <div class="logic-desc">
+                        在呼叫中心场景中，泊松分布用于预测峰值时段的溢出概率，从而决定排班策略。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Input[历史均值 λ=6 / 15min] --> Model[泊松建模]
+                            Model -- "计算 k=6" --> Success[恰好满足概率: 16.06%]
+                            Model -- "计算 k > 10" --> Overflow[系统拥堵概率: 4.13%]
+                            
+                            Overflow -- "> 5%" --> AddStaff[增加坐席储备]
+                            Overflow -- "< 5%" --> KeepStaff[维持当前配置]
+
+                            style Overflow fill:#fff1f0,stroke:#f5222d
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        // 业务逻辑伪代码
+                        if (1 - poisson.cdf(threshold, lambda) > 0.05) {
+                            alert("系统过载风险高，启动排队缓冲机制");
+                        }
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 5: 工业质检与保险场景 -->
+            <a-tab-pane key="5" tab="质量控制与风险精算">
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 工业质检：布匹疵点检测流程</h2>
+                    <div class="logic-desc">
+                        工业生产中，单位面积内的缺陷数符合泊松分布。通过 P(X=0) 可以计算出无缺陷率。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Fabric[布匹流动] -- "单位长度" --> Scan[视觉检测仪]
+                            Scan -- "发现缺陷 k" --> Count[计数分析]
+                            Count -- "均值 λ 评估" --> Quality{良率判定}
+                            Quality -- "k=0 概率高" --> GradeA[优等品]
+                            Quality -- "k > 2 频繁" --> Repair[停机检修]
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">5</span> 保险精算：罕见病理赔概率</h2>
+                    <div class="logic-desc">
+                        对于大样本人群中的稀有病例，泊松分布是计算年度理赔储备金的科学依据。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Population[大规模承保人群] --> Probability[单人发病率 p 极小]
+                            Probability -- "n * p" --> Lambda[计算总发病期望 λ]
+                            Lambda --> Reserve[设定理赔准备金区间]
+                            Reserve --> Safety[覆盖 99% 的理赔场景]
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 6: 技术总结与对比 -->
+            <a-tab-pane key="6" tab="选型决策矩阵">
+                <div class="section-card">
+                    <h2><span class="step-num">6</span> 概率模型选型路线图</h2>
+                    <div class="logic-desc">
+                        根据数据特征和业务目标，选择最合适的离散概率分布模型。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Start((开始选型)) --> Q1{实验次数 n 是否固定?}
+                            Q1 -- "是" --> Q2{p 是否极小且 n 极大?}
+                            Q1 -- "否" --> Poisson[泊松分布: 单位时间内发生次数]
+                            
+                            Q2 -- "是" --> Poisson
+                            Q2 -- "否" --> Binom[二项分布: n次实验成功k次]
+                            
+                            style Poisson fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                            style Binom fill:#e6f7ff,stroke:#1890ff
+                        </div>
+                    </div>
+
+                    <a-table :data-source="comparisonData" :pagination="false" bordered size="middle" style="margin-top:20px;">
+                        <a-table-column title="对比维度" data-index="feature" key="feature" width="20%"></a-table-column>
+                        <a-table-column title="二项分布 (Binomial)" data-index="binom" key="binom"></a-table-column>
+                        <a-table-column title="泊松分布 (Poisson)" data-index="poisson" key="poisson"></a-table-column>
+                    </a-table>
+                </div>
+            </a-tab-pane>
+            <!-- Tab 7: 置信区间 -->
+            <a-tab-pane key="7" tab="置信区间 (CI)">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 核心概念：以样本估总体</h2>
+                    <div class="logic-desc">
+                        置信区间利用样本统计量的分布去构造总体参数（均值/差值）的估计范围。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            Pop[总体: 数十万学生] -- "随机采样" --> Sample[样本: 几百个数据]
+                            Sample -- "自助法(Bootstrapping)" --> Dist[均值抽样分布]
+                            Dist -- "百分位数截取" --> CI[置信区间]
+                            CI -- "预测" --> PopParam[总体参数估计]
+                            style CI fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                        </div>
+                    </div>
+                    <div class="analogy-box">
+                        <b>💡 矛盾统一标准：</b> 可靠性（置信水平）与 准确性（区间宽度）是一对矛盾。
+                        <br>想要 99% 的可靠，代价就是区间变得很宽（误差增大）。
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 实施路径：Python 自助抽样法</h2>
+                    <div class="code-snippet">
+                        <pre>
+<span style="color: #6a9955;"># 自助法计算 95% 置信区间</span>
+results_list = []
+<span style="color: #569cd6;">for</span> i <span style="color: #569cd6;">in</span> range(<span style="color: #b5cea8;">10000</span>):
+    <span style="color: #6a9955;"># 随机重复抽样，取均值</span>
+    sample_mean = data.sample(<span style="color: #b5cea8;">100</span>, replace=<span style="color: #569cd6;">True</span>)[<span style="color: #ce9178;">'col_name'</span>].mean()
+    results_list.append(sample_mean)
+
+<span style="color: #6a9955;"># 计算 2.5 和 97.5 分位数</span>
+lower, upper = np.percentile(results_list, <span style="color: #b5cea8;">2.5</span>), np.percentile(results_list, <span style="color: #b5cea8;">97.5</span>)
+<span style="color: #6a9955;">print(f"95% 置信区间: [{lower:.2f}, {upper:.2f}]")</span>
+                        </pre>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 逻辑架构：反证法推断</h2>
+                    <div class="logic-desc">
+                        假设检验从总体出发，用样本尺度去检验假定是否正确。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph LR
+                            H0[零假设 H0: 无效应/无差异] -- "假设为真" --> Normal[构建零假设分布]
+                            Obs[观察样本统计量] -- "定位" --> Normal
+                            Normal -- "计算极端概率" --> PValue[P-Value]
+                            PValue -- "< 0.05" --> Reject[拒绝 H0: 显著]
+                            PValue -- ">= 0.05" --> Accept[无法拒绝 H0]
+                            style PValue fill:#fff1f0,stroke:#f5222d
+                        </div>
+                    </div>
+                    <div class="analogy-box" style="background: #fff7e6; border-color: #ffd591; color: #874d00;">
+                        <b>⚠️ 两类错误：</b>
+                        <br><b>一类错误 (α)：</b> H0 为真却拒绝（拒真）。这是更严重的错误。
+                        <br><b>二类错误 (β)：</b> H0 为假却接受（受伪）。
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 决策阈值校正 (Bonferroni)</h2>
+                    <div class="logic-desc">
+                        进行多次假设检验时，I 类错误率会累积。需要通过 Bonferroni 校正显著性水平。
+                    </div>
+                    <div class="code-snippet" style="background: #f5f5f5; color: #333; border: 1px solid #ddd;">
+                        <pre>
+                        <span style="color: #0000ff;"># 示例：20个假设检验，维持 1% 的错误率</span>
+                        alpha = <span style="color: #098658;">0.01</span>
+                        corrected_alpha = alpha / <span style="color: #098658;">20</span> 
+                        <span style="color: #008000;"># 此时显著性水平应设为 0.0005</span>
+                        </pre>
+                    </div>
+                </div>
+                <div>=========================================================================================================</div>
+                <div>=============================置信空间到底是什么============================================================================</div>
+                <!-- 置信区间 (Confidence Interval) 深度解析 - 独立分段 -->
+                <div id="confidence-interval-logic-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+
+                    <!-- 内部样式 -->
+                    <style>
+                        .conf-section { margin-bottom: 35px; border-left: 5px solid #13c2c2; padding-left: 20px; }
+                        .conf-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                        .conf-header span { background: #13c2c2; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 16px; }
+                        .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+                        .logic-card { background: #e6fffb; border: 1px solid #87e8de; padding: 18px; border-radius: 8px; }
+                        .logic-card h4 { color: #006d75; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #b5f5ec; padding-bottom: 5px; }
+                        .analogy-box { background: #fff7e6; border: 1px solid #ffd591; padding: 15px; border-radius: 6px; color: #874d00; font-size: 14px; margin: 15px 0; }
+                        .mermaid-box { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
+                    </style>
+
+                    <!-- 1. 物理本质：给“不确定性”加一道围栏 -->
+                    <div class="conf-section">
+                        <div class="conf-header"><span>1</span> 核心本质：从“点”到“范围”的进化</div>
+                        <div class="analogy-box">
+                            <b>拟物比喻：</b> <br>
+                            <b>点估计（均值）：</b> 像是用鱼叉去叉深水里的鱼。因为光线折射（抽样误差），你这一叉子下去，极大概率会叉歪。<br>
+                            <b>置信区间：</b> 像是改用撒网。你撒开一张大网，虽然不能确定鱼在哪一个点，但你有很大把握鱼就在这张网笼罩的范围内。
+                        </div>
+                        <div class="logic-grid">
+                            <div class="logic-card">
+                                <h4>样本均值 (x̄)</h4>
+                                <p style="font-size: 13px;">这是网的<b>中心点</b>。它是基于当前这一波样本算出来的，是捕获真值的“最佳落点预判”。</p>
+                            </div>
+                            <div class="logic-card" style="background: #f0f5ff; border-color: #adc6ff;">
+                                <h4 style="color: #003a8c;">误差范围 (Margin of Error)</h4>
+                                <p style="font-size: 13px; color: #003a8c;">由标准误差 (SE) 和置信水平决定。它代表了网的<b>半径</b>。网越大，抓住真值的可能性越高，但捕获精度就越低。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 逻辑链路：如何构建这道围栏？ -->
+                    <div class="conf-section" style="border-left-color: #1890ff;">
+                        <div class="conf-header"><span style="background: #1890ff;">2</span> 生产链路：置信区间是怎样“造”出来的？</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                Sample[单一随机样本数据] -- "计算" --> Statistic["样本统计量 (如 均值)"]
+                                Statistic -- "中心极限定理" --> Dist["抽样分布 (采样波动的规律)"]
+                                Dist -- "结合置信水平 (如 95%)" --> Interval["计算置信区间 [下限, 上限]"]
+                                Interval -- "结论" --> Truth["真值(总体均值) 有大概率藏在其中"]
+
+                                style Statistic fill:#e6fffb,stroke:#13c2c2
+                                style Interval fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 深度解读：95% 到底代表什么？ -->
+                    <div class="conf-section" style="border-left-color: #faad14;">
+                        <div class="conf-header"><span style="background: #faad14;">3</span> 认知纠偏：95% 并不是“真值在里面的概率”</div>
+                        <div class="logic-grid">
+                            <div class="logic-card" style="background: #fff7e6; border-color: #ffe58f;">
+                                <h4>错误的直觉</h4>
+                                <p style="font-size: 13px; color: #874d00;">很多人认为：“我有 95% 的把握说真值在这个区间里”。这种说法在严格统计学上是错的，因为一旦区间算出来，真值要么在，要么不在。</p>
+                            </div>
+                            <div class="logic-card" style="background: #f6ffed; border-color: #b7eb8f;">
+                                <h4>架构师的解读</h4>
+                                <p style="font-size: 13px; color: #237804;">“95% 置信水平”指的是<b>这个方法的可靠性</b>。如果你重复抽样 100 次，造出 100 个不同的围栏，其中大约有 95 个围栏能成功圈住那个唯一的真值（总体参数）。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. 矛盾权衡：可靠性 vs 精度 -->
+                    <div class="conf-section" style="border-bottom: none; margin-bottom: 0;">
+                        <div class="conf-header"><span>4</span> 结论：没有免费的午餐</div>
+                        <div class="highlight-box" style="background: #f0f5ff; border-left-color: #1890ff; color: #003a8c;">
+                            <b>核心决策逻辑：</b> <br>
+                            1. <b>如果你想要 100% 的可靠性</b>：你的网必须覆盖负无穷到正无穷。这毫无意义，因为区间太宽了，无法指导业务。<br>
+                            2. <b>如果你想要极高的精度</b>：你的网会缩成一个点，但这极大可能会漏掉真值，导致结论不可信。<br>
+                            3. <b>现实解法</b>：接受 5% 的风险（显著性水平），换取一个足够窄、有参考价值的区间。如果还是不满意，只能<b>增加样本量</b>——通过更充足的数据来同时缩小误差范围并保持高可靠性。
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <!-- 引入 Vue 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <script>
+        Vue.use(antd);
+
+        // Mermaid 初始化
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'linear'
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    comparisonData: [
+                        { key: '1', feature: '基本参数', binom: '实验次数 n, 概率 p', poisson: '平均发生率 λ' },
+                        { key: '2', feature: '均值特性', binom: 'E(X) = np', poisson: 'E(X) = λ' },
+                        { key: '3', feature: '方差特性', binom: 'Var(X) = npq', poisson: 'Var(X) = λ (均值等于方差)' },
+                        { key: '4', feature: '适用场景', binom: '有限次独立重复试验', poisson: '连续区间内的随机稀有事件' },
+                        { key: '5', feature: '转换关系', binom: 'n -> ∞, p -> 0 时转泊松', poisson: '作为二项分布的极限形式' }
+                    ],
+                    summaryData: [
+                        { key: '1', need: '估计总体参数范围', method: '置信区间 (CI)', key: '百分位数、置信水平' },
+                        { key: '2', need: '检验两组是否有差异', method: '假设检验 (A/B Test)', key: 'P-Value, 显著性水平 α' },
+                        { key: '3', need: '预测连续型数值', method: '线性回归 (OLS)', key: 'R-squared, coef' },
+                        { key: '4', need: '预测分类结果(0/1)', method: '逻辑回归 (Logit)', key: 'Odds Ratio, P > |z|' }
+                    ]
+                }
+            },
+            methods: {
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        try {
+                            mermaid.init();
+                        } catch (e) {
+                            console.error("Mermaid 渲染失败", e);
+                        }
+                    });
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+        (function() {
+            const canvas = document.getElementById('poissonCanvas');
+            const ctx = canvas.getContext('2d');
+            const slider = document.getElementById('lambdaSlider');
+            const lambdaDisplay = document.getElementById('lambdaVal');
+
+            // 初始状态
+            let state = { lambda: 4.0 };
+            
+            // 阶乘函数
+            function factorial(n) {
+                if (n === 0 || n === 1) return 1;
+                let res = 1;
+                for (let i = 2; i <= n; i++) res *= i;
+                return res;
+            }
+
+            // 计算泊松概率 PMF
+            function poissonPMF(k, lambda) {
+                return (Math.exp(-lambda) * Math.pow(lambda, k)) / factorial(k);
+            }
+
+            function draw() {
+                const lambda = state.lambda;
+                const width = canvas.width;
+                const height = canvas.height;
+                const padding = 40;
+                const chartWidth = width - padding * 2;
+                const chartHeight = height - padding * 2;
+
+                ctx.clearRect(0, 0, width, height);
+
+                // 绘制坐标轴
+                ctx.beginPath();
+                ctx.strokeStyle = '#bfbfbf';
+                ctx.lineWidth = 1;
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, height - padding);
+                ctx.lineTo(width - padding, height - padding);
+                ctx.stroke();
+
+                const maxK = 25; // 观察 0 到 25 次
+                const barWidth = chartWidth / maxK;
+
+                // 绘制概率柱状图
+                for (let k = 0; k <= maxK; k++) {
+                    const prob = poissonPMF(k, lambda);
+                    const barHeight = prob * chartHeight * 2.5; // 缩放便于观察
+                    const x = padding + k * barWidth;
+                    const y = height - padding - barHeight;
+
+                    // 渐变色样式
+                    const gradient = ctx.createLinearGradient(0, y, 0, height - padding);
+                    gradient.addColorStop(0, '#722ed1');
+                    gradient.addColorStop(1, '#efdbff');
+
+                    ctx.fillStyle = gradient;
+                    // 绘制带圆角的柱子
+                    drawRoundRect(ctx, x + 2, y, barWidth - 4, barHeight, 4);
+                    
+                    // 标注 K 值
+                    if (k % 5 === 0) {
+                        ctx.fillStyle = '#8c8c8c';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(k, x + barWidth/2 - 4, height - padding + 15);
+                    }
+                }
+
+                // 辅助线：均值位置
+                const lambdaX = padding + lambda * barWidth;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = '#fa8c16';
+                ctx.beginPath();
+                ctx.moveTo(lambdaX, padding);
+                ctx.lineTo(lambdaX, height - padding);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                ctx.fillStyle = '#fa8c16';
+                ctx.fillText(`平均值 λ`, lambdaX - 20, padding - 10);
+            }
+
+            function drawRoundRect(ctx, x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                if (h < 1) h = 1; // 最小高度可见
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // GSAP 交互动画逻辑
+            slider.addEventListener('input', (e) => {
+                const targetLambda = parseFloat(e.target.value);
+                lambdaDisplay.innerText = targetLambda.toFixed(1);
+                
+                // 使用 GSAP 平滑过度数值，让曲线变动更丝滑
+                gsap.to(state, {
+                    lambda: targetLambda,
+                    duration: 0.4,
+                    ease: "power2.out",
+                    onUpdate: draw
+                });
+            });
+
+            // 初始绘制
+            draw();
+        })();
+    </script>
+</body>
+</html>
