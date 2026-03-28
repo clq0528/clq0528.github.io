@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>假设检验（Hypothesis Testing）技术白皮书</title>
+<!--
+https://clq0528.github.io/统计/假设检验.html
+--><!-- 引入 Vue 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <!-- 引入 Vue 2 和 Ant Design Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <!-- 引入 Chart.js 和 GSAP -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2f54eb; /* 极客蓝，代表数学与理性 */
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --math-purple: #722ed1;
+            --bg-gray: #f0f2f5;
+        }
+
+        body { background: var(--bg-gray); padding: 24px; font-family: -apple-system, system-ui, sans-serif; }
+
+        .header {
+            background: #fff; padding: 25px; border-radius: 8px; margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card { 
+            background: #fff; border-radius: 8px; margin-bottom: 30px; padding: 24px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        }
+
+        h2 { 
+            border-bottom: 1px solid #e8e8e8; padding-bottom: 10px; color: #001529; 
+            display: flex; align-items: center; font-weight: 600;
+        }
+        
+        h2::before {
+            content: ""; width: 4px; height: 20px; background: var(--primary-color);
+            margin-right: 12px; border-radius: 2px;
+        }
+
+        .logic-desc {
+            margin: 15px 0; padding: 15px; background: #e6f7ff;
+            border-left: 4px solid #1890ff; color: #003a8c; font-weight: 500;
+        }
+
+        .chart-container { 
+            width: 100%; background: #fafafa; border: 1px solid #ebedf0; 
+            border-radius: 8px; padding: 20px; margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .code-block {
+            background: #2d2d2d; color: #9cdcfe; padding: 18px; border-radius: 6px;
+            font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.6;
+            margin: 15px 0; position: relative;
+        }
+
+        .math-tag {
+            display: inline-block; padding: 2px 10px; border-radius: 12px;
+            font-size: 12px; margin-right: 8px; color: white;
+        }
+
+        .step-num {
+            background: var(--primary-color); color: white; border-radius: 50%;
+            width: 24px; height: 24px; display: inline-flex;
+            justify-content: center; align-items: center; margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .status-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .tag-safe { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .tag-risk { background: #fff1f0; color: #f5222d; border: 1px solid #ffa39e; }
+
+        .highlight { color: var(--primary-color); font-weight: bold; }
+        .ant-tabs-nav-container { font-size: 16px; font-weight: bold; }
+        /* 逻辑说明样式 */
+        .logic-box {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            color: #003a8c;
+            line-height: 1.6;
+        }
+        .logic-box strong { color: #1890ff; }
+
+        /* 统计看板样式 */
+        .stat-value { font-size: 28px; font-weight: bold; color: #1890ff; }
+        .stat-label { font-size: 13px; color: #8c8c8c; }
+        
+        .chart-wrapper { height: 350px; position: relative; }
+
+        .tag-logic { margin-bottom: 8px; display: inline-block; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1 style="margin: 0; color: #001529;">假设检验（Hypothesis Testing）技术报告</h1>
+        <p style="color: #666; margin-top: 10px;">
+            <span class="math-tag" style="background: var(--primary-color);">概率反证法</span>
+            <span class="math-tag" style="background: var(--math-purple);">小概率原理</span>
+            <span class="math-tag" style="background: var(--success-color);">统计推断决策</span>
+        </p>
+    </div>
+
+    <a-tabs default-active-key="1" type="card" @change="handleTabChange">
+        <!-- Tab 1: 核心思想逻辑 -->
+        <a-tab-pane key="1" tab="🧠 核心思想 (Logic)">
+            <div class="section-card">
+                <h2><span class="step-num">1</span> 假设检验的逻辑架构：概率反证法</h2>
+                <div class="logic-desc">
+                    其核心基于“小概率原理”：如果一个假设（原假设）成立，却导致了小概率事件的发生，则怀疑该假设的真实性。
+                </div>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Start["提出原假设 H0<br/>(假设现状无显著差异)"] --> Prob["设定显著性水平 α<br/>(决策阈值)"]
+                        Prob --> Sample["获取样本数据<br/>(构造统计量 T)"]
+                        Sample --> PValue{"计算 P 值"}
+                        PValue -- "P < α<br/>(小概率事件发生)" --> Reject["拒绝 H0<br/>(备择假设 H1 成立)"]
+                        PValue -- "P ≥ α<br/>(偶然误差解释)" --> Accept["不拒绝 H0<br/>(没有证据推翻现状)"]
+                        
+                        style Start fill:#e6f7ff,stroke:#1890ff
+                        style Reject fill:#fff1f0,stroke:#f5222d,stroke-width:2px
+                        style Accept fill:#f6ffed,stroke:#52c41a
+                    </div>
+                </div>
+                
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div class="code-block">
+                            <div style="color: #7cb305; margin-bottom: 5px;">// 假设检验的两大对立阵营</div>
+                            <span style="color: #cc99cd;">原假设 (H0):</span> 保守派。认为差异仅由偶然性导致。<br/>
+                            <span style="color: #cc99cd;">备择假设 (H1):</span> 进取派。认为确实存在显著差异。
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div class="code-block">
+                            <div style="color: #7cb305; margin-bottom: 5px;">// P 值的本质</div>
+                            <span style="color: #98c379;">P-Value:</span> 在 H0 为真时，观测到当前样本<br/>
+                            结果或更极端情形的概率。<br/>
+                            <span style="color: #ce9178;">指标：P 值越小，证据越强。</span>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+            <div id="stats-alpha-deep-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+                <style>
+                    .stats-section { margin-bottom: 35px; border-left: 5px solid #1890ff; padding-left: 20px; }
+                    .stats-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                    .stats-header i { margin-right: 10px; color: #1890ff; }
+                    .logic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }
+                    .logic-card { background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 6px; }
+                    .logic-card h4 { color: #0050b3; margin-top: 0; border-bottom: 1px solid #bae7ff; padding-bottom: 5px; }
+                    .hl-blue { color: #1890ff; font-weight: bold; }
+                    .hl-red { color: #f5222d; font-weight: bold; }
+                    .viz-container { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 6px; padding: 20px; margin: 15px 0; display: flex; flex-direction: column; align-items: center; }
+                    .alpha-slider { width: 300px; margin: 10px 0; }
+                    .formula-text { font-family: 'Consolas', monospace; background: #f0f2f5; padding: 8px; border-radius: 4px; display: block; margin: 10px 0; font-size: 14px; }
+                </style>
+
+                <!-- 1. 什么是显著性水平 α？ -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="line-chart"></a-icon> 1. 显著性水平 α：拒绝的勇气与底线</div>
+                    <p>
+                        <span class="hl-blue">显著性水平 α</span> 是你事先设定的一个概率阈值。
+                    </p>
+                    <div class="logic-grid">
+                        <div class="logic-card">
+                            <h4>第一类错误的概率</h4>
+                            <p>它是指：当原假设 $H_0$ 为真时，你却错误地拒绝了它的概率。通常设定为 <span class="hl-blue">0.05</span> 或 <span class="hl-blue">0.01</span>。</p>
+                        </div>
+                        <div class="logic-card" style="background: #fff1f0; border-color: #ffa39e;">
+                            <h4>几何解释：拒绝域</h4>
+                            <p>在概率密度曲线（正态分布）下，$\alpha$ 代表了尾部那块红色阴影的面积。<b>面积越大，你越容易否定现状。</b></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. D3 可视化演示：显著性水平的“刀锋” -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="eye"></a-icon> 2. 动态演示：调整 α 观察拒绝域的变化</div>
+                    <div class="viz-container">
+                        <div style="margin-bottom: 10px; font-weight: bold;">
+                            调整显著性水平 α: <span class="hl-red" id="alpha-val-display">0.05</span>
+                        </div>
+                        <input type="range" class="alpha-slider" id="alpha-slider" min="0.001" max="0.2" step="0.001" value="0.05">
+                        <svg id="alpha-viz" width="500" height="300" style="background: white; border: 1px solid #eee;"></svg>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;">红色区域 = α (拒绝域) | 灰色区域 = 1-α (置信区间)</p>
+                    </div>
+                </div>
+
+                <!-- 3. 什么是备择假设与备择概率？ -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="swap"></a-icon> 3. 备择假设 H₁ 与 备择概率</div>
+                    <p>如果说 $H_0$ 是“保守派”，那么 <span class="hl-blue">备择假设 $H_1$</span> 就是“进取派”。</p>
+                    <div class="logic-grid">
+                        <div class="logic-card" style="background: #f6ffed; border-color: #b7eb8f;">
+                            <h4>备择假设 H₁ (Alternative)</h4>
+                            <p>你真正想要证明的结论。例如：“新药品比旧药品有效”、“老化设备通道确实有故障”。</p>
+                        </div>
+                        <div class="logic-card">
+                            <h4>检出概率 (Power / 1-β)</h4>
+                            <p>也就是所谓的<b>备择概率</b>：当 $H_1$ 真的成立时，你的实验能成功检测出来的概率。它越高，说明你的测试越灵敏。</p>
+                        </div>
+                    </div>
+                    <div class="formula-text">
+                        决策规则：<br>
+                        - 如果 P-value < α  => 拒绝 H₀，接受 H₁ (结果显著)<br>
+                        - 如果 P-value ≥ α  => 不拒绝 H₀ (证据不足)
+                    </div>
+                </div>
+
+                <!-- 4. 总结提示 -->
+                <div style="background: #f6ffed; padding: 15px; border-radius: 4px; border: 1px solid #b7eb8f; font-size: 13px;">
+                    <b style="color: #237804;">📌 架构师提示：</b><br>
+                    1. <b>双重否定：</b> 统计学从不证明 $H_1$ 是绝对正确的，它只是通过证明“$H_0$ 发生的概率太小了（小于 $\alpha$）”来反向支持 $H_1$。<br>
+                    2. <b>α 越小越好吗？</b> 不是。$\alpha$ 设得极小会增加“第二类错误”（即 $H_1$ 为真你却没发现），导致实验太保守。<br>
+                    3. <b>工控应用：</b> 在老化数据判异中，如果你把 $\alpha$ 设得太大，系统会频繁报假警（误判）；如果设得太小，真正的设备故障可能会被漏掉。
+                </div>
+            </div>
+            <div>==================================================================================================</div>
+            <div>==============================H0 与 H1 的定义对照====================================================================</div>
+            <div id="hypothesis-error-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+                <style>
+                    .stats-section { margin-bottom: 35px; border-left: 5px solid #1890ff; padding-left: 20px; }
+                    .stats-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                    .stats-header i { margin-right: 10px; color: #1890ff; }
+                    .logic-card-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }
+                    .logic-card { border: 1px solid #e8e8e8; padding: 15px; border-radius: 6px; }
+                    .card-h0 { background: #e6f7ff; border-color: #91d5ff; }
+                    .card-h1 { background: #f9f0ff; border-color: #d3adf7; }
+                    .card-h0 h4 { color: #0050b3; }
+                    .card-h1 h4 { color: #531dab; }
+                    
+                    .viz-container { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 6px; padding: 20px; margin: 15px 0; text-align: center; }
+                    .error-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+                    .error-table th, .error-table td { border: 1px solid #d9d9d9; padding: 10px; text-align: center; }
+                    .type-1 { background: #fff1f0; color: #f5222d; font-weight: bold; }
+                    .type-2 { background: #fff7e6; color: #fa8c16; font-weight: bold; }
+                    .hl-blue { color: #1890ff; font-weight: bold; }
+                    .hl-purple { color: #722ed1; font-weight: bold; }
+                </style>
+
+                <!-- 1. H0 与 H1 的定义对照 -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="interaction"></a-icon> 1. $H_0$ 与 $H_1$：保守与进取的博弈</div>
+                    <div class="logic-card-group">
+                        <div class="logic-card card-h0">
+                            <h4>原假设 $H_0$ (Null Hypothesis)</h4>
+                            <p><b>“清白假设”：</b> 认为现状没有变化，差异只是偶然。在工业中代表“设备正常”。</p>
+                            <p style="font-size: 12px; color: #666;">※ 除非证据确凿，否则我们倾向于不拒绝它。</p>
+                        </div>
+                        <div class="logic-card card-h1">
+                            <h4>备择假设 $H_1$ (Alternative Hypothesis)</h4>
+                            <p><b>“有罪假设”：</b> 你真正想证明的结论。差异是真实存在的。在工业中代表“设备确实坏了”。</p>
+                            <p style="font-size: 12px; color: #666;">※ 当 $H_0$ 发生的概率（P值）极低时，我们转向支持它。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. D3 可视化：双分布模型下的错误区域 -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="eye"></a-icon> 2. 动态演示：两类错误的本质图解</div>
+                    <p style="font-size: 14px;">左右拖动滑块调整<b>判决界限</b>，观察 $\alpha$（弃真）和 $\beta$（取伪）如何此消彼长：</p>
+                    
+                    <div class="viz-container">
+                        <div style="margin-bottom: 10px;">
+                            <b>判决阈值 (Decision Line): </b> <input type="range" id="threshold-slider" min="0" max="6" step="0.1" value="3" style="width: 200px;">
+                        </div>
+                        <svg id="error-viz" width="600" height="300" style="background: white; border: 1px solid #eee;"></svg>
+                        
+                        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 10px; font-size: 12px;">
+                            <span><i style="display:inline-block; width:12px; height:12px; background:rgba(245,34,45,0.6);"></i> 红色: 第一类错误 α</span>
+                            <span><i style="display:inline-block; width:12px; height:12px; background:rgba(250,140,22,0.6);"></i> 橙色: 第二类错误 β</span>
+                            <span><i style="display:inline-block; width:12px; height:12px; background:rgba(82,196,26,0.3);"></i> 绿色: 统计功效 (Power)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 第一类错误 vs 第二类错误 -->
+                <div class="stats-section">
+                    <div class="stats-header"><a-icon type="alert"></a-icon> 3. 错误类型深度对照表</div>
+                    <table class="error-table">
+                        <thead>
+                            <tr style="background: #fafafa;">
+                                <th>决策 \ 真实情况</th>
+                                <th>$H_0$ 是真的 (设备正常)</th>
+                                <th>$H_1$ 是真的 (设备坏了)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="font-weight: bold;">不拒绝 $H_0$<br>(判定正常)</td>
+                                <td style="color: #52c41a;">正确决策<br>(置信水平 1-α)</td>
+                                <td class="type-2">第二类错误 β<br>(漏报：放走坏人)</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">拒绝 $H_0$<br>(判定故障)</td>
+                                <td class="type-1">第一类错误 α<br>(误报：冤枉好人)</td>
+                                <td style="color: #52c41a;">正确决策<br>(统计功效 Power)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 15px; background: #fffbe6; padding: 12px; border-radius: 4px; border: 1px solid #ffe58f; font-size: 13px;">
+                        <b>💡 拟物化记忆：</b><br>
+                        - <b>第一类错误 (α)：</b> 你是个急性子。明明没动静，你非说有情况。这是<b>“假警报”</b>。<br>
+                        - <b>第二类错误 (β)：</b> 你是个马大哈。坏人都在眼皮底下了，你还没发现。这是<b>“漏网之鱼”</b>。
+                    </div>
+                </div>
+
+                <!-- 4. 总结提示 -->
+                <div style="background: #f6ffed; padding: 15px; border-radius: 4px; border: 1px solid #b7eb8f; font-size: 13px;">
+                    <b style="color: #237804;">📌 架构师提示：</b><br>
+                    1. <b>跷跷板效应：</b> 当你调小 α（为了不冤枉好人），决策界限会右移，必然导致 β 增大（更容易漏掉坏人）。<br>
+                    2. <b>解决之道：</b> 唯一能同时减小 α 和 β 的方法是<b>增加样本量</b>。样本越多，分布曲线越“瘦”，重叠区域就越小。<br>
+                    3. <b>工控平衡：</b> 在老化数据采集分析中，我们要权衡：是更怕“误报停机损失”还是更怕“坏电池流向客户”？
+                </div>
+            </div>
+            <div>==================================================================================================</div>
+            <div>=====================H1这种假设统计不一定每次都是坏事的概率=============================================================================</div>
+            <!-- 假设检验目标导向深度解析专题：H1 到底是好是坏？ - 独立分段 -->
+            <div id="hypothesis-goal-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+                
+                <!-- 内部样式 -->
+                <style>
+                    .goal-section { margin-bottom: 35px; border-left: 5px solid #52c41a; padding-left: 20px; }
+                    .goal-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                    .goal-header i { margin-right: 10px; color: #52c41a; }
+                    .logic-card-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }
+                    .logic-card { background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 6px; }
+                    .logic-card h4 { color: #237804; margin-top: 0; border-bottom: 1px solid #d9f7be; padding-bottom: 5px; }
+                    .hl-green { color: #52c41a; font-weight: bold; }
+                    .hl-blue { color: #1890ff; font-weight: bold; }
+                    .hl-red { color: #f5222d; font-weight: bold; }
+                    .mermaid-container { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 6px; padding: 20px; margin: 15px 0; }
+                </style>
+
+                <!-- 1. H1 并不一定是“不好的” -->
+                <div class="goal-section">
+                    <div class="goal-header"><a-icon type="swap"></a-icon> 1. H₁ 代表的是“打破现状” (The Change)</div>
+                    <p>
+                        你的直觉很准：在工业维护中，$H_1$ 经常代表“设备坏了”。但在研发或商业场景中，$H_1$ 往往是“好消息”。
+                    </p>
+                    <div class="logic-card-group">
+                        <div class="logic-card" style="background: #fff1f0; border-color: #ffa39e;">
+                            <h4>场景 A：故障诊断 (你说的坏事)</h4>
+                            <ul>
+                                <li><b>H₀:</b> 设备运行正常。</li>
+                                <li><b>H₁:</b> <span class="hl-red">设备发生故障</span>（此时 H₁ 是不好的）。</li>
+                            </ul>
+                        </div>
+                        <div class="logic-card" style="background: #e6f7ff; border-color: #91d5ff;">
+                            <h4>场景 B：药物研发 (好事)</h4>
+                            <ul>
+                                <li><b>H₀:</b> 新药没有效果（和盐水一样）。</li>
+                                <li><b>H₁:</b> <span class="hl-blue">新药显著有效</span>（此时 H₁ 是我们追求的好事）。</li>
+                            </ul>
+                        </div>
+                        <div class="logic-card">
+                            <h4>场景 C：工艺改进 (好事)</h4>
+                            <ul>
+                                <li><b>H₀:</b> 修改参数后产能没变。</li>
+                                <li><b>H₁:</b> <span class="hl-green">修改后产出大幅提升</span>（此时 H₁ 是好消息）。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 统计的核心：是在算 P值 还是 备择概率？ -->
+                <div class="goal-section">
+                    <div class="goal-header"><a-icon type="calculator"></a-icon> 2. 澄清：我们到底在算哪个概率？</div>
+                    <p>
+                        假设检验的逻辑是<b>“概率反证法”</b>。我们并不是直接算 $H_1$ 的概率，而是算 <span class="hl-blue">P值</span>。
+                    </p>
+                    <div class="mermaid-container">
+                        <div class="mermaid">
+                        graph LR
+                            Assumption["1. 强行假设 H₀ 是对的<br>(假设设备是好的)"] --> Calculate["2. 计算 P-Value"]
+                            Calculate -- "P 值极小" --> Reject["3. 狠狠否定 H₀<br>(不相信设备是好的)"]
+                            Reject --> Support["4. 顺理成章支持 H₁<br>(判定设备坏了)"]
+                            
+                            style Assumption fill:#e6f7ff,stroke:#1890ff
+                            style Reject fill:#fff1f0,stroke:#f5222d,stroke-width:2px
+                            style Support fill:#f6ffed,stroke:#52c41a
+                        </div>
+                    </div>
+                    <p style="font-size: 14px;">
+                        <b>P-Value 属于 H₀：</b> 它的意思是“如果世界很太平（$H_0$ 成立），出现目前这种极端数据的概率”。如果这个概率太低，我们就认为“世界不太平了”。
+                    </p>
+                </div>
+
+                <!-- 3. 统计功效 (Power)：对 H1 的真正统计 -->
+                <div class="goal-section">
+                    <div class="goal-header"><a-icon type="radar-chart"></a-icon> 3. 你说的“统计备择概率”其实是【功效】</div>
+                    <p>
+                        如果你真的在统计“$H_1$ 发生时能被抓到的概率”，那你在做的是<b>统计功效 (Power)</b> 分析。
+                    </p>
+                    <div style="background: #fafafa; border: 1px solid #ddd; padding: 15px; border-radius: 6px;">
+                        <ul>
+                            <li><span class="hl-green">H₁ 是我们的“雷达目标”：</span> $H_1$ 成立意味着确实有差异（坏人出现了，或者新药起效了）。</li>
+                            <li><span class="hl-green">备择概率 (1-β)：</span> 它是雷达的<b>灵敏度</b>。即如果坏人真的来了，雷达能报警的概率。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 4. 总结提示 -->
+                <div style="background: #f6ffed; padding: 15px; border-radius: 4px; border: 1px solid #b7eb8f; font-size: 13px;">
+                    <b style="color: #237804;">📌 架构师提示总结：</b><br>
+                    1. <b>H₁ = 信号：</b> 统计学把 $H_0$ 看作“噪音”，把 $H_1$ 看作我们要找的“信号”。<br>
+                    2. <b>不一定是不好：</b> 在质量管理中，$H_1$ 是坏事（次品率上升）；在数据挖掘中，$H_1$ 是宝贝（发现了一个值钱的关联规则）。<br>
+                    3. <b>核心目的：</b> 所有的假设检验，都是为了让我们在<b>“全是随机波动的假象”</b>中，有足够的底气（通过 P < α）宣布：<b>“我发现了一个真实存在的现象 (H₁)！”</b>
+                </div>
+            </div>
+            <div>==================================================================================================</div>
+            <div>==============================Alpha 与 Beta收益====================================================================</div>
+            <div id="finance-alpha-beta-dive" style="background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: 'Segoe UI', system-ui, sans-serif; color: #333; line-height: 1.6;">
+                <style>
+                    .fin-section { margin-bottom: 35px; border-left: 5px solid #52c41a; padding-left: 20px; }
+                    .fin-header { font-size: 22px; font-weight: bold; color: #001529; margin-bottom: 15px; display: flex; align-items: center; }
+                    .fin-header i { margin-right: 10px; color: #52c41a; }
+                    .logic-card-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0; }
+                    .logic-card { border: 1px solid #e8e8e8; padding: 15px; border-radius: 6px; }
+                    .card-beta { background: #fff7e6; border-color: #ffd591; }
+                    .card-alpha { background: #f6ffed; border-color: #b7eb8f; }
+                    .card-beta h4 { color: #d46b08; }
+                    .card-alpha h4 { color: #237804; }
+                    
+                    .viz-container { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 6px; padding: 20px; margin: 15px 0; text-align: center; }
+                    .formula-box { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 15px; margin: 15px 0; border-left: 4px solid #52c41a; }
+                    .hl-orange { color: #fa8c16; font-weight: bold; }
+                    .hl-green { color: #52c41a; font-weight: bold; }
+                    .control-panel { display: flex; justify-content: center; gap: 30px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
+                </style>
+
+                <!-- 1. 核心定义：收益的两种来源 -->
+                <div class="fin-section">
+                    <div class="fin-header"><a-icon type="line-chart"></a-icon> 1. Alpha 与 Beta：谁在为你赚钱？</div>
+                    <p>在金融学中，任何一个股票或基金的收益都可以拆解为两部分：</p>
+                    <div class="formula-box">
+                        股票总收益 = <span class="hl-green">α (超额收益)</span> + <span class="hl-orange">β × 市场收益</span> + 随机误差
+                    </div>
+                    <div class="logic-card-group">
+                        <div class="logic-card card-beta">
+                            <h4>Beta (β) 收益：市场的“风”</h4>
+                            <p><b>属性：</b> 系统性收益。指由于大盘上涨带动的收益。Beta = 1 意味着大盘涨 1%，你就涨 1%。</p>
+                            <p style="font-size: 12px; color: #666;">※ 随波逐流，是市场的“平均分”。</p>
+                        </div>
+                        <div class="logic-card card-alpha">
+                            <h4>Alpha (α) 收益：经理的“桨”</h4>
+                            <p><b>属性：</b> 非系统性收益。指通过选股、择时带来的超越大盘的净回报。</p>
+                            <p style="font-size: 12px; color: #666;">※ 逆流而上，是投资能力的“加分项”。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. D3 可视化：CAPM 收益特征线 (SCL) -->
+                <div class="fin-section">
+                    <div class="fin-header"><a-icon type="eye"></a-icon> 2. 动态演示：收益特征线</div>
+                    <p style="font-size: 14px;">通过调整滑块，观察 <span class="hl-green">Alpha (截距)</span> 和 <span class="hl-orange">Beta (斜率)</span> 如何改变你的收益曲线：</p>
+                    
+                    <div class="viz-container">
+                        <div class="control-panel">
+                            <div>
+                                <b>Alpha (α): </b> <span id="val-alpha">2%</span><br>
+                                <input type="range" id="slider-alpha" min="-5" max="5" step="0.5" value="2">
+                            </div>
+                            <div>
+                                <b>Beta (β): </b> <span id="val-beta">1.2</span><br>
+                                <input type="range" id="slider-beta" min="0" max="2.5" step="0.1" value="1.2">
+                            </div>
+                        </div>
+                        <svg id="scl-viz" width="550" height="350" style="background: white; border: 1px solid #eee;"></svg>
+                        <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                            X轴: 市场收益率 | Y轴: 你的股票收益率<br>
+                            <span style="color:#d46b08; font-weight:bold;">黑色虚线: 市场基准 (α=0, β=1)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 拟物化总结 -->
+                <div class="fin-section">
+                    <div class="fin-header"><a-icon type="bulb"></a-icon> 3. 拟物化记忆：帆船理论</div>
+                    <div style="background: #f0f2f5; padding: 20px; border-radius: 8px;">
+                        <ul>
+                            <li><b>Beta 就像是“水流”：</b> 水涨船高。如果你买的是指数基金，你赚的就是 Beta 的钱，不需要太高技术，只要水流（行情）在向上。</li>
+                            <li><b>Alpha 就像是“划桨”：</b> 逆水行舟。即便水流平缓甚至倒流，优秀的旗手通过努力也能让船加速。这是最昂贵的收益。</li>
+                            <li><b>Beta 赚钱容易：</b> 只要在大盘低位买入就行；<b>Alpha 赚钱极难：</b> 只有极少数天才或由于极度的信息不对称才能稳定获得 Alpha。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 4. 架构师提示 -->
+                <div style="background: #f6ffed; padding: 15px; border-radius: 4px; border: 1px solid #b7eb8f; font-size: 13px;">
+                    <b style="color: #237804;">📌 架构师提示：</b><br>
+                    1. <b>避坑建议：</b> 很多所谓的“牛股”在牛市里赚了大钱，其实全是 Beta（因为它波动大、Beta高），一旦熊市来临跌得比谁都惨。真正的实力看它在熊市里能否维持正向 Alpha。<br>
+                    2. <b>对冲策略：</b> 著名的“市场中性策略”就是通过做空期货锁死 Beta，从而只赚取稳定的 Alpha。
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 2: 决策风险与错误 -->
+        <a-tab-pane key="2" tab="⚠️ 决策风险 (Errors)">
+            <div class="section-card">
+                <h2><span class="step-num">2</span> 统计决策中的两类错误</h2>
+                <div class="logic-desc">依据样本信息做决策不可避免存在误差，统计学将其界定为“弃真”与“取伪”错误。</div>
+                
+                <a-table :data-source="errorMatrix" :pagination="false" bordered size="middle">
+                    <a-table-column title="决策结果 \ 实际情况" data-index="label" key="label"></a-table-column>
+                    <a-table-column title="H0 为真 (事实无差异)" data-index="h0True" key="h0True">
+                        <template slot-scope="text">
+                            <span v-if="text.type === 'error'" class="status-tag tag-risk">第一类错误 (α)：弃真</span>
+                            <span v-else class="status-tag tag-safe">正确决策 (1-α)</span>
+                        </template>
+                    </a-table-column>
+                    <a-table-column title="H0 为假 (事实有差异)" data-index="h0False" key="h0False">
+                        <template slot-scope="text">
+                            <span v-if="text.type === 'error'" class="status-tag tag-risk">第二类错误 (β)：取伪</span>
+                            <span v-else class="status-tag tag-safe">正确决策 (1-β)：功效</span>
+                        </template>
+                    </a-table-column>
+                </a-table>
+
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph LR
+                        Limit["固定样本量 n"] --> TradeOff{"α 与 β 的权衡"}
+                        TradeOff -- "严控 α (减小显性风险)" --> IncreaseB["β 会增大<br/>(容易放走坏人)"]
+                        TradeOff -- "放宽 α (增大显著性)" --> DecreaseB["β 会减小<br/>(更灵敏地发现差异)"]
+                        
+                        TradeOff -- "如何同时减小?" --> Power["增加样本容量 n"]
+                        Power --> Solution["更多信息 = 更准确的判断"]
+                        
+                        style Limit fill:#fafafa,stroke:#d9d9d9
+                        style Solution fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+                    </div>
+                </div>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 3: 常用检验方法 -->
+        <a-tab-pane key="3" tab="🔢 方法矩阵 (Methodology)">
+            <div class="section-card">
+                <h2><span class="step-num">3</span> 场景化检验方法矩阵</h2>
+                <div class="logic-desc">根据研究目的、数据类型和样本量，选择不同的数学模型。</div>
+                
+                <a-descriptions bordered title="1. t-检验 (Student's t-test) - 均值比较" size="small" :column="1">
+                    <a-descriptions-item label="单样本 t-检验">比较样本均值与已知总体均值 (如班级身高 vs 全国平均)。</a-descriptions-item>
+                    <a-descriptions-item label="独立样本 t-检验">比较两个独立组的均值差异 (如实验组 vs 对照组)。</a-descriptions-item>
+                    <a-descriptions-item label="配对样本 t-检验">比较同一受试者不同状态的差异 (如减肥前 vs 减肥后)。</a-descriptions-item>
+                </a-descriptions>
+
+                <div class="chart-container">
+                    <div class="mermaid">
+                    graph TD
+                        subgraph "均值分析"
+                            tTest["t-检验<br/>(两组均值)"]
+                            ANOVA["方差分析 ANOVA<br/>(多组均值)"]
+                        end
+                        
+                        subgraph "分类分析"
+                            Chi2["卡方检验<br/>(独立性/拟合优度)"]
+                        end
+                        
+                        subgraph "分布检验"
+                            KS["K-S 检验<br/>(分布一致性)"]
+                        end
+                    </div>
+                </div>
+
+                <a-row :gutter="16">
+                    <a-col :span="12">
+                        <div class="code-block" style="background: #1e1e1e;">
+                            <div class="code-label">ANOVA 核心原理</div>
+                            <span style="color: #61afef;">F = 组间变异 / 组内变异</span><br/><br/>
+                            <span style="color: #abb2bf;">如果组间变异远大于随机误差，<br/>则认为不同处理产生了显著效应。</span>
+                        </div>
+                    </a-col>
+                    <a-col :span="12">
+                        <div class="code-block" style="background: #1e1e1e;">
+                            <div class="code-label">卡方检验核心原理</div>
+                            <span style="color: #61afef;">χ² = Σ (观测值 - 期望值)² / 期望值</span><br/><br/>
+                            <span style="color: #abb2bf;">用于分类变量，衡量实际观测频数<br/>与独立性假设下期望频数的偏离度。</span>
+                        </div>
+                    </a-col>
+                </a-row>
+            </div>
+        </a-tab-pane>
+
+        <!-- Tab 4: 决策流程总结 -->
+        <a-tab-pane key="4" tab="📊 流程总结 (Workflow)">
+            <div id="app" class="stats-container">
+        
+            <!-- 需求 4：统计业务全生命周期流程 -->
+            <div class="section-card">
+                <h2>需求4：统计分析自动化生成 - 核心业务流程</h2>
+                <div class="logic-box">
+                    <a-tag color="blue" class="tag-logic">业务逻辑</a-tag>
+                    本流程模拟了从<strong>原始身高数据采集</strong>到<strong>自动化报告产出</strong>的科学闭环。系统首先进行数据质量监控（正态性与异常值），随后执行参数化检验，最后将统计学显著性（p值）与临床实际意义（效应量）进行对撞输出。
+                </div>
+                <div class="mermaid">
+                    graph LR
+                    classDef data fill:#e6f7ff,stroke:#1890ff,color:#000;
+                    classDef proc fill:#f6ffed,stroke:#52c41a,color:#000;
+                    classDef alert fill:#fff1f0,stroke:#f5222d,color:#000;
+
+                    Start[身高原始数据采集 N=100] --> Clean[数据清洗与异常值识别]
+                    Clean --> NormCheck{正态性 Shapiro-Wilk 检验}
+                    
+                    NormCheck -- p > 0.05 --> TTest[单样本 t 检验执行]
+                    NormCheck -- p < 0.05 --> NonPara[非参数 Wilcoxon 检验]
+                    
+                    TTest --> PVal{p < 0.05 ?}
+                    PVal -- 是 --> Effect[计算 Cohen's d 效应量]
+                    PVal -- 否 --> AcceptH0[接受零假设: 无显著差异]
+                    
+                    Effect --> Compare[2025 官方标准 Benchmarking]
+                    Compare --> Report[自动化 APA 风格报告生成]
+                    
+                    class Start,Clean data;
+                    class TTest,Effect,Compare proc;
+                    class NonPara,AcceptH0 alert;
+                </div>
+            </div>
+
+            <!-- 需求 5：数据模板与统计驾驶舱 -->
+            <div class="section-card">
+                <h2>需求5：统计模板维护与实时假设检验驾驶舱</h2>
+                
+                <a-tabs default-active-key="1" @change="handleTabChange2">
+                    <!-- 统计推断看板 -->
+                    <a-tab-pane key="1" tab="统计推断驾驶舱">
+                        <div class="logic-box">
+                            <a-icon type="info-circle" /> 
+                            <strong>递进逻辑：</strong> 描述性统计确立“现状” -> 假设检验确认“差异性” -> 效应量衡量“重要性” -> 置信区间锁定“精度”。
+                        </div>
+
+                        <a-row :gutter="16">
+                            <a-col :span="6">
+                                <a-card size="small">
+                                    <div class="stat-label">样本均值 (Mean)</div>
+                                    <div class="stat-value" id="val-mean">139.63 <small>cm</small></div>
+                                </a-card>
+                            </a-col>
+                            <a-col :span="6">
+                                <a-card size="small">
+                                    <div class="stat-label">显著性水平 (P-Value)</div>
+                                    <div class="stat-value" style="color: #f5222d;">0.002**</div>
+                                </a-card>
+                            </a-col>
+                            <a-col :span="6">
+                                <a-card size="small">
+                                    <div class="stat-label">效应量 (Cohen's d)</div>
+                                    <div class="stat-value" style="color: #faad14;">0.30</div>
+                                </a-card>
+                            </a-col>
+                            <a-col :span="6">
+                                <a-card size="small">
+                                    <div class="stat-label">95% CI 下限/上限</div>
+                                    <div class="stat-value" style="color: #52c41a;">138.6 - 140.6</div>
+                                </a-card>
+                            </a-col>
+                        </a-row>
+
+                        <a-row :gutter="24" style="margin-top: 24px;">
+                            <a-col :span="14">
+                                <a-card title="身高分布与正态拟合曲线" size="small">
+                                    <div class="chart-wrapper">
+                                        <canvas id="distChart"></canvas>
+                                    </div>
+                                </a-card>
+                            </a-col>
+                            <a-col :span="10">
+                                <a-card title="假设检验结论评估" size="small">
+                                    <a-descriptions bordered column="1" size="small">
+                                        <a-descriptions-item label="零假设 H0">平均身高 = 138.0cm</a-descriptions-item>
+                                        <a-descriptions-item label="统计决策">
+                                            <a-tag color="red">拒绝 H0</a-tag>
+                                        </a-descriptions-item>
+                                        <a-descriptions-item label="差异方向">显著高于基准值</a-descriptions-item>
+                                        <a-descriptions-item label="实际意义评估">
+                                            <a-alert message="小效应 (Small Effect)" type="warning" show-icon description="虽然统计显著，但 0.57cm 的差异在临床生长评估中影响较小。" />
+                                        </a-descriptions-item>
+                                    </a-descriptions>
+                                </a-card>
+                            </a-col>
+                        </a-row>
+                    </a-tab-pane>
+
+                    <!-- 抽检/分析模板管理 -->
+                    <a-tab-pane key="2" tab="分析模板维护">
+                        <div class="logic-box">
+                            针对不同年龄段（7-18岁）的身高数据，系统预设了<strong>动态参数带出模板</strong>。维护人仅需定义该年龄段的 μ（均值）与 σ（标准差）基准，系统即可自动执行 Z-Score 转换。
+                        </div>
+                        <a-table :columns="columns" :data-source="templateData" size="small" bordered>
+                            <template slot="tags" slot-scope="tags">
+                                <a-tag v-for="tag in tags" :color="tag === '高精度' ? 'volcano' : 'blue'">{{tag}}</a-tag>
+                            </template>
+                            <template slot="action">
+                                <a-button type="link" icon="edit">编辑参数</a-button>
+                                <a-divider type="vertical" />
+                                <a-button type="link" icon="copy">复制模板</a-button>
+                            </template>
+                        </a-table>
+                        <div style="margin-top: 15px;">
+                            <a-button type="primary" icon="plus">新建年龄段分析模板</a-button>
+                        </div>
+                    </a-tab-pane>
+                    
+                    <!-- APA 报告预览 -->
+                    <a-tab-pane key="3" tab="APA 自动化报告预览">
+                        <div style="padding: 20px; background: #fff; border: 1px solid #d9d9d9; font-family: 'Times New Roman', serif;">
+                            <h3 style="text-align: center;">Statistical Analysis Report (2025)</h3>
+                            <p><strong>Results:</strong> A one-sample t-test was conducted to compare the heights of 10-year-old boys (N=100) in 2025 to a baseline of 138.0 cm.</p>
+                            <p>The analysis revealed that the mean height (M = 139.63, SD = 4.99) was significantly higher than the hypothesized value, <em>t</em>(99) = 3.26, <em>p</em> = .002. The 95% confidence interval for the mean was [138.64, 140.62].</p>
+                            <p><strong>Conclusion:</strong> Although statistically significant, the effect size (Cohen's <em>d</em> = 0.30) suggests a small practical impact.</p>
+                            <div style="text-align: right; margin-top: 30px;">
+                                <a-button type="dashed" icon="printer">打印完整 PDF 报告</a-button>
+                            </div>
+                        </div>
+                    </a-tab-pane>
+                </a-tabs>
+            </div>
+            <div class="section-card">
+                <h2><span class="step-num">4</span> 全链路执行时序图</h2>
+                <div class="chart-container">
+                    <div class="mermaid">
+                    sequenceDiagram
+                        participant Researcher as 研究者
+                        participant Data as 样本数据
+                        participant Stats as 统计引擎 (t/ANOVA/χ²)
+                        participant Result as 统计决策
+
+                        Researcher->>Researcher: 1. 建立 H0 与 H1 假设
+                        Researcher->>Researcher: 2. 预设显著性水平 α (0.05)
+                        Data->>Stats: 3. 输入观测样本
+                        Stats->>Stats: 4. 构造并计算统计量值 (t/F/χ²)
+                        Stats->>Stats: 5. 依据分布计算 P 值
+                        Stats-->>Result: 6. 比较 P 值与 α
+                        
+                        alt P < α
+                            Result-->>Researcher: 拒绝 H0，结论具有统计学意义
+                        else P ≥ α
+                            Result-->>Researcher: 无法拒绝 H0，差异可能是偶然的
+                        end
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card" style="border-left: 6px solid var(--math-purple);">
+                <h2 style="color: var(--math-purple);">💡 专家总结</h2>
+                <ul>
+                    <li><strong>核心逻辑：</strong> 假设检验不是证明原假设正确，而是寻找证据推翻它。</li>
+                    <li><strong>数据对抗偶然：</strong> 通过概率度量不确定性，确保结论不是“撞大运”。</li>
+                    <li><strong>结论解读：</strong> “不拒绝 H0” 并不等于 “H0 正确”，仅仅是由于样本证据不足以推翻它。</li>
+                    <li><strong>样本量正义：</strong> 只要样本量足够大，任何微小的差异都可能产生显著的 P 值，因此需结合“效应量”共同判断。</li>
+                </ul>
+            </div>
+        </a-tab-pane>
+    </a-tabs>
+</div>
+
+<script>
+    Vue.use(antd);
+
+    // Mermaid 初始化配置
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'default',
+        flowchart: { 
+            useMaxWidth: false, 
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                errorMatrix: [
+                    { key: '1', label: '拒绝 H0 (判断有差异)', h0True: { type: 'error' }, h0False: { type: 'success' } },
+                    { key: '2', label: '不拒绝 H0 (判断无差异)', h0True: { type: 'success' }, h0False: { type: 'error' } }
+                ],
+                columns: [
+                    { title: '模板名称', dataIndex: 'name' },
+                    { title: '适用年龄', dataIndex: 'age' },
+                    { title: '基准均值(μ)', dataIndex: 'mu' },
+                    { title: '标准差(σ)', dataIndex: 'sigma' },
+                    { title: '标签', dataIndex: 'tags', scopedSlots: { customRender: 'tags' } },
+                    { title: '最后维护', dataIndex: 'date' },
+                    { title: '操作', key: 'action', scopedSlots: { customRender: 'action' } }
+                ],
+                templateData: [
+                    { key: '1', name: '2025-10岁男孩身高标准', age: '10岁', mu: '140.2', sigma: '5.5', tags: ['高精度', '最新版'], date: '2025-01-20' },
+                    { key: '2', name: '2025-10岁女孩身高标准', age: '10岁', mu: '140.1', sigma: '5.8', tags: ['最新版'], date: '2025-01-22' },
+                    { key: '3', name: '2020-历史对比参考', age: '全年龄', mu: 'Variable', sigma: 'Variable', tags: ['存档'], date: '2020-12-30' }
+                ]
+            }
+        },
+        methods: {
+            handleTabChange(key) {
+                this.$nextTick(() => {
+                    try {
+                        mermaid.init();
+                        if (key === '1') { // 这里根据您实际的 Tab Key 修改
+                            this.init2();
+                            this.init3();
+                            this.initAlphaViz();
+                        }
+                    } catch (e) {
+                        console.error("Mermaid init error", e);
+                    }
+                });
+            },
+            handleTabChange2(key) {
+                this.$nextTick(() => {
+                    try {
+                        mermaid.init();
+                        if (key === '1') { // 这里根据您实际的 Tab Key 修改
+                            this.animateStats();
+                            this.renderChart2();
+                        }
+                    } catch (e) {
+                        console.error("Mermaid init error", e);
+                    }
+                });
+            },
+            initAlphaViz() {
+                const svg = d3.select("#alpha-viz");
+                const width = 500, height = 300;
+                const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+                const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+                
+                const innerWidth = width - margin.left - margin.right;
+                const innerHeight = height - margin.top - margin.bottom;
+
+                // X轴：标准正态分布通常在 -4 到 4 之间
+                const x = d3.scaleLinear().domain([-4, 4]).range([0, innerWidth]);
+                const y = d3.scaleLinear().domain([0, 0.45]).range([innerHeight, 0]);
+
+                // 正态分布概率密度函数 (PDF)
+                const normalPDF = (val) => (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * val * val);
+
+                // 生成曲线数据
+                const lineData = d3.range(-4, 4.1, 0.1).map(d => ({ x: d, y: normalPDF(d) }));
+                const line = d3.line().x(d => x(d.x)).y(d => y(d.y));
+
+                // 绘制主曲线
+                g.append("path").datum(lineData).attr("fill", "#f0f0f0").attr("stroke", "#333").attr("stroke-width", 2).attr("d", line);
+
+                // 绘制拒绝域区域 (阴影)
+                const area = d3.area().x(d => x(d.x)).y0(innerHeight).y1(d => y(d.y));
+                const rejectionPath = g.append("path").attr("fill", "#f5222d").attr("opacity", 0.6);
+
+                // 坐标轴
+                g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+
+                // 更新函数
+                const update = (alpha) => {
+                    // 计算单侧临界值 Z (Standard Normal Percentile)
+                    // 简单模拟常用值，实际可用统计库或查表算法
+                    // 0.05 -> 1.645, 0.01 -> 2.326
+                    const z_critical = this.getZCritical(alpha);
+                    
+                    const areaData = d3.range(z_critical, 4.1, 0.1).map(d => ({ x: d, y: normalPDF(d) }));
+                    // 补齐最后一个点以闭合路径
+                    if(areaData.length > 0) areaData.push({x: 4, y: 0});
+                    
+                    rejectionPath.datum(areaData).attr("d", area);
+                    d3.select("#alpha-val-display").text(alpha);
+                };
+
+                // 绑定事件
+                d3.select("#alpha-slider").on("input", (event) => {
+                    const val = +event.target.value;
+                    update(val);
+                });
+
+                // 初始渲染
+                update(0.05);
+            },
+
+            // 简易正态分布临界值函数 (Inverse CDF approximation)
+            getZCritical(alpha) {
+                // 这里的逻辑近似计算正态分布的右尾分位数
+                if (alpha <= 0) return 4;
+                if (alpha >= 0.5) return 0;
+                // 查表近似：0.05 -> 1.645
+                return Math.sqrt(-2 * Math.log(alpha * Math.sqrt(2 * Math.PI))) * 0.95; 
+                // 生产环境建议引入专业统计库如 simple-statistics
+            },
+            init2() {
+                const svg = d3.select("#error-viz");
+                const width = 600, height = 300;
+                const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+                const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+                const innerW = width - margin.left - margin.right;
+                const innerH = height - margin.top - margin.bottom;
+
+                const x = d3.scaleLinear().domain([-4, 8]).range([0, innerW]);
+                const y = d3.scaleLinear().domain([0, 0.45]).range([innerH, 0]);
+
+                const pdf = (m, d, val) => (1 / (d * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((val - m) / d, 2));
+
+                // 绘制 H0 分布 (左)
+                const dataH0 = d3.range(-4, 8.1, 0.1).map(v => ({ x: v, y: pdf(0, 1, v) }));
+                const line = d3.line().x(d => x(d.x)).y(d => y(d.y));
+                g.append("path").datum(dataH0).attr("fill", "none").attr("stroke", "#1890ff").attr("stroke-width", 2).attr("d", line);
+                g.append("text").attr("x", x(0)).attr("y", y(0.42)).attr("text-anchor", "middle").text("H0 (正常)").style("fill", "#1890ff");
+
+                // 绘制 H1 分布 (右)
+                const dataH1 = d3.range(-4, 8.1, 0.1).map(v => ({ x: v, y: pdf(4, 1.2, v) }));
+                g.append("path").datum(dataH1).attr("fill", "none").attr("stroke", "#722ed1").attr("stroke-width", 2).attr("d", line);
+                g.append("text").attr("x", x(4)).attr("y", y(0.42)).attr("text-anchor", "middle").text("H1 (故障)").style("fill", "#722ed1");
+
+                // 定义区域
+                const alphaArea = g.append("path").attr("fill", "rgba(245,34,45,0.6)");
+                const betaArea = g.append("path").attr("fill", "rgba(250,140,22,0.6)");
+                const powerArea = g.append("path").attr("fill", "rgba(82,196,26,0.3)");
+                
+                const decisionLine = g.append("line").attr("stroke", "#333").attr("stroke-width", 2).attr("stroke-dasharray", "4,4");
+
+                const areaGen = d3.area().x(d => x(d.x)).y0(innerH).y1(d => y(d.y));
+
+                const update = (threshold) => {
+                    // 更新界限线
+                    decisionLine.attr("x1", x(threshold)).attr("y1", 0).attr("x2", x(threshold)).attr("y2", innerH);
+
+                    // 更新 Alpha (H0 的右尾)
+                    const aData = d3.range(threshold, 8.1, 0.1).map(v => ({ x: v, y: pdf(0, 1, v) }));
+                    aData.push({x: 8, y: 0});
+                    alphaArea.datum(aData).attr("d", areaGen);
+
+                    // 更新 Beta (H1 的左尾)
+                    const bData = d3.range(-4, threshold, 0.1).map(v => ({ x: v, y: pdf(4, 1.2, v) }));
+                    bData.push({x: threshold, y: 0});
+                    betaArea.datum(bData).attr("d", areaGen);
+
+                    // 更新 Power (H1 的右边部分)
+                    const pData = d3.range(threshold, 8.1, 0.1).map(v => ({ x: v, y: pdf(4, 1.2, v) }));
+                    pData.push({x: 8, y: 0});
+                    powerArea.datum(pData).attr("d", areaGen);
+                };
+
+                d3.select("#threshold-slider").on("input", function() {
+                    update(+this.value);
+                });
+
+                g.append("g").attr("transform", `translate(0,${innerH})`).call(d3.axisBottom(x));
+                update(2.2); // 初始默认位置
+            },
+            init3() {
+                const svg = d3.select("#scl-viz");
+                const width = 550, height = 350;
+                const margin = { top: 40, right: 40, bottom: 40, left: 50 };
+                const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+                
+                const innerW = width - margin.left - margin.right;
+                const innerH = height - margin.top - margin.bottom;
+
+                // X轴 (市场收益 -10% 到 +10%)
+                const x = d3.scaleLinear().domain([-10, 10]).range([0, innerW]);
+                // Y轴 (股票收益)
+                const y = d3.scaleLinear().domain([-15, 15]).range([innerH, 0]);
+
+                // 坐标轴绘制
+                g.append("g").attr("transform", `translate(0,${innerH/2})`).call(d3.axisBottom(x).ticks(5).tickFormat(d => d + "%"));
+                g.append("g").attr("transform", `translate(${innerW/2},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d => d + "%"));
+
+                // 绘制基准线 (Beta=1, Alpha=0)
+                g.append("line")
+                    .attr("x1", x(-10)).attr("y1", y(-10))
+                    .attr("x2", x(10)).attr("y2", y(10))
+                    .attr("stroke", "#333").attr("stroke-width", 1).attr("stroke-dasharray", "5,5");
+
+                // 绘制股票特征线 (SCL)
+                const sclLine = g.append("line").attr("stroke", "#52c41a").attr("stroke-width", 3);
+                
+                // 标注 Alpha 点
+                const alphaDot = g.append("circle").attr("r", 5).attr("fill", "#f5222d");
+                const alphaLabel = g.append("text").attr("font-size", "12px").attr("fill", "#f5222d").text("Alpha点");
+
+                const update = () => {
+                    const alpha = +d3.select("#slider-alpha").property("value");
+                    const beta = +d3.select("#slider-beta").property("value");
+                    
+                    d3.select("#val-alpha").text(alpha + "%");
+                    d3.select("#val-beta").text(beta);
+
+                    // 计算线段端点: Y = alpha + beta * X
+                    const x1 = -10, y1 = alpha + beta * x1;
+                    const x2 = 10, y2 = alpha + beta * x2;
+
+                    sclLine.transition().duration(200)
+                        .attr("x1", x(x1)).attr("y1", y(y1))
+                        .attr("x2", x(x2)).attr("y2", y(y2));
+
+                    // 更新 Alpha 标注位置 (当 X=0 时)
+                    alphaDot.transition().duration(200).attr("cx", x(0)).attr("cy", y(alpha));
+                    alphaLabel.transition().duration(200).attr("x", x(0) + 10).attr("y", y(alpha) + 5);
+                };
+
+                d3.select("#slider-alpha").on("input", update);
+                d3.select("#slider-beta").on("input", update);
+
+                update();
+            },
+            renderChart2() {
+                const ctx = document.getElementById('distChart').getContext('2d');
+                // 模拟正态分布数据
+                const labels = Array.from({length: 40}, (_, i) => 125 + i);
+                const data = labels.map(x => {
+                    const mean = 139.63;
+                    const std = 4.99;
+                    return (1 / (std * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+                });
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '身高概率密度分布',
+                            data: data,
+                            backgroundColor: 'rgba(24, 144, 255, 0.1)',
+                            borderColor: '#1890ff',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            label: '假设基准值 (138.0)',
+                            data: labels.map(x => x === 138 ? 0.08 : null),
+                            borderColor: '#f5222d',
+                            borderDash: [5, 5],
+                            pointStyle: 'line',
+                            showLine: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, display: false }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            },
+            animateStats() {
+                gsap.from(".stat-value", {
+                    textContent: 0,
+                    duration: 1.5,
+                    ease: "power2.out",
+                    snap: { textContent: 0.01 },
+                    stagger: 0.2
+                });
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                mermaid.init();
+                this.initAlphaViz();
+                this.init2();
+                this.init3();
+                this.animateStats();
+                this.renderChart2();
+            });
+        }
+    });
+</script>
+</body>
+</html>
