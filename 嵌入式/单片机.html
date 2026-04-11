@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>单片机</title>
+<!-- 
+https://clq0528.github.io/嵌入式/单片机.html 
+-->
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body {
+            background: var(--bg-gray);
+            margin: 0;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue);
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container {
+            width: 100%;
+            background: #fafafa;
+            border: 1px solid #ebedf0;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 8px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #fa8c16;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f6ffed;
+            border-left: 4px solid #b7eb8f;
+            color: #52c41a;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        /* 覆盖 Ant Design Tab 样式 */
+        .ant-tabs-bar {
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .ant-tabs-tab {
+            font-size: 16px !important;
+            padding: 16px 20px !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <h1 style="margin: 0; color: #001529;">单片机</h1>
+            <p style="color: #666; margin-top: 10px;">
+
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange">
+            <!-- TAB 1: WPF 属性系统 -->
+            <a-tab-pane key="1" tab="状态机">
+                <div id="oop-vs-pragmatism-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #1890ff;
+                            max-width: 900px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #1890ff;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-orange {
+                            background: #fff7e6;
+                            border: 1px solid #ffd8bf;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-warn {
+                            background: #fff1f0;
+                            border: 1px solid #ffa39e;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .tech-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 15px;
+                            font-size: 13px;
+                        }
+
+                        .tech-table th {
+                            background: #fafafa;
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                            text-align: left;
+                        }
+
+                        .tech-table td {
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .hl-orange {
+                            color: #fa8c16;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 报表头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">架构对账：嵌入式开发中的“对象迷思”与灰度思维</h1>
+                            <p style="color: #666; margin-top: 10px;">技术决策：从资源约束出发，打破非黑即白的编程教条</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：杀鸡焉用“航空母舰”？</div>
+                        <p>编程范式的选择应该由<b>项目复杂度</b>和<b>资源空间</b>决定，而不是由“流行词”决定。</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <div style="font-weight: bold; color: #003a8c; margin-bottom: 8px;">面向过程 (实用主义)</div>
+                                <div style="font-size: 13px;"><b>“单兵特种作战”</b>。针对跑马灯、加密狗等项目，目标明确、逻辑单一。直接下指令，响应最快，内存占用最少。
+                                </div>
+                            </div>
+                            <div class="logic-card-orange">
+                                <div style="font-weight: bold; color: #d46b08; margin-bottom: 8px;">面向对象 (结构主义)</div>
+                                <div style="font-size: 13px;"><b>“万人城市规划”</b>。针对大型 ERP、复杂 3D
+                                    游戏。处理成千上万个具有交互关系的对象，牺牲性能换取管理便利。</div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术层级：为什么单片机“不感冒”？ -->
+                        <div class="section-title">2. 深度辩证：单片机项目的“单对象”特性</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph TD
+                                Task[单片机任务: 加密狗/采集器] --> Feature1[硬件资源极其有限 RAM/Flash]
+                                Task --> Feature2[业务逻辑线性: 输入-处理-输出]
+                                Task --> Feature3[交互对象单一: 1个USB口/1个传感器]
+
+                                subgraph "OOP 引入的后果"
+                                Feature1 --> Overhead[内存虚高: 维护类与指针]
+                                Feature2 --> Complex[逻辑割裂: 强行拆解简单函数]
+                                Feature3 --> Useless[概念冗余: 给孤独的一个人写通讯录]
+                                end
+                            </div>
+                        </div>
+
+                        <!-- 3. 维度对账单：场景决定高度 -->
+                        <div class="section-title">3. 通用开发场景 vs 嵌入式硬件场景</div>
+                        <table class="tech-table">
+                            <thead>
+                                <tr>
+                                    <th>项目类型</th>
+                                    <th>核心关注点</th>
+                                    <th style="color: #1890ff;">推荐模式</th>
+                                    <th>OOP 的必要性</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>跑马灯/温度计</b></td>
+                                    <td>执行效率、实时性</td>
+                                    <td><b>模块化 C (面向过程)</b></td>
+                                    <td><span class="hl-orange">极低</span> (增加复杂度)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>考勤机/读卡器</b></td>
+                                    <td>数据吞吐、存储逻辑</td>
+                                    <td><b>结构体映射</b></td>
+                                    <td><span class="hl-orange">低</span> (结构体足够)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>大型游戏/医院系统</b></td>
+                                    <td>对象交互、行为继承</td>
+                                    <td><b>OOP (C++/Java/C#)</b></td>
+                                    <td><span class="hl-blue">极高</span> (必需)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>工业 OS 驱动框架</b></td>
+                                    <td>接口统一、跨硬件适配</td>
+                                    <td><b>模拟 OOP (虚函数表)</b></td>
+                                    <td>中等 (仅限架构层)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 关键认知：灰度思维的重要性 -->
+                        <div class="section-title">4. 进阶核心：打破“非零即一”的禁锢</div>
+                        <div class="logic-card-warn">
+                            <p style="font-size: 13px; margin: 0;">
+                                <b>• 面向对象不是圣经：</b> 在 C 语言里，用好 <code>struct</code>（封装属性）和 <code>static</code>（隐藏细节）就已经实现了
+                                OOP 最核心的<b>封装思想</b>。
+                                <br /><br />
+                                <b>• 拒绝过度封装：</b> 如果为了读一个寄存器，非要写 3 层 Class、封装 5 个 Interface。这不是高大上，这是对硬件资源的一种浪费。
+                                <b>真正的真功夫，是根据 51 单片机还是 STM32H7，灵活切换你的编程厚度。</b>
+                            </p>
+                        </div>
+
+                        <!-- 5. 专家视角：什么是“嵌入式真功夫”？ -->
+                        <div class="section-title">5. 深度总结：编程范式的本质是“工具”</div>
+                        <div
+                            style="padding: 15px; background: #fafafa; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 13px; color: #666;">
+                            <ul>
+                                <li><strong>回归物理：</strong> 嵌入式的灵魂是时序、电压和寄存器。如果你的代码让 CPU 都在跑“管理开销”而不是跑业务逻辑，那架构就是失败的。</li>
+                                <li><strong>理解边界：</strong> 只有当项目复杂到你无法通过线性函数管过来时，才是考虑引入 OOP 架构的时机。</li>
+                                <li><strong>实战优先：</strong> 加密狗不需要知道“小明爱吃红苹果”，它只需要知道密文对不对。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #001529; font-size: 14px;">
+                            <strong>📌 架构师视角总结：</strong><br />
+                            程序员最忌讳的是<b>“手里拿着锤子，看什么都是钉子”</b>。
+                            <br />• **OOP** 是为了大规模团队协作和海量动态对象设计的。
+                            <br />• **单片机** 更多是精准的“点对点”和“确定性”控制。
+                            <b>进阶的标志不是你会用多复杂的术语，而是你能在极简与极繁之间，找到那个支撑业务的最优解。一切从实际出发，才是真功夫。</b>
+                        </div>
+
+                        <!-- 底部 -->
+                        <div class="footer">
+                            Embedded Systems Programming Philosophy | 嵌入式工程论技术报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="2" tab="中断">
+                <div id="isr-architecture-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #722ed1;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 22px;
+                            background: #722ed1;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-warn {
+                            background: #fff7e6;
+                            border: 1px solid #ffe7ba;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .comparison-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 15px;
+                            font-size: 13px;
+                        }
+
+                        .comparison-table th {
+                            background: #fafafa;
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                            text-align: left;
+                        }
+
+                        .comparison-table td {
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-purple {
+                            color: #722ed1;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 报表头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">架构对账：中断服务程序 (ISR) 的“重载运行”深度报告</h1>
+                            <p style="color: #666; margin-top: 10px;">技术逻辑：打破“短小精悍”教条，解决超长 Main 循环下的硬实时冲突</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：医院的分流体系 -->
+                        <div class="section-title">1. 拟物化模型：门诊部的“大场面”挑战</div>
+                        <p>传统的编程教科书告诉我们“中断只能放标志位”，那是针对<b>简单的单兵任务</b>。在复杂系统中，逻辑分层至关重要：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <div style="font-weight: bold; color: #003a8c; margin-bottom: 8px;">Main 循环 —— 普通门诊
+                                </div>
+                                <div style="font-size: 13px;">负责慢速、非紧急的任务（如刷新 UI、写日志）。当门诊病人太多（任务堆积）时，挂号排队可能长达 10ms 以上。
+                                </div>
+                            </div>
+                            <div class="logic-card-purple">
+                                <div style="font-weight: bold; color: #391085; margin-bottom: 8px;">1ms 定时中断 —— 抢救室
+                                    (ICU)</div>
+                                <div style="font-size: 13px;">负责“必须活命”的任务（如 6 轴插补、力矩保护）。无论门诊排队多长，ICU 医生（中断程序）必须直接接管。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 核心矛盾：为什么 Main 函数会“失控”？ -->
+                        <div class="section-title">2. 深度辩证：8 个硬件定时器下的“扫描周期坍塌”</div>
+                        <p>当系统资源被高频中断严重挤占时，Main 函数的实时性会呈几何倍数衰减。</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                T1[轴1 PWM 中断] --> CPU[CPU 执行中]
+                                T2[轴2 PWM 中断] --> CPU
+                                T插补[插补运算中断] --> CPU
+                                CPU -->|剩余残破时间| Main[Main 循环执行]
+                                Main -->|后果| Jitter[执行周期从 1ms 抖动到 10ms]
+                                Jitter --> CriticalFail[核心逻辑未及时响应: 撞机或堵转]
+                            </div>
+                        </div>
+
+                        <!-- 3. 两种架构模式对账单 -->
+                        <div class="section-title">3. 维度对账：标志位模式 vs 中断执行模式</div>
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>评价维度</th>
+                                    <th style="color: #1890ff;">教科书模式 (标志位)</th>
+                                    <th style="color: #722ed1;">大拿模式 (中断放核心 App)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>实时性控制</b></td>
+                                    <td><span style="color: #f5222d;">软实时</span>：取决于 Main 循环长短。</td>
+                                    <td><span class="hl-purple">硬实时</span>：由硬件晶振强制保证。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>抖动 (Jitter)</b></td>
+                                    <td>极高：不可预测。</td>
+                                    <td><span class="hl-purple">极低</span>：纳秒级偏移。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>适用场景</b></td>
+                                    <td>低频 IO 开关、低速显示。</td>
+                                    <td><span class="hl-purple">高精度运动控制、高速解耦算法。</span></td>
+                                </tr>
+                                <tr>
+                                    <td><b>开发门槛</b></td>
+                                    <td>入门级。</td>
+                                    <td>专家级：需精确计算执行时间 WCET。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 深度扩展：大拿的“兵法”边界 -->
+                        <div class="section-title">4. 进阶核心：为什么敢把 App 往中断里塞？</div>
+                        <div class="logic-card-warn">
+                            <p style="font-size: 13px; margin: 0;">
+                                <b>• 突破定势：</b> “兵无常态”。如果核心逻辑放在 10ms 的 Main 循环里，电机每毫秒的变化就彻底失控了。
+                                <br /><br />
+                                <b>• 执行时间边界 (WCET)：</b> 敢塞代码的前提是，你必须知道这段核心代码在 CPU 上跑完需要多少微秒。只要 1ms 中断里的逻辑耗时 &lt;
+                                0.5ms，剩下的时间依然足够处理 Main 循环的杂活。
+                                <br /><br />
+                                <b>📍 架构金句：</b> 在没有 RTOS 的环境下，高优先级的定时中断就是你的“抢占式内核”。
+                            </p>
+                        </div>
+
+                        <!-- 5. 专家避坑：在中断里放 App 的“生存法则” -->
+                        <div class="section-title">5. 深度总结：大拿的“自保”技术规范</div>
+                        <div
+                            style="padding: 15px; background: #fafafa; border-radius: 4px; border-left: 5px solid #722ed1; font-size: 13px; color: #666;">
+                            <ul>
+                                <li><strong>禁止阻塞：</strong> 绝对不能在中断里放 <code>delay()</code> 或 <code>while()</code> 等待信号。
+                                </li>
+                                <li><strong>状态机化：</strong> 逻辑必须是“一触即离”的状态机结构。</li>
+                                <li><strong>原子性操作：</strong> 与 Main 循环共享的变量必须使用 <code>volatile</code> 关键字或互斥操作。</li>
+                                <li><strong>拒绝炫技：</strong> 只有 Main 循环已经快慢不一到影响功能时，才是这种“降维打击”架构登场的时候。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #001529; font-size: 14px;">
+                            <strong>📌 架构师视角总结：</strong><br />
+                            盲目遵守规则是初学者，灵活运用物理特性是架构师。
+                            <br />• **普通工程师**：通过增加 CPU 硬件来逃避架构设计难题。
+                            <br />• **大拿级工程师**：通过精准的时间片管理（Time-Slicing），在单一硬件上实现硬实时的性能闭环。
+                            <b>把核心逻辑塞进 1ms 中断，不是为了“坏习惯”，而是为了在“大场面”下，用最廉价的成本换取最高级的确定性。</b>
+                        </div>
+
+                        <!-- 底部 -->
+                        <div class="footer">
+                            Embedded Real-time Architecture | 嵌入式开发深度战术报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <!-- TAB 3: 从 UI 定义到 ViewModel 数据同步的全生命周期 -->
+            <a-tab-pane key="3" tab="3">
+                
+            </a-tab-pane>
+            <a-tab-pane key="4" tab="4">
+                
+            </a-tab-pane>
+            <a-tab-pane key="5" tab="5">
+                
+            </a-tab-pane>
+            <a-tab-pane key="6" tab="6">
+                
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <!-- 引入 Vue 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <script>
+        // 注册 Antd 组件
+        Vue.use(antd);
+
+        // 初始化 Mermaid
+        mermaid.initialize({
+            startOnLoad: false, // 改为手动控制渲染
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    activeKey: '1'
+                };
+            },
+            methods: {
+                // 当 Tab 切换时，重新运行 Mermaid 解析
+                // 解决 Mermaid 在隐藏容器中初始化宽度为 0 的问题
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        mermaid.init();
+                    });
+                }
+            },
+            mounted() {
+                // 初始加载第一个 Tab 的图表
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>
