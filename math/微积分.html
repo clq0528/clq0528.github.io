@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微积分本质解析：捅破微分概念的“窗户纸”</title>
+<!-- 
+https://clq0528.github.io/math/微积分.html
+-->   
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2f54eb;
+            /* 数学深蓝色 */
+            --analysis-green: #52c41a;
+            --warning-orange: #faad14;
+            --bg-gray: #f0f2f5;
+            --formula-bg: #fafafa;
+            --code-bg: #1e1e1e;
+        }
+
+        body {
+            background: var(--bg-gray);
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: #001529;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f0f5ff;
+            border-left: 4px solid #1890ff;
+            color: #003a8c;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        .chart-container {
+            width: 100%;
+            background: #fff;
+            border: 1px solid #ebedf0;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .formula-block {
+            background: var(--formula-bg);
+            border: 1px dashed #d9d9d9;
+            color: #262626;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: "Cambria Math", "Times New Roman", serif;
+            font-size: 16px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .status-tag {
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        .tag-strict {
+            background: #e6f7ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <h1 style="margin: 0; color: #001529;">微分概念深度解析报告 <span
+                    style="font-size: 14px; font-weight: normal; color: #8c8c8c;">Version: 现代分析体系视角</span></h1>
+            <p style="color: #595959; margin-top: 10px;">
+                <a-icon type="bulb"></a-icon> 核心洞察：摆脱“无穷小”幽灵，回归“线性逼近”本质，打通从微积分到深度学习的逻辑链路。
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange" type="card">
+
+            <!-- Tab 1: 体系对比 -->
+            <a-tab-pane key="1" tab="体系缝合之痛">
+                <div class="section-card">
+                    <h2><span class="step-num">1</span> 两种对立体系的“暴力缝合”</h2>
+                    <div class="logic-desc">
+                        教科书的困惑源于将莱布尼茨的“直观感觉”与柯西的“严谨极限”强行捆绑。这种“精神分裂”式的教学导致学生在符号与定义间不断挣扎。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            graph TD
+                            A["历史上：莱布尼茨体系"] -->|直观计算| B["无穷小量 (dx, dy)"]
+                            C["现代：魏尔斯特拉斯体系"] -->|严谨定义| D["极限与线性逼近 (ε-δ)"]
+                            E["国内教科书"] -->|强行缝合| A
+                            E -->|强行缝合| C
+                            E --> F{学生困惑: dx到底是不是0?}
+                            style A fill:#fff1f0,stroke:#f5222d
+                            style C fill:#f6ffed,stroke:#52c41a
+                            style E fill:#e6f7ff,stroke:#1890ff,stroke-width:2px
+                        </div>
+                    </div>
+                </div>
+                <!-- 微积分本质：线性逼近体系解析报告 -->
+                <div id="calculus-essence-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #28a745;
+                        }
+
+                        .report-header {
+                            font-size: 22px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .report-header::before {
+                            content: "";
+                            width: 4px;
+                            height: 22px;
+                            background: #28a745;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-theory {
+                            background: #f6ffed;
+                            border: 1px solid #b7eb8f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-engineering {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .hl-green {
+                            color: #52c41a;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .mermaid-box {
+                            background: #fafafa;
+                            border: 1px solid #d9d9d9;
+                            border-radius: 6px;
+                            padding: 20px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .code-box {
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: Consolas, monospace;
+                            font-size: 13px;
+                            margin: 10px 0;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div style="text-align: center; margin-bottom: 40px;">
+                            <h1 style="margin: 0; color: #001529;">微积分概念重构：无穷小 vs 线性逼近</h1>
+                            <p style="color: #8c8c8c; margin-top: 10px;">Engineering Insight：从玄学定义到线性算子的思维跃迁</p>
+                        </div>
+
+                        <!-- 1. 概念剥离 -->
+                        <div class="report-header">1. 符号解构：dx, dy, d 的本质</div>
+                        <p>国内教材困惑的核心在于试图缝合<b>“无穷小量(历史直觉)”</b>与<b>“线性逼近(现代数学)”</b>。需剥离如下定义：</p>
+                        <div class="logic-card-theory">
+                            <ul>
+                                <li><b>dx：</b> 自变量增量。它就是一个<b>独立的实数变量</b>（尺度），和 x 自身无关，取值属于整个 R 实数域，而非趋近于 0 的量！</li>
+                                <li><b>dy：</b> 因变量的线性主部。由定义式 <b>dy = f'(x)·dx</b> 决定，在点 x 处它是关于 dx 的线性函数，几何意义即为切线。</li>
+                                <li><b>d：</b> 微分算子(Operator)。一个函数映射器。d 作用在函数 f 上得到 df，即 df(x)(dx) = f'(x)dx，代表一个线性场。
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- 2. 可视化模型 -->
+                        <div class="report-header">2. 微分算子映射逻辑</div>
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                Op[微分算子 d] -- 作用于函数 f --> DF[微分函数 df]
+                                DF -- 输入增量 dx --> dy[输出线性近似 dy]
+                                dy -- 几何意义 --> Tangent["切线上的增量"]
+
+                                style Op fill:#f6ffed,stroke:#52c41a
+                                style dy fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 多元函数扩展 -->
+                        <div class="report-header">3. 多元函数的微分 (dz)</div>
+                        <p>当 z = f(x, y) 时，其本质依然未变：</p>
+                        <div class="code-box">
+                            dz = (∂f/∂x)dx + (∂f/∂y)dy;
+                        </div>
+                        <p>在此，dx 与 dy 依旧是独立的实数变量，分别代表在 X 和 Y 方向的增量。<b>dz 就是全增量 Δz 的线性主部！</b> d 算子依然在多元函数上进行线形映射场叠加。</p>
+
+                        <!-- 4. 算法工程对账 -->
+                        <div class="report-header">4. 算法工程师视角：线性逼近在 AI 中的应用</div>
+                        <div class="logic-card-engineering">
+                            <p style="margin: 0;">
+                                <b style="color: #003a8c;">为什么梯度下降(Gradient Descent)有效？</b><br />
+                                在深度学习中，Loss = F(W)，成千上万的权重参数 W 构成了极其复杂的非线性复合函数。反向传播算法的本质就是<b>“局部线性逼近”</b>。
+                                <br /><br />
+                                <code style="background: #fff; padding:2px 4px;">ΔLoss ≈ ∇F(W) · ΔW</code>
+                                <br /><br />
+                                即：在当前参数点 W，用梯度 ∇F(W) 作为斜率建立线性模型。只要 ΔW
+                                足够小，这个线性模型就是可靠的！我们沿着梯度的反方向走一小步，就完成了线性指导下的“下山”过程。<b>理解了线性逼近，就不会再纠结为什么“有限的学习率”可以配合“导数/微分”去更新网络参数了！</b>
+                            </p>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 15px; background: #fafafa; border-radius: 4px; border: 1px solid #d9d9d9; font-size: 13px;">
+                            <p style="margin: 0;">
+                                <strong>📌 深度总结：</strong><br />
+                                不要试图用“无穷小”去意会微分，这是微积分发展史上留下的“历史债务”。<br />
+                                • 现代算法工程告诉我们：<b>微分的核心就是“用局部最好的线性模型，去指导非线性复杂系统的演进。”</b><br />
+                                • 高阶微分(d²y)请直接看作不可分割的整体符号 f''(x)，避开物理直觉陷阱。<br />
+                                <br />
+                                推荐书单：<i>《Calculus (Spivak)》</i>(重塑严谨性)、<i>《普林斯顿微积分读本》</i>(重塑直觉)、<i>《微积分的历程》</i>(和解历史疑云)！
+                                <br /><b>具备质疑教材勇气的你，已经拥有了通往高阶工程与数学世界最宝贵的工程师品味！</b>
+                            </p>
+                        </div>
+
+                        <!-- 底部 -->
+                        <div
+                            style="text-align: center; margin-top: 40px; color: #999; font-size: 12px; border-top: 1px solid #f0f0f0; padding-top: 20px;">
+                            Calculus Theory Reconstruction Report | 现代工程数学的思维重构
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 2: 现代严谨定义 -->
+            <a-tab-pane key="2" tab="现代定义重构">
+                <div class="section-card">
+                    <h2><span class="step-num">2</span> 拆解 dx、dy 与 d 算子</h2>
+                    <div class="logic-desc">忘掉无穷小增量！在现代分析中，微分是一把测量变化的“尺子”，是函数在局部最好的线性模拟。</div>
+
+                    <a-collapse default-active-key="['1']">
+                        <a-collapse-panel key="1" header="dx：独立的自变量">
+                            <p>dx 就是一个普通的实数变量 $h$，它可以是 1、是 -100 或是 $\pi$。它不是趋近于 0 的过程，而是一个<strong>自变量</strong>。</p>
+                        </a-collapse-panel>
+                        <a-collapse-panel key="2" header="dy：线性主部 (因变量)">
+                            <p>dy 是一个依赖于 $x$ 和 $dx$ 的二元函数。其定义式为：</p>
+                            <div class="formula-block">dy = f'(x) · dx</div>
+                            <p>它是增量 $\Delta y$ 的<strong>线性主部</strong>。在点 $x$ 处，它描述了一条切线的线性外推。</p>
+                        </a-collapse-panel>
+                        <a-collapse-panel key="3" header="d：微分算子">
+                            <p>d 是一个映射，它把函数 $f$ 映射到一个<strong>线性映射场</strong>。在每一个点，$df$ 都会给出一个线性函数，接收 $dx$ 并输出 $dy$。</p>
+                        </a-collapse-panel>
+                    </a-collapse>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 3: 算法工程师视角 -->
+            <a-tab-pane key="3" tab="算法工程应用">
+                <div class="section-card">
+                    <h2><span class="step-num">3</span> 微分：AI 的基石 (梯度下降)</h2>
+                    <div class="logic-desc">
+                        在算法工程师眼里，微分不是哲学争论，而是实实在在的<strong>局部线性逼近</strong>。深度学习模型优化本质上就是在每一个局部点用微分建立线性关系。
+                    </div>
+                    <div class="chart-container">
+                        <div class="mermaid">
+                            sequenceDiagram
+                            participant Model as 神经网络 F(W)
+                            participant Grad as 梯度 ∇F(W)
+                            participant Update as 参数更新 ΔW
+
+                            Model->>Grad: 计算偏导数 (偏微分)
+                            Note over Grad: 建立局部线性模型: ΔLoss ≈ ∇F(W) · ΔW
+                            Grad->>Update: 沿着负梯度方向移动一步
+                            Update->>Model: 获得新权重 W'，重复线性逼近
+                        </div>
+                    </div>
+                    <div class="formula-block" style="background: #fffbe6; border-color: #ffe58f;">
+                        ΔLoss ≈ ∇F(W)ᵀ · ΔW <br>
+                        <span style="font-size: 14px; color: #8c8c8c;">(这就是高维版本的 dy = f'(x)dx)</span>
+                    </div>
+                </div>
+            </a-tab-pane>
+
+            <!-- Tab 4: 学习路径 -->
+            <a-tab-pane key="4" tab="推荐进阶指南">
+                <div class="section-card">
+                    <h2><span class="step-num">4</span> 告别平庸教科书</h2>
+                    <div class="logic-desc">如果想要彻底洗刷被“缝合怪”教科书带来的阴影，建议按照以下阶梯进行知识重构。</div>
+                    <a-list item-layout="horizontal" :data-source="bookList">
+                        <a-list-item slot="renderItem" slot-scope="item">
+                            <a-list-item-meta :description="item.desc">
+                                <span slot="title" style="color: var(--primary-color); font-weight: bold;">{{ item.title
+                                    }}</span>
+                            </a-list-item-meta>
+                            <a-tag color="blue">{{ item.level }}</a-tag>
+                        </a-list-item>
+                    </a-list>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="5" tab="偏微分">
+                <!-- 维度觉醒：偏导数与全微分的空间切片解析报告 -->
+                <div id="multivariate-calculus-report"
+                    style="background: #f4f7f9; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #262626; line-height: 1.6;">
+
+                    <style>
+                        .dimension-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 12px;
+                            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+                            border-top: 6px solid #fa8c16;
+                        }
+
+                        .dimension-header {
+                            font-size: 22px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .dimension-header::before {
+                            content: "";
+                            width: 4px;
+                            height: 22px;
+                            background: #fa8c16;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .mimetic-card {
+                            background: #fff7e6;
+                            border: 1px solid #ffd591;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 15px 0;
+                            position: relative;
+                            overflow: hidden;
+                        }
+
+                        .mimetic-card::after {
+                            content: "擬物";
+                            position: absolute;
+                            top: -5px;
+                            right: 10px;
+                            font-size: 40px;
+                            color: rgba(250, 140, 22, 0.08);
+                            font-weight: 800;
+                            transform: rotate(10deg);
+                        }
+
+                        .engineering-card {
+                            background: #f0f5ff;
+                            border: 1px solid #adc6ff;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 15px 0;
+                        }
+
+                        .hl-orange {
+                            color: #d46b08;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1d39c4;
+                            font-weight: bold;
+                        }
+
+                        .mermaid-box {
+                            background: #fafafa;
+                            border: 1px solid #d9d9d9;
+                            border-radius: 6px;
+                            padding: 20px;
+                            margin: 20px 0;
+                        }
+
+                        .code-box {
+                            background: #2d3436;
+                            color: #fab1a0;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Fira Code', Consolas, monospace;
+                            font-size: 13px;
+                            margin: 10px 0;
+                        }
+                    </style>
+
+                    <div class="dimension-body">
+                        <!-- 头部 -->
+                        <div style="text-align: center; margin-bottom: 40px;">
+                            <h1 style="margin: 0; color: #001529;">维度觉醒：偏微分与全微分的“空间切片”逻辑</h1>
+                            <p style="color: #8c8c8c; margin-top: 10px;">拟物化透视：从“单向切割”到“合力演进”的思维跃迁</p>
+                        </div>
+
+                        <!-- 1. 偏导数的拟物表达 -->
+                        <div class="dimension-header">1. 偏导数 (Partial Derivative)：空间中的“激光切割”</div>
+                        <p>在多元函数 <b>z = f(x, y)</b> 中，偏导数不是在算数值，而是在做<b>维度冻结</b>。</p>
+
+                        <div class="mimetic-card">
+                            <b>🔦 拟物化逻辑：激光切片机</b>
+                            <p>当你计算 <b>∂z/∂x</b> 时，想象你拿一把巨大的激光刀，在 <b>y=y₀</b>
+                                的位置垂直切下一刀。这一刀下去，三维的山峰变成了一张二维的切片平面。在这一张纸上，山坡的坡度就是该点的偏导数。
+                                <br /><br />
+                                <span class="hl-orange">本质：</span> 偏导数是在“保持其他变量死掉”的前提下，观测单一变量的<span
+                                    class="hl-orange">绝对控制力</span>。
+                            </p>
+                        </div>
+
+                        <div class="mermaid-box">
+                            <div class="mermaid">
+                                graph LR
+                                Surface[三维曲面 f_x,y] -- "固定 y = y0" --> Plane[纵向切片平面]
+                                Plane -- "求切线斜率" --> PD[偏导数 ∂z/∂x]
+
+                                Surface -- "固定 x = x0" --> Plane2[横向切片平面]
+                                Plane2 -- "求切线斜率" --> PD2[偏导数 ∂z/∂y]
+
+                                style PD fill:#fff7e6,stroke:#fa8c16
+                                style PD2 fill:#fff7e6,stroke:#fa8c16
+                            </div>
+                        </div>
+
+                        <!-- 2. 全微分的拟物表达 -->
+                        <div class="dimension-header">2. 全微分 (Total Differential)：多方博弈的“合力平衡”</div>
+                        <p>如果说偏导数是切割，那么全微分 <b>dz</b> 就是这几刀切割后的<b>最终合力结果</b>。</p>
+
+                        <div class="code-box">
+                            dz = (∂z/∂x)dx + (∂z/∂y)dy;
+                        </div>
+
+                        <div class="mimetic-card">
+                            <b>🪢 拟物化逻辑：拔河式的“拉扯贡献”</b>
+                            <p>想象你在山坡上站着，脚下有一块木板。
+                                <br />• <b>(∂z/∂x)dx</b> 是“东向”拉力对高度的贡献。
+                                <br />• <b>(∂z/∂y)dy</b> 是“北向”拉力对高度的贡献。
+                                <br /><br />全微分 <b>dz</b>
+                                就像是这两个方向的拉力同时作用在木板上，最终让木板产生了一个微小的倾斜位移。它代表了函数在所有方向共同扰动下的<b>总反馈量</b>。
+                            </p>
+                        </div>
+
+                        <!-- 3. 深度扩展：雅可比矩阵与梯度 -->
+                        <div class="dimension-header">3. 深度对账：梯度向量与雅可比 (Jacobian)</div>
+                        <div class="engineering-card">
+                            <p>
+                                <b class="hl-blue">梯度向量 (∇f)：</b>
+                                将所有偏导数打包成一个向量。拟物化看，它就是那个<b>“指北针”</b>。它永远指向当前点山势最陡峭、上升最快的方向。
+                                <br /><br />
+                                <b class="hl-blue">雅可比矩阵 (Jacobian Matrix)：</b>
+                                如果是多输入、多输出的复杂系统（比如机器人手臂的关节角度到指尖位置的映射），雅可比矩阵就是这个系统的<b>“灵敏度仪表盘”</b>。它告诉你：如果某个输入微动一下，所有的输出会发生怎样的联动反应。
+                            </p>
+                        </div>
+
+                        <!-- 4. 算法与工程实践：Loss 函数的博弈 -->
+                        <div class="dimension-header">4. 工业奥义：为什么 AI 需要“解耦”的偏微分？</div>
+                        <p>在神经网络调优中，Loss 函数依赖于数百万个权重参数。我们无法整体观察这个“亿维空间”。</p>
+
+                        <div class="logic-card-theory"
+                            style="background: #fafafa; border: 1px solid #d9d9d9; padding: 18px; border-radius: 6px;">
+                            <b>🛠 工程师的解法：梯度下降</b>
+                            <p>我们对每一个参数 <b>w_i</b> 计算偏导数 <b>∂Loss/∂w_i</b>。这相当于在问：
+                                <br /><i>“假如其他参数都不动，仅仅给这个参数增加 0.001，Loss 会变好还是变坏？”</i>
+                                <br /><br />
+                                通过反向传播（Backpropagation），我们收集了每一个参数的这种“微观反馈”，最终形成了全维度的全微分方向（负梯度方向），驱动整个复杂的模型朝着谷底进化。
+                                <br /><br />
+                                <span class="hl-orange">核心理解：</span> 偏微分把“高维复杂系统的协同进化”拆解成了“一个个独立零件的微小修正”。
+                            </p>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 15px; background: #fffbe6; border-radius: 4px; border: 1px solid #ffe58f; font-size: 13px;">
+                            <p style="margin: 0;">
+                                <strong>📌 深度总结：</strong><br />
+                                • <b>偏导数</b>是单维度的“切片快照”，它告诉我们在某个局部方向上有多陡。<br />
+                                • <b>全微分</b>是全维度的“近似蓝图”，它用一个超平面去模拟那个复杂的、多变量扰动的现实。<br />
+                                • <b>梯度</b>是行动指南，指引你向最陡峭的方向进发（或者是反方向下山）。<br />
+                                <br />
+                                <b>在多元分析中，公式不再是计算的枷锁，而是不同力量在空间中交织、平衡、演化的工程图纸！</b>
+                            </p>
+                        </div>
+
+                        <!-- 底部 -->
+                        <div
+                            style="text-align: center; margin-top: 40px; color: #999; font-size: 12px; border-top: 1px solid #f0f0f0; padding-top: 20px;">
+                            Multivariate Calculus Mimetic Report | 空间思维与高维线性演化
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+
+        <div style="text-align: center; margin-top: 40px; color: #bfbfbf; font-size: 12px;">
+            数学之美在于逻辑的自治，而非符号的玄学。
+        </div>
+    </div>
+
+    <!-- 引入 Vue 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <script>
+        Vue.use(antd);
+
+        // Mermaid 初始化配置
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'neutral',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            securityLevel: 'loose'
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    bookList: [
+                        { title: 'Michael Spivak《Calculus》', desc: '从 ε-δ 严谨构建，让你明白什么叫“分析”的灵魂。', level: '专业必读' },
+                        { title: '《普林斯顿微积分读本》', desc: '极佳的直观理解过渡，弥补国内教材丢失的思想细节。', level: '入门首选' },
+                        { title: '《微积分的历程》', desc: '理清从牛顿到勒贝格的历史脉络，看懂体系的百年变迁。', level: '历史视角' },
+                        { title: 'John M. Lee《Introduction to Smooth Manifolds》', desc: '当你学到外微分 (Exterior Derivative) 时，一切困惑将烟消云散。', level: '终极进阶' }
+                    ]
+                }
+            },
+            methods: {
+                handleTabChange(key) {
+                    // 切换标签时重新渲染 Mermaid 图表，防止样式异常
+                    this.$nextTick(() => {
+                        try {
+                            mermaid.init();
+                        } catch (e) {
+                            console.error("Mermaid 渲染失败", e);
+                        }
+                    });
+                }
+            },
+            mounted() {
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>
