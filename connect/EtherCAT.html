@@ -1,0 +1,3892 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtherCAT</title>
+<!-- 
+https://clq0528.github.io/connect/EtherCAT.html 
+-->
+    <!-- 引入 Ant Design Vue V2 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css">
+    <!-- 引入 Mermaid 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #faad14;
+            --danger-color: #f5222d;
+            --navy-blue: #001529;
+            --bg-gray: #f0f2f5;
+        }
+
+        body {
+            background: var(--bg-gray);
+            margin: 0;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid var(--primary-color);
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            color: var(--navy-blue);
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        h2::before {
+            content: "";
+            width: 4px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        .chart-container {
+            width: 100%;
+            background: #fafafa;
+            border: 1px solid #ebedf0;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .method-tag {
+            font-family: 'Consolas', monospace;
+            background: #fff7e6;
+            padding: 2px 8px;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #fa8c16;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .logic-desc {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f6ffed;
+            border-left: 4px solid #b7eb8f;
+            color: #52c41a;
+        }
+
+        .step-num {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        /* 覆盖 Ant Design Tab 样式 */
+        .ant-tabs-bar {
+            margin-bottom: 24px;
+            background: #fff;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .ant-tabs-tab {
+            font-size: 16px !important;
+            padding: 16px 20px !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <h1 style="margin: 0; color: #001529;">EtherCAT</h1>
+            <p style="color: #666; margin-top: 10px;">
+                EtherCAT
+            </p>
+        </div>
+
+        <a-tabs default-active-key="1" @change="handleTabChange">
+            <a-tab-pane key="1" tab="路由">
+                <div id="routing-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #13c2c2;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #13c2c2;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-cyan {
+                            background: #e6fffb;
+                            border: 1px solid #87e8de;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .tech-formula {
+                            font-family: 'Cascadia Code', monospace;
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-size: 13px;
+                            margin: 10px 0;
+                            border-left: 5px solid #13c2c2;
+                        }
+
+                        .hl-cyan {
+                            color: #13c2c2;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">全维透视：网络路由探测工具与原理全解</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：从本地路由表到跨海骨干网的路径追踪</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：地图与信使 -->
+                        <div class="section-title">1. 拟物化模型：导航地图 vs 探路先锋</div>
+                        <p>查路由分为两种：一种是看<b>“自己手里的地图”</b>，另一种是看<b>“信使实际上怎么走的”</b>。</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-cyan">
+                                <div style="font-weight: bold; color: #006d75; margin-bottom: 8px;">静态地图 (Routing Table)
+                                </div>
+                                <div style="font-size: 13px;"><b>指令：</b> <code>ip route</code> /
+                                    <code>route print</code>
+                                    <br /><b>比喻：</b> 你在车里翻开的离线地图，上面写着：去北京走 A 高速，去上海走 B 国道。这只是预设，并不代表路真的通。
+                                </div>
+                            </div>
+                            <div class="logic-card-purple">
+                                <div style="font-weight: bold; color: #391085; margin-bottom: 8px;">动态探路 (Path Tracing)
+                                </div>
+                                <div style="font-size: 13px;"><b>指令：</b> <code>mtr</code> / <code>traceroute</code>
+                                    <br /><b>比喻：</b> 你每到一个路口就问警察：“这是哪？下一站去哪？”这种方式能反映实时路况（丢包和延迟）。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 核心指令矩阵 -->
+                        <div class="section-title">2. 路由查证工具对账单</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        指令</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        系统环境</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        核心原理</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        应用场景</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>ip route</code></td>
+                                    <td>Linux (现代)</td>
+                                    <td>查询内核 FIB 表。</td>
+                                    <td>查看默认网关、检查本地路由规则。</td>
+                                </tr>
+                                <tr>
+                                    <td><code>mtr</code></td>
+                                    <td>Linux / Mac</td>
+                                    <td>ICMP + 持续循环采样。</td>
+                                    <td><span class="hl-cyan">诊断利器</span>。实时看每一跳的丢包。</td>
+                                </tr>
+                                <tr>
+                                    <td><code>pathping</code></td>
+                                    <td>Windows</td>
+                                    <td>Traceroute + Ping 统计。</td>
+                                    <td>Windows 下的链路性能综合分析。</td>
+                                </tr>
+                                <tr>
+                                    <td><code>tracepath</code></td>
+                                    <td>Linux</td>
+                                    <td>UDP 探测 + MTU 发现。</td>
+                                    <td>类似 Traceroute，但能测路径最大传输单元。</td>
+                                </tr>
+                                <tr>
+                                    <td><code>arp -a</code></td>
+                                    <td>所有系统</td>
+                                    <td>二层 MAC 映射。</td>
+                                    <td>查局域网内下一跳网关的物理地址。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 3. 原理解析：TTL 的牺牲精神 -->
+                        <div class="section-title">3. 深度原理：如何让路由器“开口说话”？</div>
+                        <p>除了查询本地静态表，动态追踪的核心原理是 <b>TTL (Time To Live) 递增机制</b>：</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                Source[你的电脑] -- "TTL=1 (只有1点体力)" --> R1[路由器 A]
+                                R1 -- "体力耗尽, 回送 ICMP 超时" --> Source
+                                Source -- "TTL=2 (有2点体力)" --> R1 -- "体力剩1" --> R2[路由器 B]
+                                R2 -- "体力耗尽, 回送 ICMP 超时" --> Source
+                                Source -- "TTL=3" --> Target[目标网站]
+                            </div>
+                        </div>
+
+                        <!-- 4. 技术对账：各层级路由信息的价值 -->
+                        <div class="section-title">4. 进阶扩展：路由信息的三个层次</div>
+                        <div class="logic-card-cyan">
+                            <ul style="font-size: 13px; padding-left: 20px; color: #00474f;">
+                                <li><b>第一层：本机的偏见 (Local RIB)。</b>
+                                    <br />指令：<code>netstat -rn</code>。它决定了流量从哪张网卡出去。如果你插了网线又连了 WiFi，这里就是决定成败的关键。
+                                </li>
+                                <li><b>第二层：邻居的信任 (ARP/Neighbor)。</b>
+                                    <br />指令：<code>ip neigh</code>。在同一个局域网里，路由表只告诉你去哪个 IP，ARP 才告诉你去哪个 MAC 地址。
+                                </li>
+                                <li><b>第三层：互联网的博弈 (BGP Path)。</b>
+                                    <br />这通常发生在电信机房。通过 <code>mtr</code> 看到的那些跳数，反映了全球骨干网路由器之间通过 BGP 协议达成的最优路径协议。
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- 5. 架构师视角总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #13c2c2; font-size: 14px;">
+                            <strong>📌 工业级诊断方案：</strong><br />
+                            1. <b>没网了？</b> 先用 <code>ip route</code> 看默认网关 (default via) 对不对。<br />
+                            2. <b>连不上特定服务器？</b> 用 <code>mtr</code> 盯着看，究竟是卡在了自家路由器，还是卡在了运营商公网。<br />
+                            3. <b>网速慢？</b> 用 <code>tracepath</code> 看看是不是 MTU (包大小) 设置不合理导致了大量分片。
+                            <b>路由不是死的配置，而是数据包在成千上万路由器间的一场短跑比赛。</b>
+                        </div>
+
+                        <div class="footer">
+                            Network Infrastructure | 路由探测原理与实战
+                        </div>
+                    </div>
+                </div>
+                <div id="traceroute-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #722ed1;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #722ed1;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .code-box {
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                            margin: 10px 0;
+                            border-left: 5px solid #722ed1;
+                        }
+
+                        .hl-purple {
+                            color: #722ed1;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">网络透视镜：Traceroute 路径探测算法解析</h1>
+                            <p style="color: #666; margin-top: 10px;">技术本质：利用 TTL 耗尽机制诱导路由器回送 ICMP 报文</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：不断自毁的“探路信使”</div>
+                        <p>假设你要寄一封信到远方，但路上有很多中转站，你想知道每个站点的名字。Traceroute 就像是一个<b>玩命的信使</b>：</p>
+
+                        <div class="logic-card-purple" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🏃</div>
+                            <div style="font-size: 13px;">
+                                <b>第一轮（TTL=1）：</b> 信使跑出第一步就“力竭而亡”，第一站的保安（路由器）看他可怜，发个回执告诉你：“他死在我这了，我是站点 A”。
+                                <br /><b>第二轮（TTL=2）：</b> 信使跑出两步才“力竭”，第二站的保安告诉你：“他死在我这了，我是站点 B”。
+                                <br /><b>最终：</b> 信使终于活着跑到了终点，对方告诉你：“信收到了”。
+                                <p style="margin-top: 8px; font-weight: bold; color: #391085;">这就是 Traceroute
+                                    的核心：故意让数据包在半路“自毁”，从而骗取路由器的身份信息。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术流转图 -->
+                        <div class="section-title">2. 核心算法：TTL 递增步进机制</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                PC[发起端主机] -- UDP/ICMP TTL=1 --> R1[路由器 1]
+                                R1 -- 超时回送 ICMP Time Exceeded --> PC
+                                PC -- UDP/ICMP TTL=2 --> R1 --> R2[路由器 2]
+                                R2 -- 超时回送 ICMP Time Exceeded --> PC
+                                PC -- UDP/ICMP TTL=3 --> R1 --> R2 --> Destination[目标服务器]
+
+                                style R1 fill:#f9f0ff,stroke:#d3adf7
+                                style R2 fill:#f9f0ff,stroke:#d3adf7
+                                style Destination fill:#e6f7ff,stroke:#91d5ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 命令实战 -->
+                        <div class="section-title">3. 执行与对账：如何看懂输出？</div>
+                        <div class="code-box">
+                            # 在 Linux/Mac 使用 traceroute，在 Windows 使用 tracert<br>
+                            traceroute www.example.com<br><br>
+                            1 192.168.1.1 (网关) 1.2 ms 1.1 ms<br>
+                            2 10.0.0.1 (运营商骨干) 15.4 ms 14.8 ms<br>
+                            3 * * * (请求超时 - 路由器可能开启了防火墙或禁止 ICMP)
+                        </div>
+
+                        <!-- 4. 深度扩展：网络探测的“全家桶” -->
+                        <div class="section-title">4. 工具扩展：除了 Traceroute 还有什么？</div>
+                        <p>在高性能网络排查中，Traceroute 只是基础，你还需要这些“特种工具”：</p>
+
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        工具</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        功能对账</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        适用场景</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b class="hl-purple">Ping</b></td>
+                                    <td>确认对方是否存活及其延迟。</td>
+                                    <td>最基础的可达性测试。</td>
+                                </tr>
+                                <tr>
+                                    <td><b class="hl-purple">MTR (My Traceroute)</b></td>
+                                    <td><span class="hl-purple">最强推荐！</span> 结合了 Ping 和 Traceroute。</td>
+                                    <td>实时观测每一跳的丢包率，排查网络抖动神技。</td>
+                                </tr>
+                                <tr>
+                                    <td><b class="hl-purple">Dig / Nslookup</b></td>
+                                    <td>查询域名背后的 IP 到底是谁。</td>
+                                    <td>DNS 劫持、解析异常排查。</td>
+                                </tr>
+                                <tr>
+                                    <td><b class="hl-purple">Curl -I</b></td>
+                                    <td>获取网页的 HTTP 响应头。</td>
+                                    <td>排查 Web 服务是否正常，比用浏览器快。</td>
+                                </tr>
+                                <tr>
+                                    <td><b class="hl-purple">Netstat / SS</b></td>
+                                    <td>查看本地哪些端口被占用。</td>
+                                    <td>排查端口冲突、非法连接。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 5. 架构师总结 -->
+                        <div class="section-title">5. 深度局限性分析</div>
+                        <div class="logic-card-blue">
+                            <b>⚠️ 为什么有时会看到一堆星号 (* * *)？</b><br />
+                            1. <b>路由器安全策略：</b> 现代许多公网路由器为了防攻击，配置了“拒绝回送 ICMP 报文”。<br />
+                            2. <b>路径不对称：</b> 数据包去时的路径和回来的路径可能完全不同，Traceroute 只能代表“去”的路。<br />
+                            3. <b>虚拟化干扰：</b> 在云服务（如阿里云、AWS）中，由于负载均衡和虚拟网络的存在，Traceroute 看到的节点可能并不对应真实的物理机。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #722ed1; font-size: 14px;">
+                            <strong>📌 工程师总结：</strong><br />
+                            Traceroute 是网络世界的<b>“足迹地图”</b>。
+                            <br />• 它利用了 IP 协议中为了防止死循环而设计的 <b>TTL 字段</b>。
+                            <br />• 排查跨地域网络延迟时，配合 <b>MTR</b> 才能看到真正的瓶颈点。
+                            <b>没有 Traceroute，网络排查就是盲人摸象。</b>
+                        </div>
+
+                        <div class="footer">
+                            Network Diagnostics Series | 网络底层探测技术报告
+                        </div>
+                    </div>
+                </div>
+                <div id="icmp-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #1890ff;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #1890ff;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-green {
+                            background: #f6ffed;
+                            border: 1px solid #b7eb8f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .formula-box {
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                            margin: 10px 0;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">网络“哨兵”：ICMP 协议底层逻辑全解析</h1>
+                            <p style="color: #666; margin-top: 10px;">技术定位：网络层 (Layer 3) 的辅助纠错与诊断机制</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：网络高速公路的“运维交警”</div>
+                        <p>如果 <b>IP 协议</b> 是运送货物的<b>快递员</b>（它只管跑，不保证货一定送到），那么 <b>ICMP</b> 就是<b>路政运维系统</b>：</p>
+
+                        <div class="logic-card-blue" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🚓</div>
+                            <div style="font-size: 13px;">
+                                <b>快递员迷路了？</b> ICMP 会发消息告诉寄件人：“地址找不到，请回”。
+                                <br /><b>包裹由于体力不足（TTL）损毁了？</b> ICMP 会发消息：“包裹在 A 站点由于体力耗尽被销毁了”。
+                                <br /><b>前方修路（拥塞）？</b> ICMP 曾经负责告诉寄件人：“慢点开，前面堵了”。
+                                <p style="margin-top: 8px; font-weight: bold; color: #003a8c;">ICMP
+                                    不搬运用户数据，它只搬运关于“网络状况”的诊断报告。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术流转图 -->
+                        <div class="section-title">2. 核心架构：ICMP 如何运作？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                A[源主机] -- IP 数据包 --> R1[路由器 / 中转站]
+                                R1 -- 路径故障 / 超时 --> Error[产生 ICMP 报文]
+                                Error -- 封装在 IP 包内 --> A
+                                A -- 解析报文 --> Diagnosis[显示: 目标不可达 / 超时]
+
+                                style Error fill:#fff1f0,stroke:#ff4d4f
+                                style Diagnosis fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 技术解构：报文结构对账 -->
+                        <div class="section-title">3. 协议对账单：ICMP 报文头</div>
+                        <div class="formula-box">
+                            Type (8位) | Code (8位) | Checksum (16位)<br />
+                            ------------------------------------------<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;Data (取决于 Type 和 Code)<br />
+                            ------------------------------------------
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        常用 Type</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        名称</th>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        应用场景</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>8 / 0</b></td>
+                                    <td>回显请求 / 回答 (Echo)</td>
+                                    <td>这就是你每天用的 <b class="hl-blue">Ping</b>。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>3</b></td>
+                                    <td>目标不可达</td>
+                                    <td>路不通，或者对方服务器防火墙拦截。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>11</b></td>
+                                    <td>超时 (Time Exceeded)</td>
+                                    <td><b class="hl-blue">Traceroute</b> 的引擎，TTL 耗尽时触发。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>5</b></td>
+                                    <td>重定向 (Redirect)</td>
+                                    <td>路由器告诉你：“走另一条路更快”。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. ICMP 的两大核心任务 -->
+                        <div class="section-title">4. 核心应用：Ping 与 Traceroute</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-green">
+                                <div style="font-weight: bold; color: #237804;">测试可达性 (Ping)</div>
+                                <div style="font-size: 12px; margin-top: 5px;">利用 Echo 请求。如果你问“在吗？”，对方回“在”，则链路通畅。</div>
+                            </div>
+                            <div class="logic-card-green">
+                                <div style="font-weight: bold; color: #237804;">路径追踪 (Traceroute)</div>
+                                <div style="font-size: 12px; margin-top: 5px;">利用 TTL 耗尽诱导路由器发送 Type 11
+                                    报文，从而标记出路径上每一个节点。</div>
+                            </div>
+                        </div>
+
+                        <!-- 5. 安全专家警告 -->
+                        <div class="section-title">5. 深度扩展：ICMP 的暗面</div>
+                        <div
+                            style="padding: 15px; background: #fff1f0; border-radius: 4px; border-left: 5px solid #ff4d4f; font-size: 13px; color: #666;">
+                            <ul>
+                                <li><b>Ping of Death：</b> 通过发送超大的 ICMP 包让旧系统崩溃。</li>
+                                <li><b>ICMP Flood (DDoS)：</b> 用海量的 Ping 请求淹没目标服务器的带宽。</li>
+                                <li><b>禁 Ping 策略：</b> 这就是为什么很多大厂服务器（如百度、阿里）有时能访问网页但 Ping 不通，因为他们为了安全丢弃了 ICMP 报文。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 14px;">
+                            <strong>📌 架构师总结：</strong><br />
+                            ICMP 是网络层 (L3) 不可或缺的<b>“质量回馈系统”</b>。
+                            <br />• 它<b>不传输用户数据</b>，只传输控制数据。
+                            <br />• 它封装在 IP 协议内，但逻辑上属于网络层。
+                            <b>理解了 ICMP，你就理解了网络排查的本质：所有的“超时”和“不可达”，背后都是一个 ICMP 报文在和你交流。</b>
+                        </div>
+
+                        <div class="footer">
+                            IP Control Protocols | 工业网络诊断专题报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="2" tab="telnet&nc">
+                <div id="nc-vs-telnet-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #fa8c16;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #fa8c16;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-orange {
+                            background: #fff7e6;
+                            border: 1px solid #ffd8bf;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .code-box {
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                            margin: 10px 0;
+                            border-left: 5px solid #fa8c16;
+                        }
+
+                        .hl-orange {
+                            color: #fa8c16;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">网络探针对账：Netcat (nc) vs Telnet</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：为什么 nc 是系统管理员的“瑞士军刀”？</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：访客 vs 电工</div>
+                        <p>当你想知道某个服务器的 80 端口（大门）是否打开时：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <div style="font-weight: bold; color: #003a8c; margin-bottom: 8px;">Telnet (普通访客)</div>
+                                <div style="font-size: 13px;"><b>逻辑：</b>
+                                    敲门并试图走进去坐下对话。如果门开了，他会一直呆在屋里不走，除非你手动把他拽出来（Ctrl+]）。</div>
+                            </div>
+                            <div class="logic-card-orange">
+                                <div style="font-weight: bold; color: #874d00; margin-bottom: 8px;">nc -zv (专业电工)</div>
+                                <div style="font-size: 13px;"><b>逻辑：</b> 拿着万用表碰一下门口的接线柱，灯亮了立刻撤退。他只关心“路通不通”，不关心“屋里有谁”。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术参数解析 -->
+                        <div class="section-title">2. 指令解构：nc -zv 到底在做什么？</div>
+                        <div class="code-box">
+                            nc -zv www.example.com 80
+                        </div>
+                        <div style="font-size: 14px; margin-left: 10px;">
+                            <ul>
+                                <li><b class="hl-orange">-z (Zero-I/O):</b> 只进行连接测试，不发送任何数据，连接成功后立即断开。</li>
+                                <li><b class="hl-orange">-v (Verbose):</b> 输出详细过程。成功会报 <code>succeeded!</code>，失败会报原因。
+                                </li>
+                                <li><b class="hl-orange">80:</b> 目标端口。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 3. 技术流转图 -->
+                        <div class="section-title">3. 执行链路对比</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                Start[测试请求] --> Protocol{选择工具}
+                                Protocol -- Telnet --> T_Conn[TCP 三次握手]
+                                T_Conn --> T_Wait[保持连接 / 等待输入]
+                                T_Wait --> T_Exit[需手动退出: Ctrl+...]
+
+                                Protocol -- nc -zv --> N_Conn[TCP 三次握手]
+                                N_Conn --> N_Check{灯亮了吗?}
+                                N_Check --> N_Auto[自动释放连接并返回结果]
+
+                                style T_Wait fill:#e6f7ff,stroke:#91d5ff
+                                style N_Auto fill:#fff7e6,stroke:#fa8c16,stroke-width:2px
+                            </div>
+                        </div>
+
+                        <!-- 4. 深度对比表 -->
+                        <div class="section-title">4. 核心维度对账单</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="background: #fafafa; padding: 12px; border: 1px solid #f0f0f0; text-align: left;">
+                                        维度</th>
+                                    <th style="color: #1890ff;">Telnet (Windows 常用)</th>
+                                    <th style="color: #fa8c16;">Netcat (Linux/Unix 标配)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>设计初衷</b></td>
+                                    <td>远程终端登录协议。</td>
+                                    <td><b>通用网络读写工具</b>。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>自动化脚本</b></td>
+                                    <td>极差。连接成功会阻塞进程。</td>
+                                    <td><span class="hl-orange">极佳</span>。返回 Exit Code (0/1)。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>扫描功能</b></td>
+                                    <td>只能查一个端口。</td>
+                                    <td>支持范围扫描 (如 80-100)。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>协议支持</b></td>
+                                    <td>仅限 TCP。</td>
+                                    <td>支持 <b>TCP 和 UDP</b> (-u)。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>超时控制</b></td>
+                                    <td>由操作系统决定，很难设。</td>
+                                    <td>支持 <code>-w</code> 自定义超时秒数。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 5. Windows 替代方案扩展 -->
+                        <div class="section-title">5. 深度扩展：Windows 用户的“现代版 nc”</div>
+                        <p>由于 Windows 默认不带 <code>nc</code> 且 <code>telnet</code> 需要手动开启，现代 Windows 运维推荐使用
+                            <b>PowerShell</b> 指令：
+                        </p>
+                        <div class="code-box" style="background: #002451;">
+                            # 效果等同于 nc -zv<br>
+                            Test-NetConnection -ComputerName www.example.com -Port 80
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #fa8c16; font-size: 14px;">
+                            <strong>📌 工程师架构总结：</strong><br />
+                            如果在 Linux 下排查网络，请彻底遗忘 <code>telnet</code>。
+                            <br />• <b>单次探测：</b> 用 <code>nc -zv</code>。
+                            <br />• <b>脚本集成：</b> 用 <code>nc -w 2 -z</code> (2秒超时)，根据返回状态码判断服务是否存活。
+                            <b>nc 的真正魅力在于：它不仅能测端口，还能发报文、传文件、甚至做临时的 Web 服务器。它是真正的瑞士军刀。</b>
+                        </div>
+
+                        <div class="footer">
+                            Network Utility Diagnostics | Netcat 技术专题报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="3" tab="路由器">
+                <div id="l2-vs-l3-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #722ed1;
+                            max-width: 950px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #722ed1;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .comparison-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 15px;
+                            font-size: 13px;
+                        }
+
+                        .comparison-table th {
+                            background: #fafafa;
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                            text-align: left;
+                        }
+
+                        .comparison-table td {
+                            padding: 12px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-purple {
+                            color: #722ed1;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">架构对账：二层 (L2) 与 三层 (L3) 转发逻辑深度解析</h1>
+                            <p style="color: #666; margin-top: 10px;">技术本质：MAC 地址映射 vs IP 逻辑路由</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：室内快递 vs 跨城物流</div>
+                        <p>理解二层与三层的区别，可以用一个<b>大型工厂</b>的物流系统来类比：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <div style="font-weight: bold; color: #003a8c; margin-bottom: 8px;">二层逻辑 (室内传送带)</div>
+                                <div style="font-size: 13px;"><b>标识：</b> 工人的身份证号 (MAC 地址)。
+                                    <br /><b>行为：</b> 货物在车间内部流转，传送带只看包装上的工号，直接送到对应工位。
+                                    <br /><b>局限：</b> 如果车间里有人大喊一声（广播），所有人都能听到。
+                                </div>
+                            </div>
+                            <div class="logic-card-purple">
+                                <div style="font-weight: bold; color: #391085; margin-bottom: 8px;">三层逻辑 (物流集散中心)</div>
+                                <div style="font-size: 13px;"><b>标识：</b> 详细邮寄地址 (IP 地址)。
+                                    <br /><b>行为：</b> 货物要去另一个城市，必须经过集散中心（路由器），根据地址查地图（路由表）决定走哪条高速。
+                                    <br /><b>优势：</b> 不同城市的噪音（广播）互不干扰。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 决策流转图 -->
+                        <div class="section-title">2. 技术链路：数据包如何决定去向？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                Packet[收到数据帧] --> Header{检查帧头}
+                                Header -- "二层逻辑" --> MAC[查询 MAC 地址表]
+                                MAC --> Port[直接从对应物理端口发出]
+
+                                Header -- "三层逻辑" --> IP[拆包检查目标 IP]
+                                IP --> Route[查询 路由表/FIB]
+                                Route --> ARP[查询 下一跳 MAC]
+                                ARP --> Final[封装并转发到另一子网]
+
+                                style MAC fill:#e6f7ff,stroke:#1890ff
+                                style Route fill:#f9f0ff,stroke:#722ed1,stroke-width:2px
+                            </div>
+                        </div>
+
+                        <!-- 3. 维度对账表 -->
+                        <div class="section-title">3. 核心差异对账单</div>
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>特性</th>
+                                    <th style="color: #1890ff;">二层 (Layer 2)</th>
+                                    <th style="color: #722ed1;">三层 (Layer 3)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>OSI 层级</b></td>
+                                    <td>数据链路层 (Data Link Layer)</td>
+                                    <td>网络层 (Network Layer)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>寻址依据</b></td>
+                                    <td><b>MAC 地址</b> (物理唯一，出厂固定)</td>
+                                    <td><b>IP 地址</b> (逻辑分配，可重排)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>硬件设备</b></td>
+                                    <td>二层交换机、网桥</td>
+                                    <td>路由器、三层交换机</td>
+                                </tr>
+                                <tr>
+                                    <td><b>广播域</b></td>
+                                    <td><span class="hl-blue">不隔离</span>。广播包会发送到所有端口。</td>
+                                    <td><span class="hl-purple">隔离</span>。阻断广播风暴，划分子网。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>转发效率</b></td>
+                                    <td>极高。由 ASIC 硬件芯片直接转发。</td>
+                                    <td>较高。需拆包并查路由表，计算量稍大。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 关键点：广播风暴与子网隔离 -->
+                        <div class="section-title">4. 进阶深度：为什么必须要有三层？</div>
+                        <div class="logic-card-purple">
+                            <b>1. 广播域隔离 (Broadcast Isolation)：</b>
+                            <br />在二层网络中，ARP 请求等广播包会传遍整个网络。如果网络中有 1000 台 PLC，广播包会拖垮所有 CPU。三层逻辑通过 IP 子网将这些“杂音”切断。
+                            <br /><br />
+                            <b>2. 跨网段通讯 (Inter-VLAN Routing)：</b>
+                            <br />生产网段 (192.168.1.x) 和办公网段 (10.0.0.x) 的数据交换必须经过三层逻辑。二层设备看不到 IP，无法完成这种中转。
+                            <br /><br />
+                            <b>3. 路径优化 (Routing Algorithm)：</b>
+                            <br />三层设备支持 OSPF/BGP 等协议，能在多条路径中自动选出最快的一条，而二层通常只支持简单的生成树协议 (STP) 来防止环路。
+                        </div>
+
+                        <!-- 5. 架构师总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #722ed1; font-size: 14px;">
+                            <strong>📌 工业网络选型建议：</strong><br />
+                            • <b>车间内部 (同网段)：</b> 使用二层逻辑。追求极速、低延迟，让 PLC 与 IO 模块直接通过 MAC 通讯。<br />
+                            • <b>跨车间/跨厂区 (多网段)：</b> 必须引入三层逻辑。用路由器或三层交换机来规划流量，防止一个地点的网络故障瘫痪整个厂区。
+                            <br /><b>简单来说：二层决定了“快不快”，三层决定了“乱不乱”。</b>
+                        </div>
+
+                        <div class="footer">
+                            Network Architecture Series | 二三层转发技术对账报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="4" tab="帧">
+                <div id="data-frame-comparison-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #fa541c;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #fa541c;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card {
+                            background: #fff7e6;
+                            border: 1px solid #ffd8bf;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .frame-box {
+                            font-family: 'Cascadia Code', monospace;
+                            display: flex;
+                            background: #1e1e1e;
+                            color: #fff;
+                            border-radius: 4px;
+                            overflow: hidden;
+                            margin: 10px 0;
+                            font-size: 12px;
+                        }
+
+                        .frame-part {
+                            padding: 8px 12px;
+                            border-right: 1px solid #444;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                        }
+
+                        .part-header {
+                            color: #888;
+                            font-size: 10px;
+                            margin-bottom: 4px;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                        }
+
+                        .tech-tag {
+                            background: #f5f5f5;
+                            border: 1px solid #d9d9d9;
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            font-size: 12px;
+                            margin-right: 4px;
+                        }
+
+                        .hl-orange {
+                            color: #fa541c;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">封包之美：数据帧结构及其工业协议演进</h1>
+                            <p style="color: #666; margin-top: 10px;">从串行总线到以太网：解析数据传输的“时空胶囊”</p>
+                        </div>
+
+                        <!-- 1. 通用数据帧解构 -->
+                        <div class="section-title">1. 通用数据帧 (Generic Frame) 的解构</div>
+                        <p>无论什么协议，一个完整的数据帧本质上都是一个<b>带有防伪标识的信封</b>。它必须包含三个核心：<b>你是谁？你要干嘛？你坏了吗？</b></p>
+
+                        <div class="frame-box">
+                            <div class="frame-part" style="background: #2a2a2a;">
+                                <span class="part-header">起始符/同步头</span>
+                                <span>Header / SOF</span>
+                            </div>
+                            <div class="frame-part" style="background: #3a3a3a;">
+                                <span class="part-header">寻址/标识</span>
+                                <span>Address / ID</span>
+                            </div>
+                            <div class="frame-part" style="background: #4a4a4a; flex-grow: 1;">
+                                <span class="part-header">有效载荷 (核心数据)</span>
+                                <span>Payload (Data)</span>
+                            </div>
+                            <div class="frame-part" style="background: #3a3a3a;">
+                                <span class="part-header">校验位</span>
+                                <span>CRC / Checksum</span>
+                            </div>
+                            <div class="frame-part" style="background: #2a2a2a;">
+                                <span class="part-header">结束符</span>
+                                <span>EOF</span>
+                            </div>
+                        </div>
+
+                        <!-- 2. 三大协议拟物化对比 -->
+                        <div class="section-title">2. 拟物化逻辑：快递、广播与高铁</div>
+                        <div class="logic-card" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                            <div>
+                                <b class="hl-orange">Modbus (传统邮寄)</b>
+                                <p style="font-size: 12px;">一对一投递。先写地址，再写要读哪个寄存器，对方查完再回信。慢，但逻辑极其清晰。</p>
+                            </div>
+                            <div>
+                                <b class="hl-orange">CAN (车载广播)</b>
+                                <p style="font-size: 12px;">没有收件地址！只有“主题 ID”。全村都能听到，谁需要谁捡走。ID 越小，抢占马路的优先权越高。</p>
+                            </div>
+                            <div>
+                                <b class="hl-orange">EtherCAT (高速列车)</b>
+                                <p style="font-size: 12px;">列车不停站。车开过每个站（从站）时，站点直接从飞驰的车厢里“拿走自己的信”并“放上回信”。</p>
+                            </div>
+                        </div>
+
+                        <!-- 3. 技术对账：帧结构差异 -->
+                        <div class="section-title">3. 核心协议帧结构深度对比</div>
+
+                        <p><b>Modbus RTU (极简串行帧)</b></p>
+                        <div class="frame-box">
+                            <div class="frame-part" style="width: 15%; background: #003a8c;">地址 (1B)</div>
+                            <div class="frame-part" style="width: 15%; background: #1890ff;">功能码 (1B)</div>
+                            <div class="frame-part" style="flex-grow: 1; background: #40a9ff;">寄存器数据 / 错误信息</div>
+                            <div class="frame-part" style="width: 20%; background: #003a8c;">CRC-16 校验</div>
+                        </div>
+
+                        <p><b>CAN 2.0 (基于 ID 的差分帧)</b></p>
+                        <div class="frame-box">
+                            <div class="frame-part" style="width: 5%; background: #237804;">SOF</div>
+                            <div class="frame-part" style="width: 25%; background: #52c41a;">11位 ID (决定优先级)</div>
+                            <div class="frame-part" style="width: 10%; background: #95de64;">DLC</div>
+                            <div class="frame-part" style="flex-grow: 1; background: #d9f7be; color:#333">数据 (最大 8B)
+                            </div>
+                            <div class="frame-part" style="width: 15%; background: #237804;">CRC + ACK</div>
+                        </div>
+
+                        <p><b>EtherCAT (嵌入式以太网帧)</b></p>
+                        <div class="frame-box">
+                            <div class="frame-part" style="width: 20%; background: #c41d7f;">标准以太网头</div>
+                            <div class="frame-part" style="background: #ff85c0; color:#333">子报文 1 (寻址/数据/WKC)</div>
+                            <div class="frame-part" style="background: #ffadd2; color:#333">子报文 2</div>
+                            <div class="frame-part" style="background: #ff85c0; color:#333">子报文 N</div>
+                            <div class="frame-part" style="width: 10%; background: #c41d7f;">FCS</div>
+                        </div>
+
+                        <!-- 4. 技术对账表 -->
+                        <div class="section-title">4. 关键维度对账：相同点与不同点</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 15px;">
+                            <thead>
+                                <tr style="background: #fafafa;">
+                                    <th style="padding: 12px; border: 1px solid #f0f0f0; text-align: left;">特性</th>
+                                    <th style="padding: 12px; border: 1px solid #f0f0f0; color: #fa541c;">Modbus</th>
+                                    <th style="padding: 12px; border: 1px solid #f0f0f0; color: #fa541c;">CAN</th>
+                                    <th style="padding: 12px; border: 1px solid #f0f0f0; color: #fa541c;">EtherCAT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>相同点</b></td>
+                                    <td colspan="3" style="text-align: center;">均具备：Header (定界)、Payload (负载)、Check (检错)
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><b>物理介质</b></td>
+                                    <td>RS485 / TCP</td>
+                                    <td>双绞线差分信号</td>
+                                    <td>标准百兆网线 (LVDS)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>寻址方式</b></td>
+                                    <td>从站 ID (1-247)</td>
+                                    <td><b>消息 ID</b> (按内容寻址)</td>
+                                    <td>位置寻址 / 逻辑地址</td>
+                                </tr>
+                                <tr>
+                                    <td><b>数据载荷</b></td>
+                                    <td>最大约 250 字节</td>
+                                    <td>极短 (最大 8 字节)</td>
+                                    <td>极长 (单帧可达 1500 字节)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>实时性本质</b></td>
+                                    <td>轮询 (Polling)</td>
+                                    <td>非破坏性仲裁 (CSMA/CA)</td>
+                                    <td><b>飞速处理 (Processing on the fly)</b></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 5. 架构总结 -->
+                        <div class="section-title">5. 为什么这样设计？(架构师视角)</div>
+                        <div
+                            style="background: #fafafa; border-radius: 4px; padding: 20px; border-left: 5px solid #fa541c; font-size: 14px;">
+                            <strong>📌 选型建议：</strong><br />
+                            • <b>Modbus</b> 选择了“简单”：牺牲速度换取普适性，几乎所有设备都认识这个帧。<br />
+                            • <b>CAN</b> 选择了“可靠”：帧极短，CRC 占比高，专门针对强干扰的汽车/电机环境。<br />
+                            • <b>EtherCAT</b> 选择了“极致效率”：它打破了以太网“一发一回”的低效，利用“子报文”技术让一帧数据串联起整条生产线。
+                            <br /><br />
+                            <b>总结：数据帧的结构，本质上是通信成本（Overhead）与业务需求（Real-time）博弈后的结果。</b>
+                        </div>
+
+                        <div class="footer">
+                            Industrial Communication Protocols | 帧结构深度对比报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="5" tab="ethercat">
+                <div id="ethercat-sub-datagram-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #eb2f96;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #eb2f96;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-pink {
+                            background: #fff0f6;
+                            border: 1px solid #ffadd2;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .tech-box {
+                            font-family: 'Cascadia Code', monospace;
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-size: 13px;
+                            margin: 10px 0;
+                        }
+
+                        .hl-pink {
+                            color: #eb2f96;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">EtherCAT 核心：子报文与从站的动态协同架构</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：基于 FMMU 映射的“飞速处理 (Processing on the fly)”机制
+                            </p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：不停车的“环城快递快车” -->
+                        <div class="section-title">1. 拟物化模型：永不停车的“集装箱列车”</div>
+                        <p>如果以太网帧是一辆<b>高铁列车</b>，那么<b>子报文</b>就是列车里一节节独立的<b>集装箱车厢</b>。</p>
+
+                        <div class="logic-card-pink" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🚄</div>
+                            <div style="font-size: 13px;">
+                                <b>子报文 1 (输入车厢)：</b> 专门负责沿途收集所有工厂（从站）的生产数据。
+                                <br /><b>子报文 2 (输出车厢)：</b> 专门负责给沿途工厂发放主站的开工指令。
+                                <br /><b>从站 (ESC 芯片)：</b> 相当于路边的“抓取机械臂”。列车飞速开过时，机械臂根据<b>地址标识</b>，精准地在“子报文
+                                2”里拿走自己的包裹，同时把自己的报表塞进“子报文 1”。
+                                <p style="margin-top: 8px; font-weight: bold; color: #9e1068;">
+                                    关键：列车不需要停站，数据交换在电流流过的纳秒间完成。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术流转图 -->
+                        <div class="section-title">2. 逻辑链路：子报文如何跨站协同？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                Master[主站控制内核] -- 发出整体帧 --> S1[从站 1: 伺服]
+                                S1 -- 修改子报文数据 --> S2[从站 2: IO 模块]
+                                S2 -- 修改子报文数据 --> S3[从站 3: 传感器]
+                                S3 -- 帧回路 --> Master
+
+                                subgraph "单帧内部结构 (Ethernet Frame)"
+                                D1[子报文 1: 控制指令区]
+                                D2[子报文 2: 状态反馈区]
+                                D3[子报文 3: 参数配置区]
+                                end
+
+                                S1 -.->|读取| D1
+                                S1 -.->|写入| D2
+                                S2 -.->|写入| D2
+                                style D1 fill:#e6f7ff,stroke:#91d5ff
+                                style D2 fill:#fff0f6,stroke:#ffadd2
+                            </div>
+                        </div>
+
+                        <!-- 3. 核心机制：子报文与从站的关系 -->
+                        <div class="section-title">3. 深度对账：M:N 的动态映射关系</div>
+                        <p>从站并不是盲目地读取子报文，而是通过硬件级的 <b>FMMU (现场总线存储器管理单元)</b> 进行寻址：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <b class="hl-blue">子报文的视角：</b>
+                                <div style="font-size: 12px; margin-top: 5px;">
+                                    一个子报文可以覆盖<b>多个从站</b>。
+                                    <br />例如：子报文 1 包含 100 字节，前 10 字节给 A 站，11-20 字节给 B 站。这种“逻辑寻址”极大压缩了协议开销。
+                                </div>
+                            </div>
+                            <div class="logic-card-pink">
+                                <b class="hl-pink">从站的视角：</b>
+                                <div style="font-size: 12px; margin-top: 5px;">
+                                    一个从站可以参与<b>多个子报文</b>。
+                                    <br />它在子报文 1 里取控制字（写操作），在子报文 2 里放编码器位置（读操作）。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. 实战场景介绍 -->
+                        <div class="section-title">4. 场景模拟：三轴联动机械手系统</div>
+                        <p>假设系统有 1 个主站和 3 个伺服驱动器（从站 A, B, C）：</p>
+
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #fafafa;">
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">子报文序号</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">功能描述</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">与从站的互动</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>子报文 1 (LWR)</b></td>
+                                    <td><b>逻辑读写：</b> 核心同步数据</td>
+                                    <td>主站下发 A,B,C 的目标位置；同时读取 A,B,C 的当前状态。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>子报文 2 (APRD)</b></td>
+                                    <td><b>物理读：</b> 诊断数据</td>
+                                    <td>主站只读取从站 B 的内部温度和错误代码（按位置寻址）。</td>
+                                </tr>
+                                <tr>
+                                    <td><b>子报文 3 (BRD)</b></td>
+                                    <td><b>广播读：</b> 网络发现</td>
+                                    <td>主站统计链路上总共有多少个站处于在线状态。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 5. 架构师总结 -->
+                        <div class="section-title">5. 为什么这样设计？(技术灵魂)</div>
+                        <div class="tech-box">
+                            <span style="color: #6a9955;">// 传统以太网的问题：1 个包给 1 个站，100 个站要发 100 个包，延迟巨大。</span><br />
+                            <span style="color: #6a9955;">// EtherCAT 的突破：1 个以太网包内嵌 N 个子报文。</span><br />
+                            Efficiency = (Payload_Sum / Ethernet_Header) * 100%; <br />
+                            <span style="color: #6a9955;">// 通过子报文协同，EtherCAT 的带宽利用率可达 90% 以上。</span>
+                        </div>
+                        <div
+                            style="margin-top: 20px; padding: 15px; background: #fafafa; border-radius: 4px; border-left: 5px solid #eb2f96; font-size: 14px;">
+                            <strong>📌 核心总结：</strong><br />
+                            子报文是主站定义的<b>“逻辑任务单”</b>。
+                            <br />• <b>解耦：</b> 物理链路是一条线，但逻辑上可以按功能划分为多个任务组。
+                            <br />• <b>同步：</b> 因为 A, B, C 三个站都在同一个以太网帧（及同一个子报文）里被处理，它们的刷新时间点完全一致。
+                            <b>这就是 EtherCAT 能够支撑 12.5 微秒刷新周期的秘密：多任务在一张报文里瞬时对账。</b>
+                        </div>
+
+                        <div class="footer">
+                            EtherCAT Technology Group | 子报文通讯机制解析
+                        </div>
+                    </div>
+                </div>
+                <div id="fmmu-pdo-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #faad14;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #faad14;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-gold {
+                            background: #fffbe6;
+                            border: 1px solid #ffe58f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .mapping-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 13px;
+                            margin-top: 10px;
+                        }
+
+                        .mapping-table th {
+                            background: #fafafa;
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .mapping-table td {
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                            text-align: center;
+                        }
+
+                        .hl-gold {
+                            color: #d48806;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">工业硬核：FMMU 映射机制与 PDO 链路全解析</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：从物理内存到逻辑地址的“时空平移”</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：逻辑地址空间 -->
+                        <div class="section-title">1. 拟物化模型：全网段的“共享超级大仓库”</div>
+                        <p>在 EtherCAT 看来，所有的从站并不是独立的设备，而是<b>“一个巨大逻辑内存里的不同片段”</b>。</p>
+
+                        <div class="logic-card-gold" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🗺️</div>
+                            <div style="font-size: 13px;">
+                                <b>逻辑地址空间 (全城共享地图)：</b> 主站手里有一张总表（0 - 4GB），它不关心具体哪台机器在哪。
+                                <br /><b>FMMU (从站的专属翻译官)：</b> 每个从站都有一个 FMMU。它的任务是盯着“全城大图”中属于自己的那个坐标。
+                                <br /><b>从站物理内存 (自家小仓库)：</b> 从站实际存放转速、位置的内存地址。
+                                <p style="margin-top: 8px; font-weight: bold; color: #d46b08;">FMMU 就像一个自动翻译机：当看到逻辑地址
+                                    0x100 时，立刻将其“映射”到自家小仓库的 0x1000 处。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 核心架构图：PDO -> FMMU -> Sub-Datagram -->
+                        <div class="section-title">2. 技术链路：PDO 数据是如何上车的？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                subgraph "Master (主站控制核)"
+                                M_PDO[逻辑过程映射区: 12字节]
+                                end
+
+                                M_PDO -- 封装入 --> Sub[子报文 Payload]
+                                Sub -- 飞速流经从站电路 --> Slave1
+
+                                subgraph "Slave 1 (伺服电机)"
+                                Slave1[ESC 通讯芯片] --> FMMU1[FMMU 映射单元]
+                                FMMU1 -->|逻辑转物理| RAM1[从站双口 RAM]
+                                RAM1 -->|PDO数据| Motor[电机控制器]
+                                end
+
+                                style FMMU1 fill:#fffbe6,stroke:#ffe58f,stroke-width:2px
+                                style Sub fill:#e6f7ff,stroke:#91d5ff
+                            </div>
+                        </div>
+
+                        <!-- 3. PDO、从站、子报文的关系对账 -->
+                        <div class="section-title">3. 深度辨析：三大核心实体的协作关系</div>
+
+                        <table class="mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>实体</th>
+                                    <th>角色定义</th>
+                                    <th>协同逻辑</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="hl-blue">PDO (过程数据)</td>
+                                    <td><b>包裹内容</b></td>
+                                    <td>电机的当前位置、控制字等。由从站定义（RPDO/TPDO）。</td>
+                                </tr>
+                                <tr>
+                                    <td class="hl-gold">FMMU (映射单元)</td>
+                                    <td><b>扫码装卸工</b></td>
+                                    <td>它是从站里的硬件，负责把 PDO 的物理位置映射到“逻辑地址”上。</td>
+                                </tr>
+                                <tr>
+                                    <td class="hl-blue">子报文 (Datagram)</td>
+                                    <td><b>运输班车</b></td>
+                                    <td>它带有一个“逻辑起始地址”。它开过时，各站 FMMU 自动认领数据。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 实战场景介绍：多轴同步轨迹控制 -->
+                        <div class="section-title">4. 场景模拟：四轴同步机器人</div>
+                        <p><b>场景：</b> 主站需要每 1ms 给 4 个轴发送“目标位置”，并读取“实际位置”。</p>
+                        <div class="logic-card-blue">
+                            <ul style="font-size: 13px; padding-left: 20px;">
+                                <li><b>配置阶段：</b> 主站告诉 1 号轴：“你的 FMMU 映射到逻辑地址 0x10000”；2 号轴映射到 0x10004，以此类推。</li>
+                                <li><b>运行阶段：</b> 主站发出一张<b>子报文</b>，地址指向 0x10000，长度 16 字节（包含 4 个轴的位置）。</li>
+                                <li><b>神奇之处：</b> 这一张子报文飞过所有轴时，1 号轴的 FMMU 自动截取前 4 字节，2 号轴自动截取下 4 字节。</li>
+                                <li><b>结果：</b> 只需要<b>一发一回</b>，4 个轴的数据就全部刷新了，这就是为什么 EtherCAT 实时性无敌。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 5. 架构师深度思考：为什么不直接寻址？ -->
+                        <div class="section-title">5. 技术本质：解耦与效率</div>
+                        <p style="font-size: 14px;">为什么要搞 FMMU 这么复杂的映射？</p>
+                        <div
+                            style="background: #fafafa; padding: 15px; border-radius: 4px; border-left: 5px solid #faad14; font-size: 13px; color: #666;">
+                            1. <b>屏蔽硬件差异：</b> A 厂电机的位置在 RAM 地址 0x10，B 厂在 0x20。有了
+                            FMMU，主站可以把它们统一映射到连续的逻辑空间，像读写数组一样简单。<br />
+                            2. <b>极速交换：</b> FMMU 是<b>硬件逻辑电路</b>。它不是靠 CPU 去解析包，而是在数据流过网口的一瞬间，由电路直接把电平信号“漏”进 RAM 里的。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #faad14; font-size: 14px;">
+                            <strong>📌 核心总结：</strong><br />
+                            • <b>PDO 是“什么数据”</b>，<b>从站是“数据在哪”</b>，<b>子报文是“怎么运”</b>。<br />
+                            • <b>FMMU 是连接这三者的关键纽带</b>：它把从站杂乱的物理内存，整编成了主站眼中整齐划一的“逻辑地址”。
+                            <b>没有 FMMU，EtherCAT 就只是一般的以太网；有了 FMMU，它才真正进化成了“现场总线”。</b>
+                        </div>
+
+                        <div class="footer">
+                            EtherCAT Fieldbus Technology | FMMU & PDO 架构审计报告
+                        </div>
+                    </div>
+                </div>
+                <div id="fmmu-pdo-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #faad14;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #faad14;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-gold {
+                            background: #fffbe6;
+                            border: 1px solid #ffe58f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .mapping-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 13px;
+                            margin-top: 10px;
+                        }
+
+                        .mapping-table th {
+                            background: #fafafa;
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .mapping-table td {
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                            text-align: center;
+                        }
+
+                        .hl-gold {
+                            color: #d48806;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">工业硬核：FMMU 映射机制与 PDO 链路全解析</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：从物理内存到逻辑地址的“时空平移”</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：逻辑地址空间 -->
+                        <div class="section-title">1. 拟物化模型：全网段的“共享超级大仓库”</div>
+                        <p>在 EtherCAT 看来，所有的从站并不是独立的设备，而是<b>“一个巨大逻辑内存里的不同片段”</b>。</p>
+
+                        <div class="logic-card-gold" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🗺️</div>
+                            <div style="font-size: 13px;">
+                                <b>逻辑地址空间 (全城共享地图)：</b> 主站手里有一张总表（0 - 4GB），它不关心具体哪台机器在哪。
+                                <br /><b>FMMU (从站的专属翻译官)：</b> 每个从站都有一个 FMMU。它的任务是盯着“全城大图”中属于自己的那个坐标。
+                                <br /><b>从站物理内存 (自家小仓库)：</b> 从站实际存放转速、位置的内存地址。
+                                <p style="margin-top: 8px; font-weight: bold; color: #d46b08;">FMMU 就像一个自动翻译机：当看到逻辑地址
+                                    0x100 时，立刻将其“映射”到自家小仓库的 0x1000 处。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 核心架构图：PDO -> FMMU -> Sub-Datagram -->
+                        <div class="section-title">2. 技术链路：PDO 数据是如何上车的？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                subgraph "Master (主站控制核)"
+                                M_PDO[逻辑过程映射区: 12字节]
+                                end
+
+                                M_PDO -- 封装入 --> Sub[子报文 Payload]
+                                Sub -- 飞速流经从站电路 --> Slave1
+
+                                subgraph "Slave 1 (伺服电机)"
+                                Slave1[ESC 通讯芯片] --> FMMU1[FMMU 映射单元]
+                                FMMU1 -->|逻辑转物理| RAM1[从站双口 RAM]
+                                RAM1 -->|PDO数据| Motor[电机控制器]
+                                end
+
+                                style FMMU1 fill:#fffbe6,stroke:#ffe58f,stroke-width:2px
+                                style Sub fill:#e6f7ff,stroke:#91d5ff
+                            </div>
+                        </div>
+
+                        <!-- 3. PDO、从站、子报文的关系对账 -->
+                        <div class="section-title">3. 深度辨析：三大核心实体的协作关系</div>
+
+                        <table class="mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>实体</th>
+                                    <th>角色定义</th>
+                                    <th>协同逻辑</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="hl-blue">PDO (过程数据)</td>
+                                    <td><b>包裹内容</b></td>
+                                    <td>电机的当前位置、控制字等。由从站定义（RPDO/TPDO）。</td>
+                                </tr>
+                                <tr>
+                                    <td class="hl-gold">FMMU (映射单元)</td>
+                                    <td><b>扫码装卸工</b></td>
+                                    <td>它是从站里的硬件，负责把 PDO 的物理位置映射到“逻辑地址”上。</td>
+                                </tr>
+                                <tr>
+                                    <td class="hl-blue">子报文 (Datagram)</td>
+                                    <td><b>运输班车</b></td>
+                                    <td>它带有一个“逻辑起始地址”。它开过时，各站 FMMU 自动认领数据。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 实战场景介绍：多轴同步轨迹控制 -->
+                        <div class="section-title">4. 场景模拟：四轴同步机器人</div>
+                        <p><b>场景：</b> 主站需要每 1ms 给 4 个轴发送“目标位置”，并读取“实际位置”。</p>
+                        <div class="logic-card-blue">
+                            <ul style="font-size: 13px; padding-left: 20px;">
+                                <li><b>配置阶段：</b> 主站告诉 1 号轴：“你的 FMMU 映射到逻辑地址 0x10000”；2 号轴映射到 0x10004，以此类推。</li>
+                                <li><b>运行阶段：</b> 主站发出一张<b>子报文</b>，地址指向 0x10000，长度 16 字节（包含 4 个轴的位置）。</li>
+                                <li><b>神奇之处：</b> 这一张子报文飞过所有轴时，1 号轴的 FMMU 自动截取前 4 字节，2 号轴自动截取下 4 字节。</li>
+                                <li><b>结果：</b> 只需要<b>一发一回</b>，4 个轴的数据就全部刷新了，这就是为什么 EtherCAT 实时性无敌。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 5. 架构师深度思考：为什么不直接寻址？ -->
+                        <div class="section-title">5. 技术本质：解耦与效率</div>
+                        <p style="font-size: 14px;">为什么要搞 FMMU 这么复杂的映射？</p>
+                        <div
+                            style="background: #fafafa; padding: 15px; border-radius: 4px; border-left: 5px solid #faad14; font-size: 13px; color: #666;">
+                            1. <b>屏蔽硬件差异：</b> A 厂电机的位置在 RAM 地址 0x10，B 厂在 0x20。有了
+                            FMMU，主站可以把它们统一映射到连续的逻辑空间，像读写数组一样简单。<br />
+                            2. <b>极速交换：</b> FMMU 是<b>硬件逻辑电路</b>。它不是靠 CPU 去解析包，而是在数据流过网口的一瞬间，由电路直接把电平信号“漏”进 RAM 里的。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #faad14; font-size: 14px;">
+                            <strong>📌 核心总结：</strong><br />
+                            • <b>PDO 是“什么数据”</b>，<b>从站是“数据在哪”</b>，<b>子报文是“怎么运”</b>。<br />
+                            • <b>FMMU 是连接这三者的关键纽带</b>：它把从站杂乱的物理内存，整编成了主站眼中整齐划一的“逻辑地址”。
+                            <b>没有 FMMU，EtherCAT 就只是一般的以太网；有了 FMMU，它才真正进化成了“现场总线”。</b>
+                        </div>
+
+                        <div class="footer">
+                            EtherCAT Fieldbus Technology | FMMU & PDO 架构审计报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="6" tab="控制字">
+                <div id="cia402-data-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #1890ff;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #1890ff;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-green {
+                            background: #f6ffed;
+                            border: 1px solid #b7eb8f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .register-box {
+                            font-family: 'Cascadia Code', monospace;
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-size: 13px;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .hl-green {
+                            color: #52c41a;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">深度解析：伺服控制字与反馈数据的协同逻辑</h1>
+                            <p style="color: #666; margin-top: 10px;">技术本质：CiA 402 标准下的对象字典 (OD) 与 实时寄存器映射</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：驾驶员与赛车的实时对话</div>
+                        <p>控制字、位置反馈、电流三者的关系，就像驾驶员在高速行驶中操作赛车：</p>
+
+                        <div class="logic-card-blue" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🏎️</div>
+                            <div style="font-size: 13px;">
+                                <b>控制字 (6040h)：</b> 驾驶员的手感指令（踩油门、换挡、点火）。它是主站下发的<b>“意志”</b>。
+                                <br /><b>位置反馈 (6064h)：</b> 仪表盘上的里程表。告诉驾驶员<b>“现在在哪里”</b>。
+                                <br /><b>电流/扭矩反馈 (6077h)：</b> 发动机的轰鸣声和震动感。反映了马达<b>“使了多大劲”</b>。
+                                <p style="margin-top: 8px; font-weight: bold; color: #003a8c;">三者构成闭环：意志驱动动作，反馈修正意志。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 数据与寄存器的关系 -->
+                        <div class="section-title">2. 技术解惑：数据必须存进寄存器吗？</div>
+                        <p><b>是的。</b> 在从站（伺服）内部，这些数据都存放在名为<b>双口 RAM (Dual-Port RAM)</b> 的特定物理地址空间中。</p>
+
+                        <div class="register-box">
+                            <span style="color: #6a9955;">// 物理层寄存器映射简图</span><br />
+                            [0x1000 - 0x1001] : <span style="color: #9cdcfe;">Control Word (6040h)</span> -> <span
+                                style="color: #ce9178;">PLC 写，伺服读</span><br />
+                            [0x1002 - 0x1005] : <span style="color: #9cdcfe;">Target Position (607Ah)</span> -> <span
+                                style="color: #ce9178;">PLC 写，伺服读</span><br />
+                            [0x1006 - 0x1009] : <span style="color: #b5cea8;">Actual Position (6064h)</span> -> <span
+                                style="color: #ce9178;">伺服写，PLC 读</span><br />
+                            [0x100A - 0x100B] : <span style="color: #b5cea8;">Actual Torque (6077h)</span> -> <span
+                                style="color: #ce9178;">伺服写，PLC 读</span>
+                        </div>
+                        <p style="font-size: 14px; margin-top: 10px;">
+                            <b>协同本质：</b> 主站通过 EtherCAT 子报文，将数据强行写入这些寄存器。伺服驱动器的 CPU 每隔几十微秒就会去读取 <code>6040h</code>
+                            寄存器。如果发现第 0 位变成了 1，它就知道：<b>“老板叫我上电了！”</b>
+                        </p>
+
+                        <!-- 3. 逻辑关系流转图 -->
+                        <div class="section-title">3. 协同逻辑图：从指令到物理执行</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                PLC[主站: PLC/控制卡] -- "1. 发送控制字 (6040h=0x0F)" --> Slave[从站: 伺服驱动器]
+                                Slave -- "2. 逻辑解析" --> State[状态机切换: Operation Enabled]
+                                State -- "3. 计算 PWM" --> Motor((物理电机))
+                                Motor -- "4. 物理反馈" --> Encoder[编码器 / 电流采样]
+                                Encoder -- "5. 写入寄存器" --> FB[位置反馈 6064h / 电流 6077h]
+                                FB -- "6. 随子报文返回" --> PLC
+
+                                style Slave fill:#e6f7ff,stroke:#1890ff
+                                style FB fill:#f6ffed,stroke:#52c41a
+                            </div>
+                        </div>
+
+                        <!-- 4. 深度对账：三大数据的意义 -->
+                        <div class="section-title">4. 参数维度对账单</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: #fafafa;">
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">名称</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">对象字典索引</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">功能描述</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">关联性</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="hl-blue">控制字</td>
+                                    <td>6040h (UINT)</td>
+                                    <td>控制 Servo On、急停、复位、开始运动。</td>
+                                    <td><b>因果之源：</b> 它不跳动，电机绝对不动。</td>
+                                </tr>
+                                <tr>
+                                    <td class="hl-green">位置反馈</td>
+                                    <td>6064h (DINT)</td>
+                                    <td>实时汇报编码器数值。</td>
+                                    <td><b>位移结果：</b> 用于主站计算位置偏差。</td>
+                                </tr>
+                                <tr>
+                                    <td>电流/扭矩</td>
+                                    <td>6077h (INT)</td>
+                                    <td>汇报电机当前的力矩百分比。</td>
+                                    <td><b>负载感知：</b> 用于碰撞检测或张力控制。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 5. 架构师深度解析 -->
+                        <div class="section-title">5. 专家视角：为什么一定要用对象字典（OD）？</div>
+                        <div class="logic-card-green">
+                            在 EtherCAT 通讯中，数据并不是乱放的。
+                            <br />• <b>标准化 (CiA 402)：</b> 无论你用的是松下、汇川还是西门子，<code>6040h</code>
+                            永远是控制字。这保证了不同品牌的伺服可以互换，代码不用大改。
+                            <br />• <b>实时交换：</b> 这些寄存器映射到了 <b>PDO (过程数据)</b>
+                            中。这意味着它们不是“查一下读一下”，而是随着心跳周期<b>自动、成批</b>地在主从站之间同步。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 14px;">
+                            <strong>📌 核心总结：</strong><br />
+                            • <b>控制字是“开关与方向”</b>，<b>反馈是“现状与结果”</b>。<br />
+                            • <b>寄存器是它们的“家”</b>：所有的通讯本质上都是在对 RAM 寄存器进行毫秒级的搬运。<br />
+                            • <b>协同逻辑</b>：PLC 写入控制字 -> 伺服内部 CPU 轮询寄存器并执行动作 -> 传感器采集结果并写回寄存器 -> PLC 读取结果。
+                            <b>理解了这个循环，你就理解了工业自动化的灵魂。</b>
+                        </div>
+
+                        <div class="footer">
+                            Motion Control Fundamentals | CiA 402 & PDO 数据对账报告
+                        </div>
+                    </div>
+                </div>
+                <div id="control-word-origin-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #52c41a;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #52c41a;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-green {
+                            background: #f6ffed;
+                            border: 1px solid #b7eb8f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .tech-tag {
+                            background: #f5f5f5;
+                            border: 1px solid #d9d9d9;
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            font-size: 12px;
+                            margin-right: 4px;
+                            font-weight: bold;
+                        }
+
+                        .hl-green {
+                            color: #52c41a;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">深度对账：控制字 (Control Word) 的权力来源</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：从总线物理层到设备行规 (Device Profile) 的分层模型</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：高速公路 vs 交通法规</div>
+                        <p>为什么 PLC 要发控制字？我们可以把自动化系统看作一个<b>物流帝国</b>：</p>
+
+                        <div class="logic-card-green" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🛣️</div>
+                            <div style="font-size: 13px;">
+                                <b>总线 (EtherCAT/Profinet)：</b> 它是<b>高速公路</b>。它只负责把“货箱”快速运到目的地，它不关心箱子里装的是金条还是石头。
+                                <br /><b>设备行规 (CiA 402 / PROFIdrive)：</b> 它是<b>交通法规</b>。它规定了箱子里第 1 格必须放“控制字”，且 0x0F
+                                代表“启动”。
+                                <br /><b>PLC (总督)：</b> 它是<b>决策者</b>。它决定什么时候发指令。如果总督不发令，高速公路再快，车里的工人（伺服）也不敢动。
+                                <p style="margin-top: 8px; font-weight: bold; color: #237804;">
+                                    结论：控制字不是总线自带的“零件”，而是运行在总线上的一种“通用语言”。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术分层：谁定义了控制字？ -->
+                        <div class="section-title">2. 架构分层：总线与行规的关系</div>
+                        <p>控制字的定义属于<b>应用层行规</b>。不同的总线家族，遵循不同的行规：</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                Sub[总线技术: 负责怎么传数据] --> EtherCAT
+                                Sub --> Profinet
+                                Sub --> CANopen
+
+                                Profile[设备行规: 负责定义数据含义]
+                                EtherCAT -.-> Profile_402[CiA 402 标准]
+                                CANopen -.-> Profile_402
+                                Profinet -.-> Profile_Drive[PROFIdrive 标准]
+
+                                Profile_402 --> CW[定义 6040h 为控制字]
+                                Profile_Drive --> CW2[定义 STW1 为控制字]
+
+                                style Profile_402 fill:#f6ffed,stroke:#52c41a
+                                style Profile_Drive fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 技术对账：主流总线标准对比 -->
+                        <div class="section-title">3. 不同阵营的“控制字”对账</div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: #fafafa;">
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">总线类型</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">背后行规 (语言)</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">控制字称呼</th>
+                                    <th style="padding: 10px; border: 1px solid #f0f0f0;">地址/索引</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>EtherCAT</b></td>
+                                    <td><span class="tech-tag">CiA 402</span></td>
+                                    <td>Control Word</td>
+                                    <td>Index 0x6040</td>
+                                </tr>
+                                <tr>
+                                    <td><b>Profinet</b></td>
+                                    <td><span class="tech-tag">PROFIdrive</span></td>
+                                    <td>STW1 (Steuerwort 1)</td>
+                                    <td>由 PZD 结构定义</td>
+                                </tr>
+                                <tr>
+                                    <td><b>CANopen</b></td>
+                                    <td><span class="tech-tag">DS 402</span></td>
+                                    <td>Control Word</td>
+                                    <td>Index 0x6040</td>
+                                </tr>
+                                <tr>
+                                    <td><b>Modbus</b></td>
+                                    <td><span class="tech-tag">厂商自定义</span></td>
+                                    <td>不固定 (如 0x2000)</td>
+                                    <td>由说明书定义</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 深度解析：为什么必须是 PLC 发送？ -->
+                        <div class="section-title">4. 权力逻辑：Master-Slave 主从架构</div>
+                        <div class="logic-card-blue">
+                            <p>在工业现场，为了保证<b>绝对安全</b>和<b>逻辑唯一性</b>，必须采用“主从结构”：</p>
+                            <ul style="font-size: 13px; padding-left: 20px;">
+                                <li><b>从站（伺服）是“被动”的：</b> 它们像是一组处于等待状态的状态机。如果没有 PLC
+                                    发送控制字进行“状态切换”，伺服内部的逆变器和电流环会保持断开，以防误动伤人。</li>
+                                <li><b>PLC 是“大脑”：</b> PLC 收集了所有的传感器信号（如安全门开关、限位开关）。只有大脑确认环境安全，才会下发控制字“授权”伺服上电执行。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 5. 专家视角：控制字的本质是“位映射” -->
+                        <div class="section-title">5. 进阶核心：控制字内部的“齿轮协同”</div>
+                        <div
+                            style="background: #1e1e1e; color: #dcdcdc; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 13px;">
+                            <span style="color: #6a9955;">// 一个标准的 CiA 402 控制字流程</span><br />
+                            PLC 发送 0x0006 (Bit 1, 2 = 1) -> <span style="color: #ce9178;">伺服准备好上电</span><br />
+                            PLC 发送 0x0007 (Bit 0, 1, 2 = 1) -> <span style="color: #ce9178;">伺服开启主回路</span><br />
+                            PLC 发送 0x000F (Bit 0, 1, 2, 3 = 1) -> <span style="color: #ce9178;">轴使能 (Servo ON)</span>
+                        </div>
+                        <p style="font-size: 14px; margin-top: 10px;">
+                            <b>总结：</b> 这套位序列是国际标准化组织 (ISO/CiA) 定的，PLC 厂商根据这套标准写了功能块（如
+                            <code>MC_Power</code>），让工程师不用去背二进制码，直接调指令即可。
+                        </p>
+
+                        <!-- 结尾 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #52c41a; font-size: 14px;">
+                            <strong>📌 首席架构师总结：</strong><br />
+                            • <b>总线是“载体”</b>（负责传输），<b>行规是“标准”</b>（负责内容）。<br />
+                            • <b>控制字不是总线自带的</b>，而是行业为了兼容性共同遵守的一份“合同”。<br />
+                            • <b>PLC 发送控制字</b>，本质上是在履行其作为控制核心的职责：通过软件逻辑驱动硬件状态机的演进。
+                            <b>这就是为什么不同品牌的伺服只要支持同样的行规（如 CiA 402），同一个 PLC 程序就能控制它们的原因。</b>
+                        </div>
+
+                        <div class="footer">
+                            Fieldbus Standard & Protocol Profile | 运动控制逻辑对账报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="7" tab="C#上位机与EtherCAT">
+                <div id="csharp-ethercat-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #1890ff;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #1890ff;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .code-box {
+                            background: #1e1e1e;
+                            color: #dcdcdc;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                            line-height: 1.5;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">C# 上位机与 EtherCAT 总线的联调交互架构</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：跨越“非实时 OS”与“硬实时总线”的通讯鸿沟</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑 -->
+                        <div class="section-title">1. 拟物化模型：火车站调度员与列车</div>
+                        <p>C# 程序员并不是开火车的司机，而是<b>火车站的调度经理</b>：</p>
+
+                        <div class="logic-card-blue" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🏢</div>
+                            <div style="font-size: 13px;">
+                                <b>C# 上位机 (办公楼)：</b> 环境舒适但不准时。经理在这里决定：“今天要运 100 件货”。
+                                <br /><b>实时主站内核 (站台调度)：</b> 运行在双核隔离环境（如 TwinCAT/KingStar）。它极其准时，负责每 1ms 准点发车。
+                                <br /><b>EtherCAT 子报文 (列车车厢)：</b> 调度员根据经理的指令，把数据塞进特定的车厢（PDO）。
+                                <p style="margin-top: 8px; font-weight: bold; color: #003a8c;">经理 (C#) 不直接碰铁轨，他只通过“对讲机
+                                    (API/Shared Memory)”给调度员下令。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术架构图 -->
+                        <div class="section-title">2. 逻辑分层：C# 如何操控子报文？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                CS[C# 应用程序] -- ".DLL / SDK (如 ADS, SDK API)" --> RT[实时主站内核: TwinCAT / SOEM / KingStar]
+                                RT -- "映射 (Mapping)" --> Bus[EtherCAT 物理总线]
+
+                                subgraph "数据交换 (子报文协同)"
+                                Bus --> S1[从站 1 车厢: 控制字]
+                                Bus --> S2[从站 2 车厢: 位置反馈]
+                                end
+
+                                RT -.->|同步刷新| CS
+                                style RT fill:#f9f0ff,stroke:#d3adf7,stroke-width:2px
+                                style CS fill:#e6f7ff,stroke:#91d5ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 交互场景举例：多轴同步分拣 -->
+                        <div class="section-title">3. 实战场景：C# 操控三轴分拣机器人</div>
+                        <p>假设 C# 识别到了一个视觉坐标 (X, Y)，需要控制伺服去抓取。数据是如何流过“车厢”的？</p>
+
+                        <div class="logic-card-purple">
+                            <b class="hl-blue">Step 1：异步配置 (SDO 交互)</b>
+                            <p style="font-size: 12px;">C# 调用 API 发送一个“非周期性报文”。就像给站台发个传真：<b>“请把 2 号从站的加速度设为
+                                    5000”</b>。这类数据不进常规车厢，单独发一辆“快递小车”。</p>
+
+                            <b class="hl-blue">Step 2：实时控制 (PDO 映射)</b>
+                            <p style="font-size: 12px;">C# 修改变量
+                                <code>Axis_X_TargetPos = 150.5</code>。主站内核在下一个毫秒脉冲到来时，自动把这个值填进 <b>子报文 1</b> 的第 4-7
+                                字节（对应从站 X 的 607Ah 寄存器）。
+                            </p>
+
+                            <b class="hl-blue">Step 3：状态反馈 (车厢回传)</b>
+                            <p style="font-size: 12px;">列车回程。子报文带回了 <code>Axis_X_ActualPos</code>。C# 的界面 (WPF/Winform)
+                                通过读取内存变量，实时更新 UI 上的坐标数值。</p>
+                        </div>
+
+                        <!-- 4. C# 代码级对账 -->
+                        <div class="section-title">4. C# 代码如何“写”子报文？</div>
+                        <p>在 C# 中，你通常不会看到字节偏移，而是看到<b>变量映射</b>。以下是以 <b>TwinCAT ADS</b> 为例的伪代码：</p>
+
+                        <div class="code-box">
+                            <span style="color: #6a9955;">// 1. 建立与实时调度员的连接</span><br />
+                            AdsClient client = <span style="color: #569cd6;">new</span> AdsClient();<br />
+                            client.Connect(<span style="color: #ce9178;">"127.0.0.1.1.1"</span>, <span
+                                style="color: #b5cea8;">851</span>); <br /><br />
+
+                            <span style="color: #6a9955;">// 2. 写入控制字（相当于往子报文车厢里扔一个启动信号）</span><br />
+                            <span style="color: #569cd6;">short</span> controlWord = <span
+                                style="color: #b5cea8;">0x000F</span>; <span style="color: #6a9955;">//
+                                使能信号</span><br />
+                            client.WriteSymbol(<span style="color: #ce9178;">"Main.Axis1_ControlWord"</span>,
+                            controlWord);<br /><br />
+
+                            <span style="color: #6a9955;">// 3. 读取位置反馈（从回传的子报文车厢里取货）</span><br />
+                            <span style="color: #569cd6;">float</span> actualPos = (<span
+                                style="color: #569cd6;">float</span>)client.ReadSymbol(<span
+                                style="color: #ce9178;">"Main.Axis1_ActualPos"</span>);
+                        </div>
+
+                        <!-- 5. 架构师深度解析：核心挑战 -->
+                        <div class="section-title">5. 深度局限性：为什么不直接用 C# 写驱动？</div>
+                        <div
+                            style="background: #fafafa; padding: 15px; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 13px; color: #666;">
+                            1. <b>时间抖动 (Jitter)：</b> Windows 的垃圾回收 (GC) 或系统更新可能让 C# 停顿 10ms。而 EtherCAT 如果 2ms
+                            没收到心跳，伺服就会报错停机。<br />
+                            2. <b>驱动权限：</b> 只有工作在 **Ring 0** 层的实时驱动才能接管网卡发送纳米级的同步包，C# 是工作在 **Ring 3** 的高级语言，没有这个权限。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 14px;">
+                            <strong>📌 首席架构师建议：</strong><br />
+                            • <b>方案选型：</b> 推荐使用 <b>TwinCAT (倍福)</b> 或 <b>KingStar</b>。它们提供了完善的 C# SDK，让你像读写普通变量一样操控
+                            EtherCAT 子报文。<br />
+                            • <b>分工明确：</b> 算法、运动曲线、逻辑保护放在 **实时层**；界面显示、数据库记录、MES 上传放在 **C# 上位机层**。<br />
+                            <b>记住：C# 负责“发号施令”，实时内核负责“准点装车”。</b>
+                        </div>
+
+                        <div class="footer">
+                            EtherCAT High-Level Interactivity | C# 工业软件架构报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="8" tab="驱动">
+                <div id="driver-kernel-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #f5222d;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #f5222d;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-red {
+                            background: #fff1f0;
+                            border: 1px solid #ffa39e;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-dark {
+                            background: #1f1f1f;
+                            color: #dcdcdc;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .rank-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 13px;
+                            margin-top: 10px;
+                        }
+
+                        .rank-table th {
+                            background: #fafafa;
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .rank-table td {
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-red {
+                            color: #f5222d;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">权限之巅：Ring 0 驱动开发与实时控制架构</h1>
+                            <p style="color: #666; margin-top: 10px;">底层解析：为什么只有“驱动”才能接管纳米级的时间碎片？</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：禁城的阶级 -->
+                        <div class="section-title">1. 拟物化模型：CPU 的“紫禁城”等级森严</div>
+                        <p>Intel 和 AMD 的 CPU 在硬件层面就设计了四个权限等级（Ring 0 到 Ring 3）：</p>
+
+                        <div class="mermaid-container" style="text-align: center;">
+                            <div class="mermaid">
+                                pie title CPU 权限环分布
+                                "Ring 0: 皇帝 (内核/驱动) - 掌控生死" : 25
+                                "Ring 1: 大臣 (操作系统辅助) - 已废弃" : 25
+                                "Ring 2: 侍卫 (特殊任务) - 已废弃" : 25
+                                "Ring 3: 百姓 (C#, Python, QQ) - 受限访问" : 25
+                            </div>
+                        </div>
+
+                        <div class="logic-card-red" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">👑</div>
+                            <div style="font-size: 13px;">
+                                <b>Ring 3 (用户层)：</b> 像饭店里的顾客。你不能进后厨，不能直接碰煤气灶。你想喝水（操作网卡），必须按铃（调用系统 API），等服务员（内核）有空了再给你送。
+                                <br /><b>Ring 0 (内核层)：</b> 像饭店的大厨。你直接握着火柄。没有任何人能拦截你，你对 CPU、内存、网卡拥有<b>绝对指挥权</b>。
+                                <p style="margin-top: 8px; font-weight: bold; color: #cf1322;">这就是为什么 EtherCAT 必须要在 Ring
+                                    0：因为它不能等“服务员”有空，它必须在纳秒间直接抢占网卡！</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 驱动程序入门：从哪开始？ -->
+                        <div class="section-title">2. 驱动开发的“入场券”：入门路线图</div>
+                        <p>驱动开发不再是写简单的逻辑，而是与<b>操作系统内核</b>对话。以下是入门三板斧：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div
+                                style="padding: 15px; background: #fafafa; border-radius: 6px; border: 1px solid #ddd;">
+                                <b class="hl-red">Windows 阵营 (WDK)</b>
+                                <ul style="font-size: 12px; margin-top: 10px; padding-left: 15px;">
+                                    <li>安装 Visual Studio + <b class="hl-blue">WDK (Windows Driver Kit)</b>。</li>
+                                    <li>学习 <b>KMDF (内核模式驱动框架)</b>。</li>
+                                    <li>掌握“蓝屏 (BSOD)”的心理建设：驱动写错一点，电脑直接死机。</li>
+                                </ul>
+                            </div>
+                            <div
+                                style="padding: 15px; background: #fafafa; border-radius: 6px; border: 1px solid #ddd;">
+                                <b class="hl-red">Linux 阵营 (LKM)</b>
+                                <ul style="font-size: 12px; margin-top: 10px; padding-left: 15px;">
+                                    <li>学习 <b>LKM (Linux Kernel Modules)</b>。</li>
+                                    <li>编写第一个 <code>hello_world.ko</code>。</li>
+                                    <li>理解内存映射 (mmap) 和中断处理 (ISR)。</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- 3. 语言选型：谁才是驱动之王？ -->
+                        <div class="section-title">3. 语言对账：什么语言能写驱动？</div>
+                        <table class="rank-table">
+                            <thead>
+                                <tr style="background: #fafafa;">
+                                    <th>语言</th>
+                                    <th>推荐指数</th>
+                                    <th>技术评价</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b style="color:#00599c">C 语言</b></td>
+                                    <td>⭐⭐⭐⭐⭐</td>
+                                    <td><span class="hl-red">唯一的真神</span>。Windows/Linux 内核 95% 由 C 编写。直接操作指针，无任何中间层。
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><b style="color:#004482">C++</b></td>
+                                    <td>⭐⭐⭐⭐</td>
+                                    <td><b>受限使用</b>。在内核中不能用 STL、不能用异常处理。通常只用其“类”的概念封装驱动逻辑。</td>
+                                </tr>
+                                <tr>
+                                    <td><b style="color:#dea584">Rust</b></td>
+                                    <td>⭐⭐⭐⭐</td>
+                                    <td><b>新秀</b>。拥有 C 的性能且自带内存安全。Linux 内核已开始官方支持 Rust 编写驱动。</td>
+                                </tr>
+                                <tr>
+                                    <td><b style="color:#68217a">C# / Python</b></td>
+                                    <td>❌ 无法编写</td>
+                                    <td><b>运行时限制</b>。它们依赖虚拟机或垃圾回收 (GC)，无法在 Ring 0 启动前运行。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 入门代码级初探 (C 语言驱动 Demo) -->
+                        <div class="section-title">4. 驱动级“Hello World”逻辑</div>
+                        <div class="logic-card-dark">
+                            <span style="color: #6a9955;">// 一个简单的 Windows 内核驱动入口</span><br />
+                            NTSTATUS <span style="color: #dcdcdc;">DriverEntry</span>(PDRIVER_OBJECT DriverObject,
+                            PUNICODE_STRING RegistryPath) {<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;DbgPrint(<span style="color: #ce9178;">"Hello EtherCAT! 我已进入 Ring 0
+                                禁区。\n"</span>);<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// 在这里你可以直接写物理地址，操作 CPU
+                                寄存器</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #569cd6;">return</span> STATUS_SUCCESS;<br />
+                            }
+                        </div>
+
+                        <!-- 5. 架构师建议：驱动开发的门槛 -->
+                        <div class="section-title">5. 深度忠告：驱动开发不是在写代码，是在做手术</div>
+                        <div
+                            style="background: #fafafa; padding: 20px; border-radius: 4px; border-left: 5px solid #f5222d; font-size: 14px;">
+                            <strong>📌 核心挑战：</strong><br />
+                            1. <b>没有安全网：</b> 用户态程序崩溃只是弹个窗；驱动程序崩溃（空指针访问）会导致整个系统瞬间蓝屏死机。<br />
+                            2. <b>调试极难：</b> 你不能用简单的 <code>Console.WriteLine</code>。你需要两台电脑，一台跑代码，另一台通过串行线进行<b>内核调试
+                                (WinDbg)</b>。<br />
+                            3. <b>实时性 (Real-time)：</b> 为了跑 EtherCAT，你需要掌握 <b>ISR
+                                (中断服务程序)</b>。你要在纳秒级的时间窗内完成数据收发，否则电机会因为失步而剧烈抖动。
+                        </div>
+
+                        <!-- 结尾 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #000; font-size: 14px;">
+                            <strong>📌 首席架构师总结：</strong><br />
+                            • <b>Ring 0 是权力的终点</b>，也是系统稳定性的最后防线。<br />
+                            • <b>入门请死磕 C 语言</b>，这是唯一通往内核的通行证。<br />
+                            • 对于 EtherCAT 开发，如果你不想自己从头写驱动，最好的办法是学习使用现成的实时内核（如 <b>IgH EtherCAT Master</b> 或 <b>TwinCAT
+                                驱动</b>），在它们提供的 Ring 0 框架下开发应用。
+                            <b>驱动程序是连接冷冰冰的“代码逻辑”与硬生生的“物理电平”之间的终极桥梁。</b>
+                        </div>
+
+                        <div class="footer">
+                            Kernel Programming Series | 操作系统驱动技术底层报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="9" tab="ISR">
+                <div id="isr-technical-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #faad14;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #faad14;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-gold {
+                            background: #fffbe6;
+                            border: 1px solid #ffe58f;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-dark {
+                            background: #1f1f1f;
+                            color: #dcdcdc;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .isr-rules {
+                            background: #f6ffed;
+                            border: 1px solid #b7eb8f;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-size: 13px;
+                            color: #237804;
+                        }
+
+                        .hl-gold {
+                            color: #d48806;
+                            font-weight: bold;
+                        }
+
+                        .hl-red {
+                            color: #f5222d;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">核心算法：ISR 中断服务程序与实时响应机制</h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：为什么 EtherCAT 的稳定性取决于中断的“冷酷无情”？</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：银行抢劫与报警器 -->
+                        <div class="section-title">1. 拟物化模型：CPU 的“急诊室模式”</div>
+                        <p>CPU 平时在跑你的 C# 程序（Ring 3），就像一个正在看报纸的保安。而 <b>ISR</b> 是对<b>紧急报警信号</b>的强制响应：</p>
+
+                        <div class="logic-card-gold" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🚨</div>
+                            <div style="font-size: 13px;">
+                                <b>硬件事件 (网卡收到包)：</b> 就像银行报警器响了。它通过一根物理导线给 CPU 递了一个“加急件”。
+                                <br /><b>强制中断：</b> CPU 必须立刻放下手中的报纸（保存现场），不管你在跑什么牛逼的算法，必须跳到一段特定的代码去处理这个报警。
+                                <br /><b>ISR 执行：</b> 医生（ISR）迅速止血。它不负责病人的后续康复（大数据处理），只负责<b>把数据从网卡抢救到内存里</b>。
+                                <p style="margin-top: 8px; font-weight: bold; color: #d46b08;">完成后：CPU
+                                    回到刚才看报纸的地方继续看。整个过程对于用户程序是“透明”的，但时间极其短暂。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术流转图：中断的生命周期 -->
+                        <div class="section-title">2. 逻辑链路：一个 EtherCAT 数据包的“夺命 100 微秒”</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                NIC[网卡收到 EtherCAT 回路帧] -->|触发硬件中断信号| APIC[中断控制器]
+                                APIC -->|打断当前 CPU 任务| CPU[CPU 寄存器现场保护]
+                                CPU -->|跳转至中断向量表| ISR[执行 ISR 函数]
+
+                                subgraph "ISR 内部逻辑 (Ring 0)"
+                                ISR -->|1. 读网卡状态| Status[清除中断标志位]
+                                ISR -->|2. 数据搬运| Memory[将子报文拷贝至共享内存]
+                                ISR -->|3. 唤醒| DPC[调度延迟过程调用 - 处理逻辑]
+                                end
+
+                                ISR -->|IRET| Resume[恢复之前的任务]
+
+                                style ISR fill:#fffbe6,stroke:#faad14,stroke-width:2px
+                                style NIC fill:#f5f5f5,stroke:#d9d9d9
+                            </div>
+                        </div>
+
+                        <!-- 3. 为什么 EtherCAT 必须要 ISR？ -->
+                        <div class="section-title">3. 技术对账：抖动 (Jitter) 是运动控制的杀手</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-blue">
+                                <b class="hl-blue">如果没有 ISR (轮询模式)：</b>
+                                <div style="font-size: 12px; margin-top: 5px;">
+                                    CPU 像个傻瓜一样每隔一会去问网卡：“包到了吗？”。如果正好赶上 CPU 在处理垃圾回收（GC），问晚了 0.5ms，电机的控制指令就迟到了。
+                                    <br /><b>后果：</b> 电机发出异常噪音、抖动、同步失败。
+                                </div>
+                            </div>
+                            <div class="logic-card-gold">
+                                <b class="hl-gold">有了 ISR (事件驱动)：</b>
+                                <div style="font-size: 12px; margin-top: 5px;">
+                                    包一到，网卡主动“捅” CPU。CPU 可以在 <b>1 微秒</b>内响应。
+                                    <br /><b>后果：</b> 指令刷新极其精准，支持 125µs 甚至更短的控制周期。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. ISR 开发的“四大禁令” -->
+                        <div class="section-title">4. 深度守则：在 ISR 里写代码的艺术</div>
+                        <p>在 ISR 里，你拥有最高权限，但你必须像在手术台上一样谨慎：</p>
+                        <div class="isr-rules">
+                            <b>❌ 禁令一：绝对不能“睡眠” (No Sleep/Wait)：</b> ISR 运行期间，系统是暂停的。如果你在里面
+                            <code>Sleep(10)</code>，整个电脑就会卡死 10 毫秒。
+                            <br /><br />
+                            <b>❌ 禁令二：不能进行磁盘 I/O 或打印：</b> 调用 <code>printf</code> 或写文件会触发复杂的系统调用，这在中断上下文是极其危险的，直接导致蓝屏。
+                            <br /><br />
+                            <b>❌ 禁令三：不能申请大量内存：</b> 内存分配函数通常不是重入安全的，会破坏内核堆栈。
+                            <br /><br />
+                            <b>✅ 准则四：极速执行：</b> ISR 的代码行数应尽可能少。只做最核心的寄存器读写，沉重的计算逻辑应通过 <b>DPC (Windows)</b> 或 <b>Tasklet
+                                (Linux)</b> 放到稍后处理。
+                        </div>
+
+                        <!-- 5. 语言实现：C 语言的统治区 -->
+                        <div class="section-title">5. 源码级初探：如何注册一个中断？</div>
+                        <div class="logic-card-dark">
+                            <span style="color: #6a9955;">// Linux 驱动中的中断处理函数示例</span><br />
+                            irqreturn_t <span style="color: #dcdcdc;">ethercat_isr</span>(<span
+                                style="color: #569cd6;">int</span> irq, <span style="color: #569cd6;">void</span>
+                            *dev_id) {<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// 1. 确认是否是我的网卡触发的中断</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #569cd6;">if</span> (!is_my_nic_interrupt())
+                            <span style="color: #569cd6;">return</span> IRQ_NONE;<br /><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// 2. 快速读取 EtherCAT
+                                子报文（车厢取货）</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;copy_data_from_nic_to_ram();<br /><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// 3. 告诉 CPU：我处理完了</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #569cd6;">return</span> IRQ_HANDLED;<br />
+                            }
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #faad14; font-size: 14px;">
+                            <strong>📌 首席架构师总结：</strong><br />
+                            • <b>ISR 是实时系统的心脏</b>。没有它，控制指令就无法做到“准时”。<br />
+                            • <b>ISR 的本质是“抢占”</b>：它代表硬件意志打断软件意志。<br />
+                            • <b>开发建议：</b> 如果你做上位机开发（C#），你不需要写 ISR，但你必须理解<b>“ISR 负责抓数据，C# 负责算数据”</b>的解耦逻辑。
+                            <b>掌握了 ISR，你就真正触碰到了计算机系统的“反射神经”。</b>
+                        </div>
+
+                        <div class="footer">
+                            Kernel Programming Series | ISR 中断技术底层报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="10" tab="TwinCAT和KingStar">
+                <div id="rtos-hijack-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #1890ff;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #1890ff;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-purple {
+                            background: #f9f0ff;
+                            border: 1px solid #d3adf7;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .comparison-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 13px;
+                            margin-top: 15px;
+                        }
+
+                        .comparison-table th {
+                            background: #fafafa;
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                            text-align: left;
+                        }
+
+                        .comparison-table td {
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .hl-purple {
+                            color: #722ed1;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">宿主与寄生：TwinCAT 与 KingStar 实时架构全解析
+                            </h1>
+                            <p style="color: #666; margin-top: 10px;">技术解析：基于虚拟化与硬件隔离的 Windows 实时扩展 (RTX)</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：一屋两制 -->
+                        <div class="section-title">1. 拟物化模型：同一屋檐下的“疯子”与“外科医生”</div>
+                        <p>Windows 是一个<b>“疯子”</b>：它可能因为背景更新突然发呆，也可能因为鼠标移动而兴奋。而 EtherCAT 需要<b>“外科医生”</b>（实时内核）极度精准的操作。
+                        </p>
+
+                        <div class="logic-card-blue" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🏢</div>
+                            <div style="font-size: 13px;">
+                                <b>CPU 核心 0 (疯子大厅)：</b> Windows 操作系统在这里跳舞。它处理 UI、数据库、办公软件。它是“非实时”的。
+                                <br /><b>CPU 核心 1 (无尘手术室)：</b> TwinCAT 或 KingStar 直接<b>“霸占”</b>了这里。它们修改了引导程序，在 Windows
+                                启动前就接管了这颗核。
+                                <br /><b>通信通道 (共享内存)：</b> 两个核通过特制的“气闸舱”交换数据。外科医生完成手术，把结果写在白板上，疯子有空了过来看一眼。
+                                <p style="margin-top: 8px; font-weight: bold; color: #003a8c;">这就是隔离逻辑：Windows
+                                    就算蓝屏死机了，那颗被霸占的核心依然能控制电机安全停止。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术流转图：双系统并存架构 -->
+                        <div class="section-title">2. 逻辑架构：如何在物理层“割据”？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                HW[物理 PC 硬件 - 多核 CPU] --> HAL[HAL 硬件抽象层 / 虚拟化层]
+                                HAL -->|分配 Core 0-2| Windows[Windows OS - 非实时任务]
+                                HAL -->|强行霸占 Core 3| RTOS[实时内核 - TwinCAT/KingStar]
+
+                                Windows -->|通过 ADS/Shared RAM| RTOS
+                                RTOS -->|直接操控 Ring 0 驱动| NIC[专用网卡]
+                                NIC -->|硬实时脉冲| ECAT[EtherCAT 从站集群]
+
+                                style RTOS fill:#f9f0ff,stroke:#d3adf7,stroke-width:2px
+                                style Windows fill:#e6f7ff,stroke:#91d5ff
+                            </div>
+                        </div>
+
+                        <!-- 3. TwinCAT (倍福/Beckhoff) 深度对账 -->
+                        <div class="section-title">3. 德国旗帜：TwinCAT 3 —— 工业界的 iOS</div>
+                        <div class="logic-card-purple">
+                            <b class="hl-purple">技术本质：</b> 基于 PLC 标准 (IEC 61131-3) 的完整运动控制套件。
+                            <br />• <b>集成度：</b> 它是“全家桶”。你买了它，就拥有了 PLC、CNC、机器人控制、HMI 全部功能。
+                            <br />• <b>通讯：</b> 它的灵魂是 <b>ADS 协议</b>。你可以用 C# 轻易地通过网络读取实时核里的任何变量。
+                            <br />• <b>适用人群：</b> 传统的自动化工程师，习惯写梯形图或 ST 语言，但也想用 C# 做高级界面。
+                        </div>
+
+                        <!-- 4. KingStar (IntervalZero) 深度对账 -->
+                        <div class="section-title">4. 美国尖兵：KingStar —— 程序员的超级插槽</div>
+                        <div class="logic-card-blue">
+                            <b class="hl-blue">技术本质：</b> 基于 Windows 的硬实时扩展 <b>RTX64</b> 构建的纯软件主站。
+                            <br />• <b>开放性：</b> 它更像是一个“函数库 (SDK)”。它极其欢迎 C# / C++ 程序员，让你感觉不到在用 PLC。
+                            <br />• <b>柔性化：</b> 它支持“即插即用”。它的扫描逻辑非常适合做复杂的视觉算法与运动控制的强耦合。
+                            <br />• <b>适用人群：</b> 现代装备开发商，团队主力是 C# / C++ 程序员，希望把视觉和运动控制合二为一。
+                        </div>
+
+                        <!-- 5. 综合对比对账单 -->
+                        <div class="section-title">5. 深度决策：我该选哪一个？</div>
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>特性</th>
+                                    <th style="color: #722ed1;">TwinCAT 3 (Beckhoff)</th>
+                                    <th style="color: #1890ff;">KingStar (IntervalZero)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>实时基础</b></td>
+                                    <td>自研实时内核 (基于 Windows 系统补丁)</td>
+                                    <td>基于 <b>RTX64</b> (老牌硬实时扩展)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>编程范式</b></td>
+                                    <td>PLC 逻辑 (ST/LD) 为主，C# 为辅</td>
+                                    <td><span class="hl-blue">C# / C++ 直接驱动</span>，支持 SoftPLC</td>
+                                </tr>
+                                <tr>
+                                    <td><b>硬件依赖</b></td>
+                                    <td>对网卡非常挑剔 (通常要求 Intel 芯片)</td>
+                                    <td>适配性较广，支持多种高性能网卡</td>
+                                </tr>
+                                <tr>
+                                    <td><b>学习曲线</b></td>
+                                    <td>需学习博途类似的 IDE (TwinCAT XAE)</td>
+                                    <td><span class="hl-blue">极低</span>，只要会调用 .NET API 即可</td>
+                                </tr>
+                                <tr>
+                                    <td><b>典型应用</b></td>
+                                    <td>锂电生产线、风力发电、大型包装机</td>
+                                    <td>半导体固晶机、点胶机、高精 3D 打印</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 6. 专家揭秘：为什么能“霸占”成功？ -->
+                        <div class="section-title">6. 底层黑科技：内核注入与中断接管</div>
+                        <div
+                            style="background: #fafafa; padding: 20px; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 13px; color: #666;">
+                            <b>1. 启动隔离 (Boot-time Isolation)：</b> 这些软件在系统启动阶段，通过修改 BCD (引导配置数据)，告诉 Windows：这颗 CPU
+                            核心不属于你，你不能分配任务给它。<br />
+                            <b>2. 中断屏蔽：</b> 它们在实时核里禁用了所有 Windows 产生的中断。在那个核心里，时钟滴答是绝对恒定的。<br />
+                            <b>3. 零拷贝交换：</b> C# 修改数据后，实时核通过<b>指针偏移</b>直接读取，没有任何像 Socket 那样的协议层开销，延迟低于 1 微秒。
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #1890ff; font-size: 14px;">
+                            <strong>📌 首席架构师建议：</strong><br />
+                            • 如果你追求<b>行业稳定性、标准化</b>，想让电工也能看懂你的程序，选 <b>TwinCAT</b>。<br />
+                            • 如果你追求<b>灵活性、极致性能</b>，你的核心算法是用 C# 写的高级逻辑，选 <b>KingStar</b>。<br />
+                            <b>无论选谁，你都已经跨越了“单机脚本”的初级阶段，进入了“硬实时系统架构”的专业领域。</b>
+                        </div>
+
+                        <div class="footer">
+                            Industrial Real-Time Architecture | 软插件主站技术专题报告
+                        </div>
+                    </div>
+                </div>
+                <div id="rtx64-deep-report"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #f5222d;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #f5222d;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-dark {
+                            background: #1f1f1f;
+                            color: #dcdcdc;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                            font-family: 'Cascadia Code', monospace;
+                            font-size: 13px;
+                        }
+
+                        .logic-card-red {
+                            background: #fff1f0;
+                            border: 1px solid #ffa39e;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .tech-box {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 15px;
+                            border-radius: 4px;
+                            font-size: 13px;
+                            color: #003a8c;
+                        }
+
+                        .hl-red {
+                            color: #f5222d;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">影子内核：RTX64 硬实时扩展深度审计报告</h1>
+                            <p style="color: #666; margin-top: 10px;">技术定位：Windows 平台的确定性实时子系统 (RTOS)</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：影子内阁 -->
+                        <div class="section-title">1. 拟物化模型：Windows 帝国内部的“影子内阁”</div>
+                        <p>Windows 是一个<b>“庞大且臃肿的行政机构”</b>，它处理文件的效率很高，但你永远不知道它什么时候会突然开个长会（系统中断/更新）。</p>
+
+                        <div class="logic-card-red" style="display: flex; gap: 20px; align-items: center;">
+                            <div style="font-size: 40px;">🛡️</div>
+                            <div style="font-size: 13px;">
+                                <b>行政机构 (Windows)：</b> 负责接待民众、处理文书。虽然它权力很大，但它是“非实时”的。
+                                <br /><b>影子内阁 (RTX64)：</b> 潜伏在行政机构内部的特种分队。它们<b>不经过</b>繁琐的部门审批。
+                                <br /><b>绝对优先：</b> 当影子内阁下令时，整个行政机构必须静默。影子内阁拥有自己的<b>专用通道 (CPU Cores)</b> 和 <b>专用时钟
+                                    (Timer)</b>。
+                                <p style="margin-top: 8px; font-weight: bold; color: #cf1322;">结果：即便 Windows
+                                    整个瘫痪了（蓝屏），影子内阁依然能有条不紊地操作电机安全复位。</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. 技术架构：双内核并存 -->
+                        <div class="section-title">2. 核心架构：两个内核是如何和平共处的？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                HW[物理硬件 - 多核 x86 CPU] --> HAL[RTX64 硬件抽象层]
+                                HAL -->|屏蔽中断| RTSS[RTSS 实时子系统]
+                                HAL -->|透传中断| WIN[Windows 10/11 内核]
+
+                                subgraph "Ring 0 (内核态)"
+                                RTSS
+                                WIN
+                                end
+
+                                RTSS -->|执行| Task[硬实时任务: EtherCAT/伺服控制]
+                                WIN -->|执行| App[用户态任务: C#, GUI, Database]
+
+                                App <==>|高效 IPC / 共享内存| RTSS
+                            </div>
+                        </div>
+
+                        <!-- 3. RTX64 的四大硬核特性 -->
+                        <div class="section-title">3. 技术对账：为什么它被誉为“实时之王”？</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="tech-box">
+                                <b class="hl-red">1. 确定性 (Determinism)：</b>
+                                <br />Windows 的调度抖动在毫秒级，而 RTX64 的抖动在 <b>1 微秒 (1µs)</b> 以内。这保证了 EtherCAT 子报文的发送时间精确得像原子钟。
+                            </div>
+                            <div class="tech-box">
+                                <b class="hl-red">2. 硬件隔离 (Isolation)：</b>
+                                <br />它接管了本地 APIC（中断控制器）。Windows 的中断无法干扰实时核，实时核的任务永远拥有最高优先级。
+                            </div>
+                            <div class="tech-box">
+                                <b class="hl-red">3. 蓝屏生存 (BSOD Survival)：</b>
+                                <br />由于 RTX64 有独立的调度器，如果 Windows 驱动引发蓝屏，RTX64 代码仍可运行几秒钟或持续运行，执行关键的保护动作。
+                            </div>
+                            <div class="tech-box">
+                                <b class="hl-red">4. 共享内存 (Shared Memory)：</b>
+                                <br />提供纳秒级的进程间通信。你的 C# 程序修改一个内存地址，实时核 0 延迟可见，不需要经过 TCP 或管道。
+                            </div>
+                        </div>
+
+                        <!-- 4. 程序员视角：如何开发 RTX64？ -->
+                        <div class="section-title">4. 开发范式：C 语言的绝对主场</div>
+                        <p>在 RTX64 中，你不能使用任何 .NET 库。你写的是 <b>RTSS 应用程序 (.rtss)</b>：</p>
+
+                        <div class="logic-card-dark">
+                            <span style="color: #6a9955;">// 一个硬实时的周期性循环示例</span><br />
+                            <span style="color: #569cd6;">void</span> <span
+                                style="color: #dcdcdc;">RealTimeTask</span>() {<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;RtSetTimerPeriod(hTimer, &period); <span style="color: #6a9955;">//
+                                设置 100 微秒周期</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #569cd6;">while</span>(running) {<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RtWaitForSingleObject(hTimer,
+                            INFINITE);<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// ---
+                                这里执行硬实时逻辑 (EtherCAT 读写) ---</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EtherCAT_Scan_Subdatagrams();<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6a9955;">// --- 必须在
+                                100µs 内跑完，否则报错 ---</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
+                            }
+                        </div>
+
+                        <!-- 5. 交互对账：C# 到底扮演什么角色？ -->
+                        <div class="section-title">5. 协作关系：C# 上位机与 RTX64 的完美契合</div>
+                        <div class="logic-card-red">
+                            <p><b>典型的工业软件架构：</b></p>
+                            <ul style="font-size: 13px; padding-left: 20px;">
+                                <li><b class="hl-red">C# (User Space):</b> 负责逻辑配置、界面显示、MES 连接、视觉处理（OpenCV）。它通过 <b>RTX64
+                                        SDK</b> 提供的 API 读取数据。</li>
+                                <li><b class="hl-red">RTX64 (Kernel Space):</b> 负责运动控制算法（PID、插补）、安全联锁、EtherCAT 实时通讯。
+                                </li>
+                                <li><b>同步机制：</b> C# 发出 `Move` 命令 -> 写入共享内存 -> RTX64 发现内存变化 -> 在实时周期内执行运动。</li>
+                            </ul>
+                        </div>
+
+                        <!-- 总结 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #f5222d; font-size: 14px;">
+                            <strong>📌 首席架构师总结：</strong><br />
+                            • <b>RTX64 不是一个软件，而是一个运行环境</b>。它把普通的 PC 变成了一台硬实时控制器。<br />
+                            • <b>如果你在用 KingStar</b>，你其实就是在间接使用 RTX64 的超高性能。KingStar 把复杂的 RTX64 C 语言底层封装成了好用的 C#
+                            API。<br />
+                            • <b>核心价值：</b> 它解决了 Windows “不可控”的痛点，是高端精密制造设备的唯一基石。
+                            <b>理解了 RTX64，你就理解了为什么民用电脑能变身成为工业大脑。</b>
+                        </div>
+
+                        <div class="footer">
+                            IntervalZero RTX64 Technology | 实时控制底层全息报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+            <a-tab-pane key="11" tab="倍福">
+                <div id="beckhoff-vs-kingstar-relationship"
+                    style="background: #f0f2f5; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #000000d9; line-height: 1.6;">
+
+                    <style>
+                        .report-body {
+                            background: #fff;
+                            padding: 32px;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                            border-top: 6px solid #fa541c;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+
+                        .report-header {
+                            text-align: center;
+                            margin-bottom: 40px;
+                        }
+
+                        .section-title {
+                            font-size: 20px;
+                            font-weight: bold;
+                            color: #001529;
+                            margin: 30px 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 8px;
+                        }
+
+                        .section-title::before {
+                            content: "";
+                            width: 4px;
+                            height: 20px;
+                            background: #fa541c;
+                            margin-right: 12px;
+                            border-radius: 2px;
+                        }
+
+                        .logic-card-orange {
+                            background: #fff7e6;
+                            border: 1px solid #ffd8bf;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .logic-card-blue {
+                            background: #e6f7ff;
+                            border: 1px solid #91d5ff;
+                            padding: 18px;
+                            border-radius: 6px;
+                            margin: 15px 0;
+                        }
+
+                        .mermaid-container {
+                            background: #fafafa;
+                            border: 1px solid #f0f0f0;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            overflow-x: auto;
+                        }
+
+                        .comp-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 13px;
+                            margin-top: 15px;
+                        }
+
+                        .comp-table th {
+                            background: #fafafa;
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                            text-align: left;
+                        }
+
+                        .comp-table td {
+                            padding: 10px;
+                            border: 1px solid #f0f0f0;
+                        }
+
+                        .hl-orange {
+                            color: #fa541c;
+                            font-weight: bold;
+                        }
+
+                        .hl-blue {
+                            color: #1890ff;
+                            font-weight: bold;
+                        }
+
+                        .footer {
+                            text-align: center;
+                            margin-top: 40px;
+                            color: #999;
+                            font-size: 12px;
+                            border-top: 1px solid #f0f0f0;
+                            padding-top: 20px;
+                        }
+                    </style>
+
+                    <div class="report-body">
+                        <!-- 头部 -->
+                        <div class="report-header">
+                            <h1 style="margin: 0; color: #001529; font-size: 26px;">工业双雄：倍福 TwinCAT 与 KingStar 的血缘与博弈
+                            </h1>
+                            <p style="color: #666; margin-top: 10px;">技术对账：垂直集成巨头 vs 纯软件定义工业内核</p>
+                        </div>
+
+                        <!-- 1. 拟物化逻辑：苹果 vs 安卓 -->
+                        <div class="section-title">1. 拟物化模型：工业自动化界的“苹果”与“谷歌”</div>
+                        <p>虽然它们都跑在 Windows 上，但它们的生存哲学完全不同：</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="logic-card-orange">
+                                <div style="font-weight: bold; color: #d4380d; margin-bottom: 8px;">倍福 TwinCAT (苹果模式)
+                                </div>
+                                <div style="font-size: 13px;"><b>哲学：垂直集成。</b> 倍福既发明了 EtherCAT（协议），又制造 IPC（硬件），还开发
+                                    TwinCAT（系统）。
+                                    <br /><b>关系：</b> 它是“庄家”。它希望你买它的全家桶，虽然也支持第三方硬件，但在自家的工业电脑上跑得最稳。
+                                </div>
+                            </div>
+                            <div class="logic-card-blue">
+                                <div style="font-weight: bold; color: #003a8c; margin-bottom: 8px;">KingStar (安卓/Windows
+                                    增强模式)</div>
+                                <div style="font-size: 13px;"><b>哲学：软件定义。</b> KingStar 不卖硬件。它专注于把 <b>RTX64</b>
+                                    这个硬核工具封装成好用的运动控制 API。
+                                    <br /><b>关系：</b> 它是“破壁者”。它支持你用任何高性能 PC 和网卡，只要装上它的软件，就能拥有和倍福一样的实时性能。
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 关系流转图：技术血缘 -->
+                        <div class="section-title">2. 溯源：它们是如何与 Windows 共存的？</div>
+                        <div class="mermaid-container">
+                            <div class="mermaid">
+                                graph LR
+                                WIN[Windows 操作系统]
+
+                                subgraph "TwinCAT 3 架构"
+                                TC_Kernel[倍福自研实时内核 XAR]
+                                TC_PLC[TwinCAT PLC/ST 编程环境]
+                                TC_Kernel -.-> WIN
+                                end
+
+                                subgraph "KingStar 架构"
+                                RTX64[IntervalZero RTX64 实时内核]
+                                KS_Lib[KingStar 运动控制库/API]
+                                RTX64 -.-> WIN
+                                end
+
+                                Standard[EtherCAT 国际标准]
+                                TC_Kernel --> Standard
+                                RTX64 --> Standard
+
+                                style TC_Kernel fill:#fff7e6,stroke:#fa541c
+                                style RTX64 fill:#e6f7ff,stroke:#1890ff
+                            </div>
+                        </div>
+
+                        <!-- 3. 核心差异对账单 -->
+                        <div class="section-title">3. 深度对比：两者的核心利益点</div>
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>维度</th>
+                                    <th style="color: #fa541c;">倍福 TwinCAT</th>
+                                    <th style="color: #1890ff;">KingStar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><b>实时内核起源</b></td>
+                                    <td>倍福闭源自研 (基于内核补丁)</td>
+                                    <td>基于 <b class="hl-blue">RTX64</b> (原美国 VenturCom 实验室)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>商业模式</b></td>
+                                    <td>硬件 + 软件授权 (主要卖工业电脑)</td>
+                                    <td>纯软件授权 (买 SDK，自己配电脑)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>编程语言</b></td>
+                                    <td><span class="hl-orange">PLC 工程师为主</span> (ST, LD, CFC)</td>
+                                    <td><span class="hl-blue">IT 程序员为主</span> (C#, C++, .NET)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>对网卡的要求</b></td>
+                                    <td>极挑剔 (几乎只支持 Intel 网卡)</td>
+                                    <td>较宽泛 (通过 RTX64 驱动适配)</td>
+                                </tr>
+                                <tr>
+                                    <td><b>视觉集成</b></td>
+                                    <td>TwinCAT Vision (PLC 语法处理图像)</td>
+                                    <td>直接在 C# 里调用 OpenCV (更自由)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- 4. 它们是什么关系？ -->
+                        <div class="section-title">4. 总结：它们的三重关系</div>
+                        <div class="logic-card-orange">
+                            <b>1. 行业共同推动者：</b>
+                            它们都极大地推动了“PC-Based”控制架构取代传统的“硬件 PLC/运动控制卡”。
+                            <br /><br />
+                            <b>2. 互补关系：</b>
+                            • 如果你是一个<b>老牌工厂</b>，招的是 PLC 电工，你会选 <b>TwinCAT</b>，因为它的逻辑符合电工思维。
+                            <br />• 如果你是一个<b>高科技装备商</b>（如半导体、精密点胶），团队全是写代码的，你会选 <b>KingStar</b>，因为 C# 开发效率极高。
+                            <br /><br />
+                            <b>3. 竞争关系：</b>
+                            在“软主站”市场上，KingStar 经常凭借<b>更友好的 IT 接口</b>和<b>硬件灵活性</b>，从倍福手中抢夺那些不希望被硬件锁死的客户。
+                        </div>
+
+                        <!-- 5. 架构师视角：核心技术本质 -->
+                        <div
+                            style="margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 4px; border-left: 5px solid #fa541c; font-size: 14px;">
+                            <strong>📌 首席架构师总结：</strong><br />
+                            • <b>TwinCAT</b> 赢在生态：它提供了从 I/O 模块到伺服电机的完整硬件链条。<br />
+                            • <b>KingStar</b> 赢在纯粹：它把 RTX64 的底层能力彻底释放给 C# 程序员，让“软件定义机器”变得极其简单。<br />
+                            <b>对于你（C# 开发者）来说：</b> 如果你不想去学那些晦涩的 PLC 指令，只想在 Visual Studio 里掌控一切，KingStar 可能是你更亲密的战友。
+                        </div>
+
+                        <div class="footer">
+                            Beckhoff vs KingStar | 工业实时内核技术深度报告
+                        </div>
+                    </div>
+                </div>
+            </a-tab-pane>
+        </a-tabs>
+    </div>
+
+    <!-- 引入 Vue 和 Ant Design Vue JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+
+    <script>
+        // 注册 Antd 组件
+        Vue.use(antd);
+
+        // 初始化 Mermaid
+        mermaid.initialize({
+            startOnLoad: false, // 改为手动控制渲染
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    activeKey: '1'
+                };
+            },
+            methods: {
+                // 当 Tab 切换时，重新运行 Mermaid 解析
+                // 解决 Mermaid 在隐藏容器中初始化宽度为 0 的问题
+                handleTabChange(key) {
+                    this.$nextTick(() => {
+                        mermaid.init();
+                    });
+                }
+            },
+            mounted() {
+                // 初始加载第一个 Tab 的图表
+                this.$nextTick(() => {
+                    mermaid.init();
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>
