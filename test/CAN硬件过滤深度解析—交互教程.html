@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAN 硬件过滤深度解析 — 交互教程</title>
+<style>
+/* ===== CSS 变量 ===== */
+:root {
+  --bg-deep: #0d0f13;
+  --bg-panel: #161920;
+  --bg-panel-2: #1e222b;
+  --bg-hover: #262b36;
+  --bg-active: #2d3340;
+  --border: #2a2f3a;
+  --border-light: #3a4150;
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0ac;
+  --text-muted: #5f6673;
+  --accent-green: #00e676;
+  --accent-green-dim: rgba(0, 230, 118, 0.12);
+  --accent-red: #ff5252;
+  --accent-red-dim: rgba(255, 82, 82, 0.12);
+  --accent-orange: #ff9800;
+  --accent-orange-dim: rgba(255, 152, 0, 0.12);
+  --accent-blue: #448aff;
+  --accent-blue-dim: rgba(68, 138, 255, 0.12);
+  --accent-gold: #ffd740;
+  --accent-gold-dim: rgba(255, 215, 64, 0.12);
+  --accent-purple: #b388ff;
+  --accent-purple-dim: rgba(179, 136, 255, 0.12);
+  --mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-x: hidden;
+}
+
+/* ===== 顶部标题栏（芯片风格） ===== */
+.title-bar {
+  height: 38px;
+  background: linear-gradient(180deg, #1c2029 0%, #14171d 100%);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  justify-content: space-between;
+  user-select: none;
+}
+.title-bar-left { display: flex; align-items: center; gap: 12px; }
+.chip-logo {
+  width: 22px; height: 22px;
+  background: var(--accent-green);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: var(--bg-deep);
+  position: relative;
+}
+.chip-logo::before, .chip-logo::after {
+  content: ''; position: absolute; width: 3px; height: 8px;
+  background: var(--accent-green); top: 7px;
+}
+.chip-logo::before { left: -4px; }
+.chip-logo::after { right: -4px; }
+.title-bar-text { font-size: 12.5px; color: var(--text-secondary); letter-spacing: 0.3px; }
+.title-bar-text strong { color: var(--text-primary); font-weight: 600; }
+.title-bar-right { display: flex; gap: 4px; }
+.title-bar-btn {
+  width: 28px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px; color: var(--text-muted); cursor: pointer; font-size: 12px;
+}
+.title-bar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ===== 功能区 ===== */
+.ribbon {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+  display: flex; align-items: stretch;
+  height: 44px; gap: 1px;
+  overflow-x: auto;
+}
+.ribbon-tab {
+  display: flex; align-items: center;
+  padding: 0 12px;
+  font-size: 12.5px; color: var(--text-secondary);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s; gap: 6px; white-space: nowrap;
+}
+.ribbon-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+.ribbon-tab.active {
+  color: var(--accent-green);
+  border-bottom-color: var(--accent-green);
+  background: var(--accent-green-dim);
+}
+.ribbon-tab svg { width: 15px; height: 15px; flex-shrink: 0; }
+.ribbon-spacer { flex: 1; }
+.ribbon-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--text-muted); padding-right: 8px; white-space: nowrap;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ===== 主布局 ===== */
+.app-layout { display: flex; height: calc(100vh - 82px); min-height: 560px; }
+
+/* ===== 侧边栏 ===== */
+.sidebar {
+  width: 230px; min-width: 230px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 14px 0;
+}
+.sidebar-section { padding: 0 10px; margin-bottom: 4px; }
+.sidebar-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-muted); padding: 8px 10px 6px; font-weight: 600;
+}
+.sidebar-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; border-radius: 5px;
+  cursor: pointer; font-size: 12.5px; color: var(--text-secondary);
+  transition: all 0.15s; margin-bottom: 1px;
+}
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-item.active { background: var(--accent-green-dim); color: var(--accent-green); font-weight: 500; }
+.sidebar-item .num { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); min-width: 18px; }
+.sidebar-item.active .num { color: var(--accent-green); }
+.sidebar-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ===== 主内容区 ===== */
+.main-content { flex: 1; overflow-y: auto; padding: 22px 28px; background: var(--bg-deep); }
+.view { display: none; }
+.view.active { display: block; animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+.page-header { margin-bottom: 20px; }
+.page-header h1 { font-size: 23px; font-weight: 700; margin-bottom: 5px; }
+.page-header .subtitle { color: var(--text-secondary); font-size: 13.5px; }
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.card h2 {
+  font-size: 15.5px; font-weight: 600; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card h2 .icon { color: var(--accent-green); display: flex; }
+.card h3 { font-size: 13.5px; font-weight: 600; margin: 14px 0 7px; color: var(--text-primary); }
+.card p { color: var(--text-secondary); margin-bottom: 9px; }
+.card ul, .card ol { color: var(--text-secondary); padding-left: 18px; margin-bottom: 9px; }
+.card li { margin-bottom: 3px; }
+.card strong { color: var(--text-primary); }
+
+.tip-box {
+  background: var(--accent-blue-dim);
+  border-left: 3px solid var(--accent-blue);
+  padding: 11px 15px; border-radius: 0 6px 6px 0;
+  margin: 11px 0; font-size: 12.5px; color: var(--text-primary);
+}
+.tip-box .tip-label { color: var(--accent-blue); font-weight: 600; margin-right: 6px; }
+.warn-box {
+  background: var(--accent-orange-dim);
+  border-left: 3px solid var(--accent-orange);
+  padding: 11px 15px; border-radius: 0 6px 6px 0;
+  margin: 11px 0; font-size: 12.5px; color: var(--text-primary);
+}
+.warn-box .warn-label { color: var(--accent-orange); font-weight: 600; margin-right: 6px; }
+.danger-box {
+  background: var(--accent-red-dim);
+  border-left: 3px solid var(--accent-red);
+  padding: 11px 15px; border-radius: 0 6px 6px 0;
+  margin: 11px 0; font-size: 12.5px; color: var(--text-primary);
+}
+.danger-box .danger-label { color: var(--accent-red); font-weight: 600; margin-right: 6px; }
+
+.data-table {
+  width: 100%; border-collapse: collapse; margin: 11px 0; font-size: 12.5px;
+}
+.data-table th {
+  background: var(--bg-panel-2); text-align: left;
+  padding: 9px 11px; font-weight: 600; color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light); font-size: 12px;
+}
+.data-table td {
+  padding: 8px 11px; border-bottom: 1px solid var(--border); color: var(--text-secondary);
+}
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table code {
+  font-family: var(--mono); background: var(--bg-panel-2);
+  padding: 1px 5px; border-radius: 3px; font-size: 11.5px; color: var(--accent-gold);
+}
+
+/* ===== Hero ===== */
+.hero-section {
+  background: linear-gradient(135deg, var(--bg-panel) 0%, #131a26 100%);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 28px 30px; margin-bottom: 18px; position: relative; overflow: hidden;
+}
+.hero-section::before {
+  content: ''; position: absolute; top: -40%; right: -5%;
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, var(--accent-green-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-section::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-green), transparent);
+  opacity: 0.5;
+}
+.hero-section h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; position: relative; }
+.hero-section .hero-sub {
+  font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;
+  position: relative; max-width: 640px;
+}
+.hero-conclusion {
+  background: var(--bg-deep); border: 1px solid var(--accent-green);
+  border-radius: 8px; padding: 14px 18px; position: relative;
+  font-size: 13.5px; color: var(--text-primary); line-height: 1.8;
+}
+.hero-conclusion .hc-label {
+  color: var(--accent-green); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+}
+.hero-conclusion strong { color: var(--accent-gold); }
+
+.scenario-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0;
+}
+.scenario-card {
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; border-left: 3px solid var(--accent-orange);
+}
+.scenario-card h4 { font-size: 13px; color: var(--accent-orange); margin-bottom: 6px; }
+.scenario-card p { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
+
+/* ===== CAN 分层架构图 ===== */
+.layer-diagram {
+  display: flex; flex-direction: column; gap: 0;
+  margin: 16px 0; max-width: 700px;
+}
+.layer-block {
+  border: 1px solid var(--border-light); border-radius: 6px;
+  padding: 14px 18px; cursor: pointer; transition: all 0.2s;
+  position: relative; background: var(--bg-panel-2);
+}
+.layer-block:hover { border-color: var(--accent-green); background: var(--bg-hover); }
+.layer-block.active { border-color: var(--accent-green); background: var(--accent-green-dim); }
+.layer-block .layer-top {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.layer-block .layer-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  display: flex; align-items: center; gap: 10px;
+}
+.layer-block .layer-tag {
+  font-size: 10.5px; padding: 2px 8px; border-radius: 10px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.layer-block .layer-desc { font-size: 12px; color: var(--text-secondary); margin-top: 5px; }
+.layer-detail {
+  max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+  font-size: 12.5px; color: var(--text-secondary);
+}
+.layer-block.active .layer-detail { max-height: 300px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-light); }
+.layer-arrow {
+  text-align: center; color: var(--text-muted); font-size: 16px;
+  padding: 2px 0; font-family: var(--mono);
+}
+.layer-bus { border-color: var(--accent-blue); }
+.layer-bus .layer-tag { background: var(--accent-blue-dim); color: var(--accent-blue); }
+.layer-phy { border-color: var(--accent-orange); }
+.layer-phy .layer-tag { background: var(--accent-orange-dim); color: var(--accent-orange); }
+.layer-mac { border-color: var(--accent-gold); }
+.layer-mac .layer-tag { background: var(--accent-gold-dim); color: var(--accent-gold); }
+.layer-mcu { border-color: var(--accent-purple); }
+.layer-mcu .layer-tag { background: var(--accent-purple-dim); color: var(--accent-purple); }
+
+/* ===== 过滤模拟器 ===== */
+.filter-sim {
+  background: var(--bg-panel-2); border: 1px solid var(--border-light);
+  border-radius: 8px; padding: 18px; margin: 14px 0;
+}
+.filter-sim h3 { margin-top: 0; }
+.sim-row {
+  display: flex; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; align-items: flex-end;
+}
+.sim-field { flex: 1; min-width: 140px; }
+.sim-field label {
+  display: block; font-size: 11.5px; color: var(--text-muted);
+  margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.sim-field input, .sim-field select {
+  width: 100%; background: var(--bg-deep); border: 1px solid var(--border-light);
+  color: var(--accent-gold); font-family: var(--mono); font-size: 14px;
+  padding: 8px 10px; border-radius: 5px; outline: none;
+}
+.sim-field input:focus, .sim-field select:focus { border-color: var(--accent-green); }
+.sim-btn {
+  padding: 9px 20px; background: var(--accent-green); color: var(--bg-deep);
+  border: none; border-radius: 5px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.sim-btn:hover { background: #33eb91; }
+.sim-btn.secondary {
+  background: var(--bg-active); color: var(--text-primary); border: 1px solid var(--border-light);
+}
+.sim-btn.secondary:hover { background: var(--bg-hover); }
+
+/* 二进制位展示 */
+.bit-display {
+  display: flex; gap: 2px; margin: 8px 0; font-family: var(--mono); font-size: 13px;
+  flex-wrap: wrap;
+}
+.bit-cell {
+  width: 26px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 3px; font-weight: 600; border: 1px solid transparent;
+}
+.bit-cell.bit-1 { background: var(--accent-green-dim); color: var(--accent-green); border-color: var(--accent-green); }
+.bit-cell.bit-0 { background: var(--bg-deep); color: var(--text-muted); border-color: var(--border); }
+.bit-cell.bit-dc { background: var(--accent-gold-dim); color: var(--accent-gold); border-color: var(--accent-gold); }
+.bit-cell.bit-match { background: var(--accent-green); color: var(--bg-deep); }
+.bit-cell.bit-mismatch { background: var(--accent-red); color: #fff; }
+.bit-label {
+  font-size: 11px; color: var(--text-muted); margin-bottom: 3px;
+  display: flex; justify-content: space-between;
+}
+.bit-label .legend { display: flex; gap: 12px; }
+.bit-label .legend span { display: flex; align-items: center; gap: 4px; }
+.bit-label .legend .dot { width: 10px; height: 10px; border-radius: 2px; }
+
+.filter-result {
+  margin-top: 14px; padding: 14px; border-radius: 6px; text-align: center;
+  font-size: 15px; font-weight: 700; display: none;
+}
+.filter-result.pass {
+  display: block; background: var(--accent-green-dim);
+  border: 1px solid var(--accent-green); color: var(--accent-green);
+}
+.filter-result.fail {
+  display: block; background: var(--accent-red-dim);
+  border: 1px solid var(--accent-red); color: var(--accent-red);
+}
+.filter-result .fr-detail { font-size: 12px; font-weight: 400; margin-top: 5px; color: var(--text-secondary); }
+
+/* 极性切换 */
+.polarity-toggle {
+  display: flex; gap: 0; margin: 12px 0; background: var(--bg-deep);
+  border-radius: 6px; padding: 3px; border: 1px solid var(--border);
+  width: fit-content;
+}
+.polarity-option {
+  padding: 6px 16px; font-size: 12px; cursor: pointer;
+  border-radius: 4px; color: var(--text-secondary); transition: all 0.15s;
+}
+.polarity-option.active { background: var(--accent-gold); color: var(--bg-deep); font-weight: 600; }
+
+/* ===== 时序动画 ===== */
+.timing-compare {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 14px 0;
+}
+.timing-panel {
+  background: var(--bg-panel-2); border: 1px solid var(--border-light);
+  border-radius: 8px; padding: 16px;
+}
+.timing-panel h4 {
+  font-size: 13px; margin-bottom: 10px; display: flex;
+  align-items: center; gap: 8px;
+}
+.timing-panel.with-filter h4 { color: var(--accent-green); }
+.timing-panel.without-filter h4 { color: var(--accent-red); }
+.timeline {
+  position: relative; height: 160px; margin-top: 8px;
+}
+.tl-frame {
+  position: absolute; height: 24px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-family: var(--mono); font-weight: 600;
+  transition: all 0.3s;
+}
+.tl-frame.frame-ok { background: var(--accent-green-dim); border: 1px solid var(--accent-green); color: var(--accent-green); }
+.tl-frame.frame-no { background: var(--accent-red-dim); border: 1px solid var(--accent-red); color: var(--accent-red); }
+.tl-isr {
+  position: absolute; width: 3px; background: var(--accent-orange);
+  transition: all 0.3s; opacity: 0;
+}
+.tl-isr.active { opacity: 1; }
+.tl-isr::after {
+  content: 'ISR'; position: absolute; top: -16px; left: 50%;
+  transform: translateX(-50%); font-size: 9px; color: var(--accent-orange);
+  font-family: var(--mono); white-space: nowrap;
+}
+.tl-axis {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: var(--border-light);
+}
+.tl-axis-label {
+  position: absolute; bottom: -18px; font-size: 10px;
+  color: var(--text-muted); font-family: var(--mono);
+  transform: translateX(-50%);
+}
+.timing-controls {
+  display: flex; gap: 10px; margin: 12px 0; align-items: center;
+}
+.timing-stats {
+  display: flex; gap: 20px; margin-top: 10px; font-size: 12px;
+}
+.timing-stats .stat { display: flex; flex-direction: column; }
+.timing-stats .stat-val { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+.timing-stats .stat-lbl { font-size: 10.5px; color: var(--text-muted); }
+.with-filter .stat-val { color: var(--accent-green); }
+.without-filter .stat-val { color: var(--accent-red); }
+
+/* ===== 方案对比卡片 ===== */
+.solution-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 14px 0;
+}
+.solution-card {
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; cursor: pointer; transition: all 0.2s;
+  position: relative; overflow: hidden;
+}
+.solution-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.solution-card .sol-badge {
+  position: absolute; top: 0; right: 0; padding: 3px 10px;
+  font-size: 10px; font-weight: 700; border-radius: 0 8px 0 8px;
+}
+.solution-card.a { border-top: 3px solid var(--accent-blue); }
+.solution-card.a .sol-badge { background: var(--accent-blue-dim); color: var(--accent-blue); }
+.solution-card.b { border-top: 3px solid var(--accent-orange); }
+.solution-card.b .sol-badge { background: var(--accent-orange-dim); color: var(--accent-orange); }
+.solution-card.c { border-top: 3px solid var(--accent-green); }
+.solution-card.c .sol-badge { background: var(--accent-green-dim); color: var(--accent-green); }
+.solution-card h4 { font-size: 13.5px; margin-bottom: 8px; padding-right: 50px; }
+.solution-card .sol-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+.solution-card .sol-specs { font-size: 11.5px; }
+.solution-card .sol-specs .spec-row {
+  display: flex; justify-content: space-between; padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.solution-card .sol-specs .spec-row:last-child { border-bottom: none; }
+.solution-card .spec-lbl { color: var(--text-muted); }
+.solution-card .spec-val { color: var(--text-primary); font-weight: 500; }
+.solution-card .spec-val.good { color: var(--accent-green); }
+.solution-card .spec-val.bad { color: var(--accent-red); }
+.solution-card .spec-val.mid { color: var(--accent-orange); }
+
+/* ===== 假唤醒清单 ===== */
+.wakeup-item {
+  background: var(--bg-panel-2); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 8px; overflow: hidden;
+}
+.wakeup-question {
+  padding: 12px 16px; cursor: pointer; display: flex;
+  align-items: center; justify-content: space-between; gap: 10px;
+  transition: background 0.15s;
+}
+.wakeup-question:hover { background: var(--bg-hover); }
+.wakeup-question .wq-text { font-size: 13px; font-weight: 500; flex: 1; }
+.wakeup-question .wq-tag {
+  font-size: 10px; padding: 2px 7px; border-radius: 3px;
+  font-weight: 600; flex-shrink: 0;
+}
+.wakeup-arrow { color: var(--text-muted); transition: transform 0.25s; flex-shrink: 0; }
+.wakeup-item.open .wakeup-arrow { transform: rotate(180deg); }
+.wakeup-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+.wakeup-item.open .wakeup-answer { max-height: 400px; }
+.wakeup-answer-inner {
+  padding: 0 16px 14px; font-size: 12.5px; color: var(--text-secondary);
+  border-top: 1px solid var(--border); padding-top: 10px;
+}
+.wakeup-answer-inner .cause { color: var(--accent-red); font-weight: 600; margin-bottom: 4px; }
+.wakeup-answer-inner .solution { color: var(--accent-green); font-weight: 600; margin: 7px 0 4px; }
+
+/* ===== 角色对比 ===== */
+.role-compare {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 14px 0;
+}
+.role-card {
+  background: var(--bg-panel-2); border-radius: 8px; padding: 16px;
+  border: 1px solid var(--border);
+}
+.role-card.controller { border-top: 3px solid var(--accent-gold); }
+.role-card.no-filter { border-top: 3px solid var(--accent-red); }
+.role-card.pn { border-top: 3px solid var(--accent-orange); }
+.role-card h4 { font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.role-card .role-row {
+  display: flex; justify-content: space-between; padding: 5px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.role-card .role-row:last-child { border-bottom: none; }
+.role-card .role-lbl { color: var(--text-muted); }
+.role-card .role-val { color: var(--text-primary); text-align: right; max-width: 60%; }
+
+/* ===== 总结卡片 ===== */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px; margin: 14px 0;
+}
+.summary-card {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px; border-left: 3px solid var(--accent-green);
+}
+.summary-card h4 { font-size: 12.5px; color: var(--accent-green); margin-bottom: 5px; font-weight: 600; }
+.summary-card p { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+
+.one-liner {
+  background: linear-gradient(135deg, var(--accent-green-dim), var(--accent-blue-dim));
+  border: 1px solid var(--accent-green); border-radius: 10px;
+  padding: 20px 24px; margin: 16px 0; text-align: center;
+}
+.one-liner .ol-title {
+  font-size: 11px; color: var(--accent-green); text-transform: uppercase;
+  letter-spacing: 2px; font-weight: 700; margin-bottom: 8px;
+}
+.one-liner .ol-text {
+  font-size: 15px; color: var(--text-primary); line-height: 1.8;
+}
+.one-liner .ol-text strong { color: var(--accent-gold); }
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--bg-panel-2); border: 1px solid var(--accent-green);
+  color: var(--text-primary); padding: 10px 20px; border-radius: 6px;
+  font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  transition: transform 0.3s ease; z-index: 1000;
+  display: flex; align-items: center; gap: 8px;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast svg { width: 16px; height: 16px; color: var(--accent-green); }
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ===== 响应式 ===== */
+@media (max-width: 1024px) {
+  .sidebar { width: 190px; min-width: 190px; }
+  .timing-compare, .solution-grid, .role-compare { grid-template-columns: 1fr; }
+  .scenario-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { padding: 14px; }
+  .hero-section { padding: 18px; }
+  .hero-section h1 { font-size: 20px; }
+  .bit-cell { width: 22px; height: 24px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部标题栏 ===== -->
+<div class="title-bar">
+  <div class="title-bar-left">
+    <div class="chip-logo">C</div>
+    <div class="title-bar-text"><strong>CAN 硬件过滤</strong> 深度解析 — 交互教程</div>
+  </div>
+  <div class="title-bar-right">
+    <div class="title-bar-btn">&#8211;</div>
+    <div class="title-bar-btn">&#9633;</div>
+    <div class="title-bar-btn">&#10005;</div>
+  </div>
+</div>
+
+<!-- ===== 功能区 ===== -->
+<div class="ribbon">
+  <div class="ribbon-tab active" data-view="overview">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    概览
+  </div>
+  <div class="ribbon-tab" data-view="layers">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+    分层架构
+  </div>
+  <div class="ribbon-tab" data-view="filter">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+    过滤模拟器
+  </div>
+  <div class="ribbon-tab" data-view="timing">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    时序对比
+  </div>
+  <div class="ribbon-tab" data-view="pn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    PN 唤醒
+  </div>
+  <div class="ribbon-tab" data-view="wakeup">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+    假唤醒
+  </div>
+  <div class="ribbon-tab" data-view="solutions">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+    方案取舍
+  </div>
+  <div class="ribbon-tab" data-view="summary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    总结
+  </div>
+  <div class="ribbon-spacer"></div>
+  <div class="ribbon-status">
+    <div class="status-dot"></div>
+    <span>ISO 11898</span>
+  </div>
+</div>
+
+<!-- ===== 主布局 ===== -->
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">导航</div>
+      <div class="sidebar-item active" data-view="overview">
+        <span class="num">00</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        开场与结论
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">核心原理</div>
+      <div class="sidebar-item" data-view="layers">
+        <span class="num">01</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        分层架构
+      </div>
+      <div class="sidebar-item" data-view="filter">
+        <span class="num">02</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+        硬件过滤模拟器
+      </div>
+      <div class="sidebar-item" data-view="timing">
+        <span class="num">03</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        中断时序对比
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">低功耗</div>
+      <div class="sidebar-item" data-view="pn">
+        <span class="num">04</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        PN 选择性唤醒
+      </div>
+      <div class="sidebar-item" data-view="wakeup">
+        <span class="num">05</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        假唤醒排查
+      </div>
+      <div class="sidebar-item" data-view="solutions">
+        <span class="num">06</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707"/></svg>
+        普通 PHY 三方案
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">回顾</div>
+      <div class="sidebar-item" data-view="summary">
+        <span class="num">07</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        知识小结
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+
+    <!-- ===== 视图：概览 ===== -->
+    <section class="view active" id="view-overview">
+      <div class="hero-section">
+        <h1>CAN 收发器"带硬件过滤"和"不带"，到底差在哪？</h1>
+        <p class="hero-sub">CAN 里的"过滤"有三个意思，别再只当成一个了。收发器管"电平"、控制器管"收数据"、PN 收发器管"醒 MCU"。</p>
+        <div class="hero-conclusion">
+          <div class="hc-label">核心结论</div>
+          经典 CAN 收发器<strong>不认报文 ID</strong>，它不做过滤；真正按 ID 过滤的是 <strong>CAN 控制器</strong>；而新一代收发器上的"唤醒过滤"，目的不是收数据，是<strong>省电</strong>。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></span> 两个反直觉的真实场景</h2>
+        <div class="scenario-grid">
+          <div class="scenario-card">
+            <h4>场景一：电瓶亏电</h4>
+            <p>一辆车停了一周没动，电瓶却没电了。查到最后，某个一直挂着电瓶的 ECU 半夜里自己醒了几次——没人碰它。</p>
+          </div>
+          <div class="scenario-card">
+            <h4>场景二：CPU 负载不均</h4>
+            <p>两条 CAN 报文在总线上飞，节点 A 的 CPU 很闲，节点 B 的 CPU 却一直在跑。硬件差不多，差在哪？</p>
+          </div>
+        </div>
+        <p>这两个问题，都绕不开 CAN 里一个常被讲错的概念：<strong>硬件过滤</strong>。把过滤讲错的人，多半是把收发器和控制器混了。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> 三种"过滤"速览</h2>
+        <table class="data-table">
+          <thead><tr><th>角色</th><th>管什么</th><th>过滤目的</th><th>典型器件</th></tr></thead>
+          <tbody>
+            <tr><td><strong style="color:var(--accent-orange)">收发器</strong></td><td>电平转换</td><td>经典款不过滤；PN 款决定是否唤醒 MCU</td><td>TJA1050 / TJA1145</td></tr>
+            <tr><td><strong style="color:var(--accent-gold)">控制器</strong></td><td>数据链路层</td><td>按 ID 决定收不收，降 CPU 负载</td><td>SJA1000 / MCP2515 / bxCAN / M_CAN</td></tr>
+            <tr><td><strong style="color:var(--accent-red)">无/全开过滤</strong></td><td>CPU 软件过滤</td><td>全收后软件判断，调试/嗅探用</td><td>简单控制器或掩码全 1</td></tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <span class="tip-label">关键：</span>工程上说的"带硬件过滤"，绝大多数指 <strong>CAN 控制器带了硬件验收滤波</strong>。而"收发器带过滤"特指支持局部组网/选择性唤醒（PN）的收发器。
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：分层架构 ===== -->
+    <section class="view" id="view-layers">
+      <div class="page-header">
+        <h1>过滤到底发生在哪一层？</h1>
+        <p class="subtitle">按 ISO 11898 分层，点击每一层查看详细职责。过滤不在收发器，在控制器。</p>
+      </div>
+
+      <div class="layer-diagram">
+        <div class="layer-block layer-mcu" onclick="toggleLayer(this)">
+          <div class="layer-top">
+            <div class="layer-name">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+              MCU（应用层）
+            </div>
+            <span class="layer-tag">应用</span>
+          </div>
+          <div class="layer-desc">运行应用代码，处理收到的报文数据，发送指令。</div>
+          <div class="layer-detail">
+            <p>MCU 通过中断或轮询从 CAN 控制器的 RXFIFO 读取报文。<strong>带硬件过滤时</strong>，只有匹配的帧才进 FIFO、才触发中断，CPU 负载低。<strong>不带过滤时</strong>，所有帧都进 FIFO，CPU 必须在 ISR 里逐个读出来再软件判断 ID。</p>
+          </div>
+        </div>
+        <div class="layer-arrow">&#8597; TXD/RXD（SPI/并行）</div>
+        <div class="layer-block layer-mac" onclick="toggleLayer(this)">
+          <div class="layer-top">
+            <div class="layer-name">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9z"/></svg>
+              CAN 控制器（LLC + MAC 数据链路层）
+            </div>
+            <span class="layer-tag">过滤在这里</span>
+          </div>
+          <div class="layer-desc">组帧/解帧、CRC、位填充、<strong>验收滤波（Acceptance Filter）</strong>。</div>
+          <div class="layer-detail">
+            <p>控制器内部有验收码（ACR/Filter）和验收屏蔽（AMR/Mask）寄存器。每收到一帧，硬件自动比较：<code>(ID &amp; Mask) == (ACR &amp; Mask)</code>。相等则存入 RXFIFO 并触发中断；不等则<strong>硬件直接丢弃</strong>，不进 FIFO、不中断 CPU。</p>
+            <p>不同控制器的过滤资源差异很大：SJA1000 有 ACR0-3+AMR0-3；MCP2515 有 2 屏蔽+6 过滤器；STM32 bxCAN 有 28 个过滤器组；TC3xx MCMCAN（Bosch M_CAN）有独立的过滤元素配置，且<strong>掩码极性与 SJA1000 相反</strong>。</p>
+          </div>
+        </div>
+        <div class="layer-arrow">&#8597; TXD/RXD（逻辑电平）</div>
+        <div class="layer-block layer-phy" onclick="toggleLayer(this)">
+          <div class="layer-top">
+            <div class="layer-name">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              CAN 收发器（PMA 物理层）
+            </div>
+            <span class="layer-tag">电平转换</span>
+          </div>
+          <div class="layer-desc">把 TXD/RXD 逻辑电平变成 CANH/CANL 差分信号，再变回来。经典款是"哑"器件。</div>
+          <div class="layer-detail">
+            <p><strong>经典收发器</strong>（TJA1050/TJA1042/TJA1043）：只做电平转换，<strong>不解析报文 ID，没有过滤能力</strong>。休眠时靠 WAKE 引脚或"唤醒模式脉冲"唤醒，基本是"总线有活动就醒"。</p>
+            <p><strong>PN 收发器</strong>（TJA1145/TJA1445）：内部有硬件比较逻辑+唤醒过滤器，Sleep 模式下仍监听总线，只有匹配预设 ID 的唤醒帧才拉高 INH 引脚给 MCU 上电。<strong>目的是省电，不是收数据</strong>。</p>
+          </div>
+        </div>
+        <div class="layer-arrow">&#8597; CANH / CANL（差分信号）</div>
+        <div class="layer-block layer-bus" onclick="toggleLayer(this)">
+          <div class="layer-top">
+            <div class="layer-name">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              CAN 总线（CANH / CANL）
+            </div>
+            <span class="layer-tag">传输介质</span>
+          </div>
+          <div class="layer-desc">双绞线，差分信号传输，所有节点共享。报文广播到总线上所有节点。</div>
+          <div class="layer-detail">
+            <p>总线是广播介质——一帧报文发出来，所有节点的收发器都能收到。<strong>验收滤波只决定"本节点收不收"，不影响报文照常广播到总线上</strong>。它只防"不相关帧进 FIFO"，不防链路层错误（那靠 CAN 自带的 5 种错误检测+错误帧）。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> 一句话记住</h2>
+        <div class="one-liner">
+          <div class="ol-title">分层职责</div>
+          <div class="ol-text"><strong>收发器</strong>管"电平"、<strong>控制器</strong>管"收数据"、<strong>PN 收发器</strong>管"醒 MCU"——三者是不同层面的事，别张冠李戴。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：过滤模拟器 ===== -->
+    <section class="view" id="view-filter">
+      <div class="page-header">
+        <h1>硬件验收滤波模拟器</h1>
+        <p class="subtitle">配置验收码（ACR）和掩码（Mask），输入报文 ID，实时查看每一位的匹配过程。可切换 SJA1000 与 M_CAN 极性。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></span> 交互配置</h2>
+
+        <div class="polarity-toggle">
+          <div class="polarity-option active" data-polarity="sja" onclick="setPolarity('sja')">SJA1000 / STM32 / MCP2515</div>
+          <div class="polarity-option" data-polarity="mcan" onclick="setPolarity('mcan')">Bosch M_CAN (TC3xx)</div>
+        </div>
+        <div class="tip-box" id="polarity-tip">
+          <span class="tip-label">SJA1000 极性：</span>掩码位 = <strong>1</strong> → "不关心"（通配）；掩码位 = <strong>0</strong> → 必须精确匹配验收码对应位。
+        </div>
+
+        <div class="filter-sim">
+          <div class="sim-row">
+            <div class="sim-field">
+              <label>验收码 ACR（11位标准ID）</label>
+              <input type="text" id="input-acr" value="0x100" maxlength="6">
+            </div>
+            <div class="sim-field">
+              <label>验收掩码 AMR</label>
+              <input type="text" id="input-amr" value="0x7F0" maxlength="6">
+            </div>
+            <div class="sim-field">
+              <label>收到的报文 ID</label>
+              <input type="text" id="input-id" value="0x101" maxlength="6">
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="sim-btn" onclick="runFilterTest()">测试过滤</button>
+              <button class="sim-btn secondary" onclick="loadPreset('only100')">只收0x100</button>
+              <button class="sim-btn secondary" onclick="loadPreset('all')">全收</button>
+            </div>
+          </div>
+
+          <div class="bit-label">
+            <span>位匹配可视化（11 位 ID，从高位到低位）</span>
+            <span class="legend">
+              <span><span class="dot" style="background:var(--accent-green)"></span>匹配</span>
+              <span><span class="dot" style="background:var(--accent-red)"></span>不匹配</span>
+              <span><span class="dot" style="background:var(--accent-gold)"></span>不关心(DC)</span>
+            </span>
+          </div>
+          <div class="bit-display" id="bit-acr"></div>
+          <div class="bit-display" id="bit-mask"></div>
+          <div class="bit-display" id="bit-id"></div>
+          <div class="bit-display" id="bit-result"></div>
+
+          <div class="filter-result" id="filter-result"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></span> 各芯片过滤资源对比</h2>
+        <table class="data-table">
+          <thead><tr><th>控制器</th><th>过滤资源</th><th>特点</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SJA1000</strong></td><td>ACR0-3 + AMR0-3</td><td>BasicCAN 单滤波；PeliCAN 单滤波(1×32bit) / 双滤波(2×16bit)</td></tr>
+            <tr><td><strong>MCP2515</strong></td><td>2 屏蔽 RXM0/1 + 6 验收过滤器 RXF0-5</td><td>屏蔽+过滤器灵活组合，覆盖标准/扩展帧</td></tr>
+            <tr><td><strong>STM32 bxCAN</strong></td><td>28 个过滤器组</td><td>每组可设 16/32bit、掩码/列表模式，可指定进 FIFO0 或 FIFO1</td></tr>
+            <tr><td><strong>TC3xx MCMCAN</strong></td><td>Bosch M_CAN 内核，过滤元素列表</td><td>掩码极性与 SJA1000 <strong style="color:var(--accent-red)">相反</strong>，移植最容易整反</td></tr>
+          </tbody>
+        </table>
+        <div class="danger-box">
+          <span class="danger-label">移植坑：</span>SJA1000/STM32/MCP2515 是"掩码位=1 不关心"；Bosch M_CAN（TC3xx）正好相反——"掩码位=1 才必须精确匹配、=0 才是通配"。从老芯片搬过滤表到 MCMCAN，最容易整反。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg></span> 带硬件过滤的好处</h2>
+        <ul>
+          <li>CPU 只在相关帧到达时才被打断，<strong>负载低</strong></li>
+          <li>总线负载高时也不会被无关帧撑爆 FIFO 而<strong>丢帧</strong></li>
+          <li>实时性好，<strong>中断次数可控</strong></li>
+        </ul>
+        <h3>不带过滤的代价</h3>
+        <ul>
+          <li>总线上所有帧都进 RXFIFO，CPU 必须在中断里逐个读出来再软件判断</li>
+          <li>CPU 占用高、中断频繁</li>
+          <li>FIFO/RAM 容易被无关帧占满，进而溢出丢帧（总线负载高时尤其致命）</li>
+          <li>实时性下降</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===== 视图：时序对比 ===== -->
+    <section class="view" id="view-timing">
+      <div class="page-header">
+        <h1>带过滤 vs 不带过滤：中断时序对比</h1>
+        <p class="subtitle">总线 500kbps，飞过三帧：0x101（要收）、0x205（不要）、0x1A0（不要）。点击播放看中断差异。</p>
+      </div>
+
+      <div class="card">
+        <div class="timing-controls">
+          <button class="sim-btn" onclick="playTiming()">播放动画</button>
+          <button class="sim-btn secondary" onclick="resetTiming()">重置</button>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">每帧约 0.2ms，观察 RX 中断（橙色）触发次数</span>
+        </div>
+
+        <div class="timing-compare">
+          <div class="timing-panel with-filter">
+            <h4>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+              带硬件过滤
+            </h4>
+            <div class="timeline" id="tl-with">
+              <div class="tl-axis"></div>
+              <div class="tl-axis-label" style="left:0%">0ms</div>
+              <div class="tl-axis-label" style="left:33%">0.2ms</div>
+              <div class="tl-axis-label" style="left:66%">0.4ms</div>
+              <div class="tl-axis-label" style="left:100%">0.6ms</div>
+            </div>
+            <div class="timing-stats">
+              <div class="stat"><span class="stat-val" id="stat-with-isr">0</span><span class="stat-lbl">RX 中断次数</span></div>
+              <div class="stat"><span class="stat-val" id="stat-with-cpu">0%</span><span class="stat-lbl">CPU 处理占比</span></div>
+              <div class="stat"><span class="stat-val" id="stat-with-drop">0</span><span class="stat-lbl">硬件丢弃</span></div>
+            </div>
+          </div>
+
+          <div class="timing-panel without-filter">
+            <h4>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              不带硬件过滤（全收）
+            </h4>
+            <div class="timeline" id="tl-without">
+              <div class="tl-axis"></div>
+              <div class="tl-axis-label" style="left:0%">0ms</div>
+              <div class="tl-axis-label" style="left:33%">0.2ms</div>
+              <div class="tl-axis-label" style="left:66%">0.4ms</div>
+              <div class="tl-axis-label" style="left:100%">0.6ms</div>
+            </div>
+            <div class="timing-stats">
+              <div class="stat"><span class="stat-val" id="stat-without-isr">0</span><span class="stat-lbl">RX 中断次数</span></div>
+              <div class="stat"><span class="stat-val" id="stat-without-cpu">0%</span><span class="stat-lbl">CPU 处理占比</span></div>
+              <div class="stat"><span class="stat-val" id="stat-without-drop">0</span><span class="stat-lbl">软件丢弃</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> 时序解读</h2>
+        <p>没有硬件过滤时，控制器对每一帧都做同样的事：帧在总线上传输（约 0.2ms）→ 塞进 RXFIFO → 立刻拉 RX 中断 → MCU 进 ISR 读帧、读 ID → 软件比对 → 匹配则处理，不匹配则丢弃。</p>
+        <div class="warn-box">
+          <span class="warn-label">关键：</span>哪怕这帧最后要被丢掉，MCU 也已经进了 ISR、读了 FIFO、比了 ID。三帧里只有一帧是自己的，但 MCU 进了<strong>三次中断</strong>、比了三次 ID。总线一忙，这些 ISR 会排队，FIFO 被无关帧占满就溢出丢帧。
+        </div>
+        <p>如果带硬件过滤，只有 0x101 会触发中断，MCU 只进<strong>一次 ISR</strong>。0x205 和 0x1A0 在控制器硬件层就被丢弃了，根本不进 FIFO、不中断 CPU。</p>
+      </div>
+    </section>
+
+    <!-- ===== 视图：PN 唤醒 ===== -->
+    <section class="view" id="view-pn">
+      <div class="page-header">
+        <h1>PN 收发器与选择性唤醒（TJA1145）</h1>
+        <p class="subtitle">"收发器带过滤"是较新的说法，特指支持 ISO 11898-6 局部组网的收发器。目的不是收数据，是省电。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span> 普通收发器 vs PN 收发器</h2>
+        <table class="data-table">
+          <thead><tr><th>特性</th><th>普通收发器 (TJA1050/1042/1043)</th><th>PN 收发器 (TJA1145/1445)</th></tr></thead>
+          <tbody>
+            <tr><td>物理层转换</td><td>有</td><td>有</td></tr>
+            <tr><td>报文 ID 解析</td><td>无（纯 PHY）</td><td>有（唤醒过滤器）</td></tr>
+            <tr><td>休眠唤醒方式</td><td>WAKE 引脚 / 唤醒模式脉冲</td><td>按 ID（+可选 DLC/数据）选择性唤醒</td></tr>
+            <tr><td>唤醒精度</td><td>"总线有活动就醒"</td><td>只匹配预设 ID 才醒</td></tr>
+            <tr><td>配置接口</td><td>引脚</td><td>SPI 寄存器（ID + 掩码 + DLC/数据掩码）</td></tr>
+            <tr><td>FD-passive</td><td>无</td><td>TJA1145/FD 有（Sleep 忽略 FD 帧）</td></tr>
+            <tr><td>静态电流</td><td>约 12.8 mA</td><td>约 <strong style="color:var(--accent-green)">0.7 mA</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span> PN 唤醒工作流程</h2>
+        <ol>
+          <li>MCU 通过 SPI 配置 TJA1145 的唤醒过滤器：ID 寄存器 + ID 掩码寄存器（+可选 DLC/数据掩码）</li>
+          <li>MCU 进入 Sleep，TJA1145 也进入 Sleep 模式，但仍监听总线</li>
+          <li>总线上有帧到来时，TJA1145 硬件比较 ID 是否匹配预设</li>
+          <li>匹配 → 拉高 <code>INH</code> 引脚 → 给 MCU/外置 LDO 上电 → 唤醒节点</li>
+          <li>不匹配 → 继续 Sleep，不唤醒 MCU</li>
+        </ol>
+        <div class="tip-box">
+          <span class="tip-label">掩码极性：</span>TJA1145 的唤醒过滤器掩码位 = 1 同样是"不关心"，和 SJA1000 一致。
+        </div>
+        <div class="warn-box">
+          <span class="warn-label">注意：</span>过滤器配置在<strong>易失性寄存器</strong>里，收发器掉电后需 MCU 重新通过 SPI 配置。每次上电或唤醒后，都要重新配置 PN 寄存器再进低功耗。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span> 实测效果</h2>
+        <div class="scenario-grid">
+          <div class="scenario-card" style="border-left-color:var(--accent-red)">
+            <h4 style="color:var(--accent-red)">普通收发器休眠</h4>
+            <p>静态电流约 <strong>12.8 mA</strong>，任何总线活动都唤醒，非必要唤醒频繁。</p>
+          </div>
+          <div class="scenario-card" style="border-left-color:var(--accent-green)">
+            <h4 style="color:var(--accent-green)">PN 收发器选择性唤醒</h4>
+            <p>静态电流约 <strong>0.7 mA</strong>，非必要唤醒减少约 <strong>95%</strong>。</p>
+          </div>
+        </div>
+        <p>兼容 ISO 11898-6 局部组网标准。TJA1145/FD 变体还有 <strong>FD-passive</strong>：Sleep 模式直接忽略 CAN FD 帧，避免被 FD 通信误唤醒——这点对假唤醒很关键。</p>
+      </div>
+    </section>
+
+    <!-- ===== 视图：假唤醒 ===== -->
+    <section class="view" id="view-wakeup">
+      <div class="page-header">
+        <h1>假唤醒排查清单</h1>
+        <p class="subtitle">节点本不该醒，却因为无关帧、噪声或配置问题退出了休眠，白白耗电。常电节点电瓶亏电的头号原因之一。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></span> 7 大常见原因与解法（点击展开）</h2>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">CAN FD 帧误唤醒</span>
+            <span class="wq-tag" style="background:var(--accent-red-dim);color:var(--accent-red)">FD</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>普通 PN 收发器在 Sleep 监听时，收到 FD 帧（FDF 隐性、BRS 等），可能被误判为有效唤醒帧。</p>
+            <div class="solution">解法：</div>
+            <p>用带 <strong>FD-passive</strong> 的 TJA1145/FD，Sleep 模式直接忽略 FD 帧。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">唤醒模式（wake-up pattern）误触发</span>
+            <span class="wq-tag" style="background:var(--accent-orange-dim);color:var(--accent-orange)">配置</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>只开了 CAN 唤醒使能（CWE=1），却没使能选择性唤醒（CPNC=0）或 PN 配置无效（PNCOK=0），任何标准唤醒模式脉冲都会唤醒。</p>
+            <div class="solution">解法：</div>
+            <p>正确使能选择性唤醒（CPNC=1）并把 PN 寄存器配好（拿到 PNCOK=1）。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">总线噪声 / 毛刺 / EMC 干扰</span>
+            <span class="wq-tag" style="background:var(--accent-purple-dim);color:var(--accent-purple)">硬件</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>地弹、短促毛刺被误判为唤醒模式或帧。</p>
+            <div class="solution">解法：</div>
+            <p>做好屏蔽与接地、去抖、正确总线偏置，满足 ISO 7637-3 / ISO 11452 的抗扰要求。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">ID 掩码配太宽</span>
+            <span class="wq-tag" style="background:var(--accent-gold-dim);color:var(--accent-gold)">掩码</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>掩码 1 太多，很多不相关 ID 都能匹配，导致频繁唤醒；掩码全 1 甚至退化成"边沿触发"，任何相关格式帧都醒。</p>
+            <div class="solution">解法：</div>
+            <p>按需收紧掩码，只匹配网络管理（NM）报文所在 ID 段。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">配置丢失 / 没配</span>
+            <span class="wq-tag" style="background:var(--accent-orange-dim);color:var(--accent-orange)">配置</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>TJA1145 的过滤器在易失寄存器里，断电后清空；若 MCU 没重新 SPI 配置就进 Sleep，默认状态可能"全收"。</p>
+            <div class="solution">解法：</div>
+            <p>每次上电或唤醒后，都重新配置 PN 寄存器再进低功耗。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">只配 ID 没配 DLC/数据</span>
+            <span class="wq-tag" style="background:var(--accent-gold-dim);color:var(--accent-gold)">精度</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>同 ID 但内容不符的帧也唤醒。</p>
+            <div class="solution">解法：</div>
+            <p>把 DLC + 数据掩码也配上，进一步收窄唤醒条件。</p>
+          </div></div>
+        </div>
+
+        <div class="wakeup-item">
+          <div class="wakeup-question" onclick="toggleWakeup(this)">
+            <span class="wq-text">网络管理报文风暴</span>
+            <span class="wq-tag" style="background:var(--accent-blue-dim);color:var(--accent-blue)">NM</span>
+            <svg class="wakeup-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="wakeup-answer"><div class="wakeup-answer-inner">
+            <div class="cause">原因：</div>
+            <p>NM 设计不当，唤醒后不及时休眠、节点互相唤醒。</p>
+            <div class="solution">解法：</div>
+            <p>规范 NM 超时与休眠策略，避免唤醒风暴。</p>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> 规避假唤醒一句话</h2>
+        <div class="one-liner">
+          <div class="ol-title">最佳实践</div>
+          <div class="ol-text"><strong>PN 收发器</strong> + <strong>FD-passive 型号</strong> + <strong>窄掩码</strong>（只认 NM 报文 ID）+ <strong>每次上电重配 SPI</strong> + <strong>良好 EMC 设计</strong>，基本能灭掉假唤醒。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：方案取舍 ===== -->
+    <section class="view" id="view-solutions">
+      <div class="page-header">
+        <h1>普通 PHY 板子的三条现实路子</h1>
+        <p class="subtitle">如果你的收发器是 TJA1043 这种普通 PHY，深休眠下无法按 ID 选择性唤醒——这是硬件限制，不是配置技巧。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></span> 为什么深休眠下 MCMCAN 挡不住？</h2>
+        <p>节点进深休眠，MCMCAN 的时钟会被停掉（<code>CCCR.CSR</code> 时钟停止，硬件回 <code>CCCR.CSA=1</code> 确认）。这时候 MCMCAN 的验收过滤器<strong>根本没在跑</strong>——控制器都没上电，谈不上挡帧。</p>
+        <p>真正守在总线边上的是收发器。普通收发器只看"有没有活动"，看不懂 ID。总线上来一帧 0x100，它照样把 RXD 拉活、把 MCU 叫醒，跟别的帧没区别。</p>
+        <div class="danger-box">
+          <span class="danger-label">结论：</span>深休眠 + 普通收发器，0x100 来了照样醒你，MCMCAN 那时是"聋"的，挡不住。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></span> 三套方案对比</h2>
+        <div class="solution-grid">
+          <div class="solution-card a">
+            <span class="sol-badge">最常用</span>
+            <h4>路子 A：深休眠 + 假唤醒再睡</h4>
+            <div class="sol-desc">深休眠、收发器 Standby，任何帧都唤醒。MCU 醒来后读 ID，发现不是 NM 报文就立刻重新进休眠。</div>
+            <div class="sol-specs">
+              <div class="spec-row"><span class="spec-lbl">0x100 不唤醒？</span><span class="spec-val bad">做不到，靠软件兜</span></div>
+              <div class="spec-row"><span class="spec-lbl">功耗</span><span class="spec-val good">最低（μA 级）</span></div>
+              <div class="spec-row"><span class="spec-lbl">硬件要求</span><span class="spec-val">普通 PHY 即可</span></div>
+              <div class="spec-row"><span class="spec-lbl">代价</span><span class="spec-val mid">白醒再睡的开销</span></div>
+            </div>
+          </div>
+          <div class="solution-card b">
+            <span class="sol-badge">费电</span>
+            <h4>路子 B：轻休眠 + MCMCAN 保活</h4>
+            <div class="sol-desc">收发器保持 NORMAL 模式，MCMCAN 时钟不关、验收过滤器照常跑，把 0x100 配进"拒绝"。MCU 睡在等 RX 中断上。</div>
+            <div class="sol-specs">
+              <div class="spec-row"><span class="spec-lbl">0x100 不唤醒？</span><span class="spec-val good">能做到</span></div>
+              <div class="spec-row"><span class="spec-lbl">功耗</span><span class="spec-val bad">较高（mA 级）</span></div>
+              <div class="spec-row"><span class="spec-lbl">硬件要求</span><span class="spec-val">普通 PHY，不能 Standby</span></div>
+              <div class="spec-row"><span class="spec-lbl">前提</span><span class="spec-val mid">唤醒源必须是 MCMCAN RX 中断</span></div>
+            </div>
+          </div>
+          <div class="solution-card c">
+            <span class="sol-badge">正解</span>
+            <h4>路子 C：换 PN 收发器</h4>
+            <div class="sol-desc">直接上 TJA1145 这类 PN 收发器，把 ID 判定下沉到收发器，μA 级就能按 ID 唤醒。架构层面的事，硬件定型后改不了。</div>
+            <div class="sol-specs">
+              <div class="spec-row"><span class="spec-lbl">0x100 不唤醒？</span><span class="spec-val good">能做到</span></div>
+              <div class="spec-row"><span class="spec-lbl">功耗</span><span class="spec-val good">低（μA 级）</span></div>
+              <div class="spec-row"><span class="spec-lbl">硬件要求</span><span class="spec-val bad">必须换 PN 收发器</span></div>
+              <div class="spec-row"><span class="spec-lbl">时机</span><span class="spec-val mid">改版或新板子</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> 落到你的需求</h2>
+        <p>"唤醒后需要收 0x100"这一半一直没问题——醒来把 0x100 放进 MCMCAN 验收表放行即可。</p>
+        <p>"休眠不希望 0x100 唤醒"才是矛盾点：</p>
+        <ul>
+          <li>要<strong>深休眠省电</strong> → 走 A（容忍假唤醒，醒来软件再睡）</li>
+          <li>要<strong>严格不被吵醒</strong> → 走 B（轻休眠费电，MCMCAN 保活过滤）</li>
+          <li>想<strong>深休眠又按 ID 选择性</strong> → 走 C（换 PN 收发器）</li>
+        </ul>
+        <div class="tip-box">
+          <span class="tip-label">提醒：</span>前面讲的 TJA1145 选择性唤醒是"有 PN 收发器时"的解法；如果你的板子只有普通 PHY，深休眠的 ID 选择性唤醒靠 MCMCAN 单枪匹马解决不了，得在上面三套方案里选。
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：总结 ===== -->
+    <section class="view" id="view-summary">
+      <div class="page-header">
+        <h1>知识小结</h1>
+        <p class="subtitle">核心要点速查表，一页回顾全部知识点。</p>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></span> 三种角色对比</h2>
+        <div class="role-compare">
+          <div class="role-card controller">
+            <h4 style="color:var(--accent-gold)">带验收滤波的控制器</h4>
+            <div class="role-row"><span class="role-lbl">过滤位置</span><span class="role-val">MCU 内 CAN 控制器</span></div>
+            <div class="role-row"><span class="role-lbl">过滤目的</span><span class="role-val">只收相关帧、降 CPU</span></div>
+            <div class="role-row"><span class="role-lbl">匹配对象</span><span class="role-val">报文 ID（+可选 RTR/数据）</span></div>
+            <div class="role-row"><span class="role-lbl">配置接口</span><span class="role-val">控制器寄存器</span></div>
+            <div class="role-row"><span class="role-lbl">功耗影响</span><span class="role-val">无直接</span></div>
+            <div class="role-row"><span class="role-lbl">丢帧风险</span><span class="role-val" style="color:var(--accent-green)">低</span></div>
+          </div>
+          <div class="role-card no-filter">
+            <h4 style="color:var(--accent-red)">无/全开过滤的控制器</h4>
+            <div class="role-row"><span class="role-lbl">过滤位置</span><span class="role-val">MCU 内 CAN 控制器</span></div>
+            <div class="role-row"><span class="role-lbl">过滤目的</span><span class="role-val">监听全部（调试用）</span></div>
+            <div class="role-row"><span class="role-lbl">匹配对象</span><span class="role-val">全部接收</span></div>
+            <div class="role-row"><span class="role-lbl">配置接口</span><span class="role-val">同左（掩码全 1）</span></div>
+            <div class="role-row"><span class="role-lbl">功耗影响</span><span class="role-val">无直接</span></div>
+            <div class="role-row"><span class="role-lbl">丢帧风险</span><span class="role-val" style="color:var(--accent-red)">高（负载大时）</span></div>
+          </div>
+          <div class="role-card pn">
+            <h4 style="color:var(--accent-orange)">带 PN 的收发器 (TJA1145)</h4>
+            <div class="role-row"><span class="role-lbl">过滤位置</span><span class="role-val">总线侧收发器</span></div>
+            <div class="role-row"><span class="role-lbl">过滤目的</span><span class="role-val">决定是否唤醒 MCU、省电</span></div>
+            <div class="role-row"><span class="role-lbl">匹配对象</span><span class="role-val">唤醒帧 ID（+可选 DLC/数据）</span></div>
+            <div class="role-row"><span class="role-lbl">配置接口</span><span class="role-val">SPI 寄存器</span></div>
+            <div class="role-row"><span class="role-lbl">功耗影响</span><span class="role-val" style="color:var(--accent-green)">大幅降低休眠电流</span></div>
+            <div class="role-row"><span class="role-lbl">丢帧风险</span><span class="role-val">不涉及数据接收</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card"><h4>经典收发器</h4><p>是"哑"的，只管电平转换，不认 ID。TJA1050/1042/1043 没有过滤能力。</p></div>
+        <div class="summary-card"><h4>控制器验收滤波</h4><p>管"收不收数据"，用来降 CPU、防丢帧。ACR+AMR 硬件比较，不匹配直接丢弃。</p></div>
+        <div class="summary-card"><h4>PN 收发器</h4><p>管"醒不醒 MCU"，用来省电。TJA1145 按 ID 选择性唤醒，静态电流 0.7mA。</p></div>
+        <div class="summary-card"><h4>掩码极性</h4><p>SJA1000/STM32：掩码=1 不关心；M_CAN(TC3xx)：相反，掩码=1 必须匹配。移植别整反。</p></div>
+        <div class="summary-card"><h4>假唤醒</h4><p>常电节点电瓶亏电头号原因。靠 FD-passive + 窄掩码 + 重配 SPI + 良好 EMC 化解。</p></div>
+        <div class="summary-card"><h4>普通 PHY 深休眠</h4><p>无法按 ID 选择性唤醒。三选一：假唤醒再睡 / 轻休眠保活 / 换 PN 收发器。</p></div>
+        <div class="summary-card"><h4>量产 ECU</h4><p>用控制器硬件验收滤波，按功能分配 ID 段，配好掩码，别让 CPU 去"软过滤"。</p></div>
+        <div class="summary-card"><h4>调试/嗅探</h4><p>临时把过滤设成"全收"监听整网。量产节点一般不这么做。</p></div>
+        <div class="summary-card"><h4>两层边界</h4><p>验收滤波只决定"收不收"，不影响报文广播；不防链路层错误（那靠错误检测+错误帧）。</p></div>
+      </div>
+
+      <div class="one-liner">
+        <div class="ol-title">一句话记住</div>
+        <div class="ol-text">
+          <strong>收发器</strong>管"电平"、<strong>控制器</strong>管"收数据"、<strong>PN 收发器</strong>管"醒 MCU"——CAN 里的"过滤"有三个意思，别再只当成一个了；而"深休眠按 ID 唤醒"只有第三个（且得是 PN 收发器）才办得到。
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+  <span id="toast-text">操作完成</span>
+</div>
+
+<script>
+// ===== 状态 =====
+const state = {
+  currentView: 'overview',
+  polarity: 'sja',
+  timingPlaying: false,
+};
+
+// ===== 导航 =====
+function switchView(view) {
+  state.currentView = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.querySelectorAll('.ribbon-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelectorAll('.sidebar-item').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.querySelector('.main-content').scrollTop = 0;
+}
+document.querySelectorAll('.ribbon-tab, .sidebar-item').forEach(el => {
+  el.addEventListener('click', () => { if (el.dataset.view) switchView(el.dataset.view); });
+});
+
+// ===== 分层架构 =====
+function toggleLayer(el) {
+  const wasActive = el.classList.contains('active');
+  document.querySelectorAll('.layer-block').forEach(b => b.classList.remove('active'));
+  if (!wasActive) el.classList.add('active');
+}
+
+// ===== 过滤模拟器 =====
+function parseHex(str) {
+  str = str.trim().toLowerCase();
+  if (str.startsWith('0x')) str = str.slice(2);
+  return parseInt(str, 16) || 0;
+}
+
+function setPolarity(p) {
+  state.polarity = p;
+  document.querySelectorAll('.polarity-option').forEach(o => {
+    o.classList.toggle('active', o.dataset.polarity === p);
+  });
+  const tip = document.getElementById('polarity-tip');
+  if (p === 'sja') {
+    tip.innerHTML = '<span class="tip-label">SJA1000 极性：</span>掩码位 = <strong>1</strong> → "不关心"（通配）；掩码位 = <strong>0</strong> → 必须精确匹配验收码对应位。';
+  } else {
+    tip.innerHTML = '<span class="tip-label">M_CAN 极性（相反）：</span>掩码位 = <strong>1</strong> → 必须精确匹配；掩码位 = <strong>0</strong> → "不关心"（通配）。';
+  }
+  runFilterTest();
+}
+
+function loadPreset(type) {
+  if (type === 'only100') {
+    document.getElementById('input-acr').value = '0x100';
+    document.getElementById('input-amr').value = '0x000';
+    document.getElementById('input-id').value = '0x100';
+  } else if (type === 'all') {
+    document.getElementById('input-acr').value = '0x000';
+    document.getElementById('input-amr').value = '0x7FF';
+    document.getElementById('input-id').value = '0x101';
+  }
+  runFilterTest();
+}
+
+function renderBits(containerId, value, mask, type) {
+  const container = document.getElementById(containerId);
+  let html = '';
+  for (let i = 10; i >= 0; i--) {
+    const bit = (value >> i) & 1;
+    const maskBit = (mask >> i) & 1;
+    let cls = 'bit-cell bit-' + bit;
+    if (type === 'mask') {
+      // 掩码显示：SJA模式 1=DC(金), 0=必须匹配; M_CAN相反
+      if (state.polarity === 'sja') {
+        cls = maskBit ? 'bit-cell bit-dc' : 'bit-cell bit-0';
+      } else {
+        cls = maskBit ? 'bit-cell bit-1' : 'bit-cell bit-dc';
+      }
+    }
+    html += '<div class="' + cls + '">' + bit + '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function runFilterTest() {
+  const acr = parseHex(document.getElementById('input-acr').value) & 0x7FF;
+  const amr = parseHex(document.getElementById('input-amr').value) & 0x7FF;
+  const id = parseHex(document.getElementById('input-id').value) & 0x7FF;
+
+  // 渲染位
+  renderBits('bit-acr', acr, amr, 'acr');
+  renderBits('bit-mask', amr, amr, 'mask');
+  renderBits('bit-id', id, amr, 'id');
+
+  // 计算匹配
+  // SJA: (ID & Mask) == (ACR & Mask), mask=1表示不关心
+  // M_CAN: mask=1表示必须匹配, 即有效比较位是mask=1的位置
+  let pass = true;
+  let matchCount = 0, dcCount = 0, mismatchCount = 0;
+  let resultHtml = '';
+
+  for (let i = 10; i >= 0; i--) {
+    const acrBit = (acr >> i) & 1;
+    const idBit = (id >> i) & 1;
+    const maskBit = (amr >> i) & 1;
+
+    let isDc, mustMatch;
+    if (state.polarity === 'sja') {
+      isDc = (maskBit === 1);
+      mustMatch = (maskBit === 0);
+    } else {
+      isDc = (maskBit === 0);
+      mustMatch = (maskBit === 1);
+    }
+
+    if (isDc) {
+      resultHtml += '<div class="bit-cell bit-dc">X</div>';
+      dcCount++;
+    } else if (acrBit === idBit) {
+      resultHtml += '<div class="bit-cell bit-match">' + idBit + '</div>';
+      matchCount++;
+    } else {
+      resultHtml += '<div class="bit-cell bit-mismatch">' + idBit + '</div>';
+      mismatchCount++;
+      pass = false;
+    }
+  }
+  document.getElementById('bit-result').innerHTML = resultHtml;
+
+  const result = document.getElementById('filter-result');
+  if (pass) {
+    result.className = 'filter-result pass';
+    result.innerHTML = 'PASS — 报文被接收，存入 RXFIFO 并触发 RX 中断<div class="fr-detail">匹配 ' + matchCount + ' 位 / 不关心 ' + dcCount + ' 位 / 不匹配 0 位</div>';
+  } else {
+    result.className = 'filter-result fail';
+    result.innerHTML = 'FAIL — 硬件直接丢弃，不进 FIFO、不中断 CPU<div class="fr-detail">匹配 ' + matchCount + ' 位 / 不关心 ' + dcCount + ' 位 / 不匹配 ' + mismatchCount + ' 位</div>';
+  }
+}
+
+// ===== 时序动画 =====
+const frames = [
+  { id: '0x101', wanted: true, start: 2, width: 28 },
+  { id: '0x205', wanted: false, start: 35, width: 28 },
+  { id: '0x1A0', wanted: false, start: 68, width: 28 },
+];
+
+function resetTiming() {
+  state.timingPlaying = false;
+  ['tl-with', 'tl-without'].forEach(id => {
+    const tl = document.getElementById(id);
+    tl.querySelectorAll('.tl-frame, .tl-isr').forEach(el => el.remove());
+  });
+  document.getElementById('stat-with-isr').textContent = '0';
+  document.getElementById('stat-with-cpu').textContent = '0%';
+  document.getElementById('stat-with-drop').textContent = '0';
+  document.getElementById('stat-without-isr').textContent = '0';
+  document.getElementById('stat-without-cpu').textContent = '0%';
+  document.getElementById('stat-without-drop').textContent = '0';
+}
+
+function playTiming() {
+  if (state.timingPlaying) return;
+  state.timingPlaying = true;
+  resetTiming();
+
+  let withIsr = 0, withoutIsr = 0, withDrop = 0, withoutDrop = 0;
+
+  frames.forEach((frame, idx) => {
+    setTimeout(() => {
+      // 带过滤
+      const tlWith = document.getElementById('tl-with');
+      const f1 = document.createElement('div');
+      f1.className = 'tl-frame ' + (frame.wanted ? 'frame-ok' : 'frame-no');
+      f1.style.left = frame.start + '%';
+      f1.style.width = frame.width + '%';
+      f1.style.top = '20px';
+      f1.textContent = frame.id + (frame.wanted ? ' (收)' : ' (丢)');
+      tlWith.appendChild(f1);
+
+      if (frame.wanted) {
+        const isr = document.createElement('div');
+        isr.className = 'tl-isr active';
+        isr.style.left = (frame.start + frame.width / 2) + '%';
+        isr.style.top = '55px';
+        isr.style.height = '50px';
+        tlWith.appendChild(isr);
+        withIsr++;
+      } else {
+        withDrop++;
+      }
+      document.getElementById('stat-with-isr').textContent = withIsr;
+      document.getElementById('stat-with-drop').textContent = withDrop;
+      document.getElementById('stat-with-cpu').textContent = Math.round(withIsr / 3 * 100) + '%';
+
+      // 不带过滤
+      const tlWithout = document.getElementById('tl-without');
+      const f2 = document.createElement('div');
+      f2.className = 'tl-frame ' + (frame.wanted ? 'frame-ok' : 'frame-no');
+      f2.style.left = frame.start + '%';
+      f2.style.width = frame.width + '%';
+      f2.style.top = '20px';
+      f2.textContent = frame.id + (frame.wanted ? ' (处理)' : ' (软丢)');
+      tlWithout.appendChild(f2);
+
+      const isr2 = document.createElement('div');
+      isr2.className = 'tl-isr active';
+      isr2.style.left = (frame.start + frame.width / 2) + '%';
+      isr2.style.top = '55px';
+      isr2.style.height = '50px';
+      tlWithout.appendChild(isr2);
+      withoutIsr++;
+      if (!frame.wanted) withoutDrop++;
+      document.getElementById('stat-without-isr').textContent = withoutIsr;
+      document.getElementById('stat-without-drop').textContent = withoutDrop;
+      document.getElementById('stat-without-cpu').textContent = '100%';
+
+      if (idx === frames.length - 1) {
+        setTimeout(() => { state.timingPlaying = false; }, 500);
+      }
+    }, idx * 700);
+  });
+}
+
+// ===== 假唤醒 =====
+function toggleWakeup(el) {
+  el.parentElement.classList.toggle('open');
+}
+
+// ===== Toast =====
+let toastTimer;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ===== 初始化 =====
+runFilterTest();
+</script>
+</body>
+</html>

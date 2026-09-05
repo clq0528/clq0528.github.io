@@ -1,0 +1,2242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CANoe Data &amp; Statistics 窗口交互教程</title>
+<style>
+/* ===== CSS 变量 ===== */
+:root {
+  --bg-deep: #14161b;
+  --bg-panel: #1e2128;
+  --bg-panel-2: #252830;
+  --bg-hover: #2d313a;
+  --bg-active: #333844;
+  --border: #363b47;
+  --border-light: #444a58;
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #6b7280;
+  --accent-green: #00d4aa;
+  --accent-green-dim: rgba(0, 212, 170, 0.15);
+  --accent-amber: #ffb547;
+  --accent-amber-dim: rgba(255, 181, 71, 0.15);
+  --accent-red: #ff5c5c;
+  --accent-red-dim: rgba(255, 92, 92, 0.15);
+  --accent-blue: #4a9eff;
+  --accent-blue-dim: rgba(74, 158, 255, 0.15);
+  --mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ===== 顶部标题栏 ===== */
+.title-bar {
+  height: 36px;
+  background: linear-gradient(180deg, #2a2e38 0%, #1e2128 100%);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  justify-content: space-between;
+  user-select: none;
+}
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.title-bar-logo {
+  width: 20px; height: 20px;
+  background: var(--accent-green);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--bg-deep);
+}
+.title-bar-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+.title-bar-text strong { color: var(--text-primary); font-weight: 600; }
+.title-bar-right {
+  display: flex; gap: 4px;
+}
+.title-bar-btn {
+  width: 28px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.title-bar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ===== 功能区 Ribbon ===== */
+.ribbon {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  gap: 2px;
+}
+.ribbon-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  gap: 6px;
+}
+.ribbon-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+.ribbon-tab.active {
+  color: var(--accent-green);
+  border-bottom-color: var(--accent-green);
+  background: var(--accent-green-dim);
+}
+.ribbon-tab svg { width: 15px; height: 15px; }
+.ribbon-spacer { flex: 1; }
+.ribbon-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--text-muted);
+  padding-right: 8px;
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== 主布局 ===== */
+.app-layout {
+  display: flex;
+  height: calc(100vh - 80px);
+  min-height: 600px;
+}
+
+/* ===== 侧边栏 ===== */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px 0;
+}
+.sidebar-section {
+  padding: 0 12px;
+  margin-bottom: 4px;
+}
+.sidebar-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 8px 10px 6px;
+  font-weight: 600;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  margin-bottom: 1px;
+}
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-item.active {
+  background: var(--accent-green-dim);
+  color: var(--accent-green);
+  font-weight: 500;
+}
+.sidebar-item .num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 20px;
+}
+.sidebar-item.active .num { color: var(--accent-green); }
+.sidebar-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* ===== 主内容区 ===== */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  background: var(--bg-deep);
+}
+.view { display: none; }
+.view.active { display: block; animation: fadeIn 0.25s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 通用组件 ===== */
+.page-header {
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+.page-header .subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.page-header .version-badge {
+  display: inline-block;
+  background: var(--accent-amber-dim);
+  color: var(--accent-amber);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 10px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card h2 .icon { color: var(--accent-green); }
+.card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: var(--text-primary);
+}
+.card p { color: var(--text-secondary); margin-bottom: 10px; }
+.card ul, .card ol { color: var(--text-secondary); padding-left: 20px; margin-bottom: 10px; }
+.card li { margin-bottom: 4px; }
+
+/* 提示框 */
+.tip-box {
+  background: var(--accent-blue-dim);
+  border-left: 3px solid var(--accent-blue);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.tip-box .tip-label {
+  color: var(--accent-blue);
+  font-weight: 600;
+  margin-right: 6px;
+}
+.warn-box {
+  background: var(--accent-amber-dim);
+  border-left: 3px solid var(--accent-amber);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.warn-box .warn-label {
+  color: var(--accent-amber);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* 表格 */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.data-table th {
+  background: var(--bg-panel-2);
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 12.5px;
+}
+.data-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table code {
+  font-family: var(--mono);
+  background: var(--bg-panel-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--accent-green);
+}
+
+/* ===== CANoe 仿真窗口 ===== */
+.canoe-window {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  margin: 16px 0;
+}
+.canoe-window-titlebar {
+  background: linear-gradient(180deg, #2d313a 0%, #252830 100%);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.canoe-window-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.canoe-window-title .win-icon {
+  width: 16px; height: 16px;
+  background: var(--accent-green);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: var(--bg-deep); font-weight: 700;
+}
+.canoe-window-controls {
+  display: flex; gap: 4px;
+}
+.win-ctrl {
+  width: 22px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.win-ctrl:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.canoe-window-toolbar {
+  background: var(--bg-panel-2);
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toolbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-light); }
+.toolbar-btn.active { background: var(--accent-green-dim); color: var(--accent-green); border-color: var(--accent-green); }
+.toolbar-btn svg { width: 13px; height: 13px; }
+.toolbar-sep {
+  width: 1px; height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.toolbar-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+/* ===== Data 窗口内容 ===== */
+.data-window-body {
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.data-table-header {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 0.6fr 0.8fr 1.2fr;
+  background: var(--bg-panel-2);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.data-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 0.6fr 0.8fr 1.2fr;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background 0.15s;
+}
+.data-row:hover { background: var(--bg-hover); }
+.data-row .sig-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.data-row .sig-value {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-green);
+  transition: color 0.3s;
+}
+.data-row .sig-value.flash { color: var(--accent-amber); }
+.data-row .sig-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.data-row .sig-raw {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.data-row .sig-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sig-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-deep);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.sig-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green), #00f5c4);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.sig-bar-text {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Min-Max 模式扩展行 */
+.data-row.minmax-mode {
+  grid-template-columns: 1.5fr 1fr 0.6fr 0.8fr 1.2fr;
+}
+.minmax-extra {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 24px;
+  padding: 6px 0 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border);
+  margin-top: 6px;
+}
+.minmax-extra span { font-family: var(--mono); }
+.minmax-extra .min-val { color: var(--accent-blue); }
+.minmax-extra .max-val { color: var(--accent-red); }
+
+/* 空状态 */
+.data-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.data-empty svg { width: 40px; height: 40px; margin-bottom: 10px; opacity: 0.4; }
+
+/* ===== Statistics 窗口内容 ===== */
+.stats-window-body {
+  max-height: 480px;
+  overflow-y: auto;
+}
+.stats-channel-bar {
+  background: var(--bg-panel-2);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.stats-channel-bar select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.stats-table-header {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  background: var(--bg-panel-2);
+  padding: 7px 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.stats-row {
+  display: grid;
+  grid-template-columns: 2fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  font-size: 12.5px;
+}
+.stats-row:hover { background: var(--bg-hover); }
+.stats-row .stat-name { color: var(--text-secondary); }
+.stats-row .stat-name .unit { color: var(--text-muted); font-size: 11px; }
+.stats-row .stat-val {
+  font-family: var(--mono);
+  color: var(--text-primary);
+  text-align: right;
+}
+.stats-row .stat-val.highlight { color: var(--accent-green); font-weight: 600; }
+.stats-row .stat-val.warn { color: var(--accent-amber); }
+.stats-row .stat-val.danger { color: var(--accent-red); }
+.stats-row.category-header {
+  background: var(--bg-panel-2);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 12px;
+}
+.stats-row.category-header .stat-val { color: var(--text-muted); }
+
+/* Busload 仪表 */
+.busload-gauge {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.gauge-circle {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent-green) 0deg, var(--accent-green) var(--gauge-angle, 54deg), var(--bg-deep) var(--gauge-angle, 54deg));
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.5s;
+}
+.gauge-inner {
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.gauge-value {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-green);
+}
+.gauge-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.gauge-info { flex: 1; }
+.gauge-info h4 { font-size: 13px; margin-bottom: 4px; color: var(--text-primary); }
+.gauge-info p { font-size: 12px; color: var(--text-secondary); margin: 0; }
+.gauge-status {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.gauge-status.healthy { background: var(--accent-green-dim); color: var(--accent-green); }
+.gauge-status.warning { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.gauge-status.danger { background: var(--accent-red-dim); color: var(--accent-red); }
+
+/* ===== 三窗口对比 ===== */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+.compare-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.compare-card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compare-card-header .icon-wrap {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.compare-card-header h3 { margin: 0; font-size: 14px; }
+.compare-card-header .sub { font-size: 11px; color: var(--text-muted); }
+.compare-card-body { padding: 14px 16px; }
+.compare-card-body .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.compare-card-body .row:last-child { border-bottom: none; }
+.compare-card-body .row .label { color: var(--text-muted); }
+.compare-card-body .row .value { color: var(--text-primary); font-weight: 500; }
+.compare-card.trace .icon-wrap { background: var(--accent-blue-dim); color: var(--accent-blue); }
+.compare-card.graphic .icon-wrap { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.compare-card.data .icon-wrap { background: var(--accent-green-dim); color: var(--accent-green); }
+
+/* 迷你模拟预览 */
+.mini-preview {
+  background: var(--bg-deep);
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  height: 80px;
+  overflow: hidden;
+  position: relative;
+}
+.mini-trace-line {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.mini-trace-line .ts { color: var(--text-muted); }
+.mini-trace-line .id { color: var(--accent-blue); }
+.mini-trace-line .data { color: var(--accent-green); }
+.mini-graphic-canvas {
+  width: 100%; height: 60px;
+}
+
+/* ===== 实操清单 ===== */
+.checklist {
+  list-style: none;
+  padding: 0;
+}
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.checklist-item:hover { background: var(--bg-hover); }
+.checklist-item.done { opacity: 0.6; }
+.checklist-item.done .step-title { text-decoration: line-through; }
+.check-checkbox {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border-light);
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+  transition: all 0.2s;
+}
+.checklist-item.done .check-checkbox {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+.check-checkbox svg { width: 12px; height: 12px; color: var(--bg-deep); opacity: 0; }
+.checklist-item.done .check-checkbox svg { opacity: 1; }
+.step-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 28px;
+  font-weight: 600;
+}
+.step-content { flex: 1; }
+.step-title { font-size: 13.5px; font-weight: 500; color: var(--text-primary); margin-bottom: 3px; }
+.step-path { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+.step-expect { font-size: 12px; color: var(--accent-green); margin-top: 3px; }
+.step-ref { font-size: 11px; color: var(--accent-blue); margin-top: 2px; }
+
+.progress-bar-wrap {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.progress-text { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.progress-text strong { color: var(--accent-green); font-size: 18px; }
+.progress-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-deep);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green), #00f5c4);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* ===== FAQ ===== */
+.faq-item {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.faq-question {
+  padding: 14px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: background 0.15s;
+}
+.faq-question:hover { background: var(--bg-hover); }
+.faq-question .q-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+.faq-question .q-tag {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--accent-amber-dim);
+  color: var(--accent-amber);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.faq-arrow {
+  color: var(--text-muted);
+  transition: transform 0.25s;
+  flex-shrink: 0;
+}
+.faq-item.open .faq-arrow { transform: rotate(180deg); }
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.faq-item.open .faq-answer { max-height: 500px; }
+.faq-answer-inner {
+  padding: 0 18px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.faq-answer-inner .cause {
+  color: var(--accent-amber);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.faq-answer-inner .solution {
+  color: var(--accent-green);
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
+.faq-answer-inner ul { padding-left: 18px; }
+.faq-answer-inner li { margin-bottom: 3px; }
+
+/* ===== 知识小结 ===== */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.summary-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 3px solid var(--accent-green);
+}
+.summary-card h4 {
+  font-size: 13px;
+  color: var(--accent-green);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.summary-card p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ===== 介绍页 Hero ===== */
+.hero-section {
+  background: linear-gradient(135deg, var(--bg-panel) 0%, #1a2332 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -10%;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, var(--accent-green-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-section h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  position: relative;
+}
+.hero-section .hero-sub {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  position: relative;
+  max-width: 600px;
+}
+.hero-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+.hero-tag {
+  padding: 4px 12px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.hero-tag.green { border-color: var(--accent-green); color: var(--accent-green); }
+.hero-tag.amber { border-color: var(--accent-amber); color: var(--accent-amber); }
+
+.quick-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.quick-nav-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.quick-nav-card:hover {
+  border-color: var(--accent-green);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 212, 170, 0.1);
+}
+.quick-nav-card .qn-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--accent-green-dim);
+  color: var(--accent-green);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 10px;
+}
+.quick-nav-card .qn-icon svg { width: 18px; height: 18px; }
+.quick-nav-card h4 { font-size: 13.5px; margin-bottom: 4px; }
+.quick-nav-card p { font-size: 11.5px; color: var(--text-muted); margin: 0; }
+
+/* ===== Toast 通知 ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--accent-green);
+  color: var(--text-primary);
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast svg { width: 16px; height: 16px; color: var(--accent-green); }
+
+/* ===== 滚动条 ===== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ===== 响应式 ===== */
+@media (max-width: 1024px) {
+  .sidebar { width: 200px; min-width: 200px; }
+  .compare-grid { grid-template-columns: 1fr; }
+  .data-table-header, .data-row { grid-template-columns: 1.2fr 0.8fr 0.5fr 0.7fr 1fr; font-size: 12px; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { padding: 16px; }
+  .hero-section { padding: 20px; }
+  .hero-section h1 { font-size: 22px; }
+  .ribbon { overflow-x: auto; }
+  .data-table-header, .data-row { grid-template-columns: 1fr 0.8fr 0.5fr 0.6fr; }
+  .data-table-header > :last-child, .data-row > :last-child { display: none; }
+  .stats-table-header, .stats-row { grid-template-columns: 1.5fr 0.7fr 0.7fr 0.7fr 0.7fr; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部标题栏 ===== -->
+<div class="title-bar">
+  <div class="title-bar-left">
+    <div class="title-bar-logo">C</div>
+    <div class="title-bar-text"><strong>CANoe</strong> 交互教程 — Data &amp; Statistics 窗口</div>
+  </div>
+  <div class="title-bar-right">
+    <div class="title-bar-btn">&#8211;</div>
+    <div class="title-bar-btn">&#9633;</div>
+    <div class="title-bar-btn">&#10005;</div>
+  </div>
+</div>
+
+<!-- ===== 功能区 ===== -->
+<div class="ribbon">
+  <div class="ribbon-tab" data-view="overview">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    概览
+  </div>
+  <div class="ribbon-tab active" data-view="data">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    Data 窗口
+  </div>
+  <div class="ribbon-tab" data-view="statistics">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+    Statistics 窗口
+  </div>
+  <div class="ribbon-tab" data-view="compare">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+    三窗口对比
+  </div>
+  <div class="ribbon-tab" data-view="practice">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+    实操清单
+  </div>
+  <div class="ribbon-tab" data-view="faq">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    常见问题
+  </div>
+  <div class="ribbon-tab" data-view="summary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    知识小结
+  </div>
+  <div class="ribbon-spacer"></div>
+  <div class="ribbon-status">
+    <div class="status-dot"></div>
+    <span>Measurement: Running</span>
+  </div>
+</div>
+
+<!-- ===== 主布局 ===== -->
+<div class="app-layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">导航</div>
+      <div class="sidebar-item active" data-view="overview">
+        <span class="num">00</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        课程概览
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Data 窗口</div>
+      <div class="sidebar-item" data-view="data">
+        <span class="num">01</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z"/></svg>
+        交互模拟器
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Statistics 窗口</div>
+      <div class="sidebar-item" data-view="statistics">
+        <span class="num">02</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/></svg>
+        总线统计面板
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">对比与实践</div>
+      <div class="sidebar-item" data-view="compare">
+        <span class="num">03</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        三窗口对比
+      </div>
+      <div class="sidebar-item" data-view="practice">
+        <span class="num">04</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+        10步实操
+      </div>
+      <div class="sidebar-item" data-view="faq">
+        <span class="num">05</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3"/></svg>
+        常见问题
+      </div>
+      <div class="sidebar-item" data-view="summary">
+        <span class="num">06</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586"/></svg>
+        知识小结
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+
+    <!-- ===== 视图：概览 ===== -->
+    <section class="view active" id="view-overview">
+      <div class="hero-section">
+        <h1>Data 窗口与 Statistics 窗口</h1>
+        <p class="hero-sub">既要"精确数字"，又要"全局统计"——Data 窗口像数字仪表盘实时显示信号精确值，Statistics 窗口像统计报表汇总总线运行数据。两个窗口配合用，精确值和统计量都有了。</p>
+        <div class="hero-tags">
+          <span class="hero-tag green">CANoe 11.0 SP2</span>
+          <span class="hero-tag">Analysis 功能区</span>
+          <span class="hero-tag amber">需关联 DBC（Data）</span>
+          <span class="hero-tag">无需 DBC（Statistics）</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span> 本篇你将学到</h2>
+        <div class="quick-nav">
+          <div class="quick-nav-card" data-view="data">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z"/></svg></div>
+            <h4>Data 窗口</h4>
+            <p>打开方式、添加信号、显示格式与模式、Signal Logging</p>
+          </div>
+          <div class="quick-nav-card" data-view="statistics">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/></svg></div>
+            <h4>Statistics 窗口</h4>
+            <p>总线负载率、帧类型分布、错误帧、错误计数、右键菜单</p>
+          </div>
+          <div class="quick-nav-card" data-view="compare">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></div>
+            <h4>三窗口对比</h4>
+            <p>Trace / Graphic / Data 各适合看什么，怎么搭配</p>
+          </div>
+          <div class="quick-nav-card" data-view="practice">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg></div>
+            <h4>10步实操</h4>
+            <p>从加信号看数字到复制统计数据，手把手操作路径</p>
+          </div>
+          <div class="quick-nav-card" data-view="faq">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3"/></svg></div>
+            <h4>常见问题</h4>
+            <p>加不上信号、数值不刷新、负载率为0等排查方案</p>
+          </div>
+          <div class="quick-nav-card" data-view="summary">
+            <div class="qn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586"/></svg></div>
+            <h4>知识小结</h4>
+            <p>核心要点速查表，一页回顾全部知识点</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg></span> 核心类比</h2>
+        <table class="data-table">
+          <thead>
+            <tr><th>窗口</th><th>类比</th><th>看什么</th><th>数据粒度</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Trace</strong></td><td>流水账账本</td><td>每一帧报文是什么</td><td>帧级</td></tr>
+            <tr><td><strong>Graphic</strong></td><td>走势图</td><td>信号怎么随时间变化</td><td>信号曲线</td></tr>
+            <tr><td><strong>Data</strong></td><td>仪表盘</td><td>信号当前精确值</td><td>当前值</td></tr>
+            <tr><td><strong>Statistics</strong></td><td>月度报表</td><td>总线整体运行状态</td><td>聚合统计</td></tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <span class="tip-label">提示：</span>Data 窗口和 Graphic 窗口一样，都要依赖 DBC 文件才能添加信号。没 DBC 就没信号可选。Statistics 窗口不依赖 DBC，它统计的是报文层数据。
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：Data 窗口 ===== -->
+    <section class="view" id="view-data">
+      <div class="page-header">
+        <h1>Data 窗口 <span class="version-badge">交互模拟器</span></h1>
+        <p class="subtitle">数字仪表盘——实时显示信号当前精确值。点击工具栏切换显示格式和模式，观察数字变化。</p>
+      </div>
+
+      <!-- Data 窗口仿真 -->
+      <div class="canoe-window">
+        <div class="canoe-window-titlebar">
+          <div class="canoe-window-title">
+            <div class="win-icon">D</div>
+            Data — 信号实时显示
+          </div>
+          <div class="canoe-window-controls">
+            <div class="win-ctrl">&#8211;</div>
+            <div class="win-ctrl">&#9633;</div>
+            <div class="win-ctrl">&#10005;</div>
+          </div>
+        </div>
+        <div class="canoe-window-toolbar">
+          <span class="toolbar-label">显示格式:</span>
+          <button class="toolbar-btn active" data-format="physical" onclick="setDataFormat('physical')">Physical</button>
+          <button class="toolbar-btn" data-format="raw" onclick="setDataFormat('raw')">Raw</button>
+          <button class="toolbar-btn" data-format="decimal" onclick="setDataFormat('decimal')">Decimal</button>
+          <button class="toolbar-btn" data-format="hex" onclick="setDataFormat('hex')">Hex</button>
+          <div class="toolbar-sep"></div>
+          <span class="toolbar-label">显示模式:</span>
+          <button class="toolbar-btn active" data-mode="current" onclick="setDataMode('current')">Current</button>
+          <button class="toolbar-btn" data-mode="minmax" onclick="setDataMode('minmax')">Min/Max</button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="toggleDataRunning()">
+            <svg id="data-run-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+            <span id="data-run-text">暂停</span>
+          </button>
+          <button class="toolbar-btn" onclick="resetDataMinMax()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            重置极值
+          </button>
+        </div>
+        <div class="data-window-body" id="data-window-body">
+          <div class="data-table-header">
+            <div>Name</div>
+            <div>Value</div>
+            <div>Unit</div>
+            <div>Raw Value</div>
+            <div>Bar</div>
+          </div>
+          <div id="data-rows-container"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></span> Data 窗口要点</h2>
+        <h3>1. 打开方式</h3>
+        <p>点 <code>Analysis → Data</code>，弹出 Data 窗口。新建空白工程默认不会自动打开，需手动点。一个工程可打开多个 Data 窗口，分屏摆放像汽车的双仪表盘。</p>
+
+        <h3>2. 添加信号</h3>
+        <p>在 Data 窗口空白处右键 → <strong>Add Signals...</strong>，按"数据库 → 报文 → 信号"树形结构选择。右键菜单还有：</p>
+        <ul>
+          <li><strong>Add Variables...</strong>：加系统变量或环境变量</li>
+          <li><strong>Add Diagnostics Parameter...</strong>：加诊断参数</li>
+          <li><strong>User Defined Signals</strong>：自定义虚拟信号，不依赖 DBC</li>
+        </ul>
+
+        <h3>3. 显示格式</h3>
+        <table class="data-table">
+          <thead><tr><th>格式</th><th>显示内容</th><th>示例</th><th>适用场景</th></tr></thead>
+          <tbody>
+            <tr><td>Physical</td><td>DBC 转换后工程值，带单位</td><td>87.5 km/h</td><td>日常查看，最直观</td></tr>
+            <tr><td>Raw</td><td>DBC 转换前原始整数</td><td>350</td><td>底层调试，查信号编码</td></tr>
+            <tr><td>Decimal</td><td>十进制显示</td><td>87</td><td>快速读数</td></tr>
+            <tr><td>Hexadecimal</td><td>十六进制显示</td><td>0x15E</td><td>底层字节级分析</td></tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <span class="tip-label">物理值 vs 原始值：</span>DBC 里每个信号有转换公式（factor、offset）。如车速原始值 350，factor=0.25、offset=0，物理值 = 350 × 0.25 = 87.5 km/h。
+        </div>
+
+        <h3>4. 显示模式</h3>
+        <table class="data-table">
+          <thead><tr><th>模式</th><th>显示内容</th><th>适用场景</th></tr></thead>
+          <tbody>
+            <tr><td>Current</td><td>只显示当前最新值</td><td>实时监控，看"现在多少"</td></tr>
+            <tr><td>Min/Max</td><td>当前值 + 历史最小值 + 最大值</td><td>监控波动范围，看"有没有超限"</td></tr>
+          </tbody>
+        </table>
+        <div class="warn-box">
+          <span class="warn-label">注意：</span>Data 窗口本身没有"平均值模式"。信号的平均值 (Average) 统计属于 Graphic 窗口功能——测量停止后，Graphic 可在曲线上显示 min/max/avg/std。
+        </div>
+
+        <h3>5. Signal Logging</h3>
+        <p>Data 窗口工具栏支持信号记录，输出 <strong>MDF</strong> 格式（汽车领域常用测量数据格式）。注意：这里的记录只记录 Data 窗口里当前显示的信号，和 Measurement Setup 里的 Logging Block 不是一回事。</p>
+      </div>
+    </section>
+
+    <!-- ===== 视图：Statistics 窗口 ===== -->
+    <section class="view" id="view-statistics">
+      <div class="page-header">
+        <h1>Statistics 窗口 <span class="version-badge">交互模拟器</span></h1>
+        <p class="subtitle">统计报表——汇总总线运行数据。观察负载率变化，尝试暂停/重置统计，复制数据到剪贴板。</p>
+      </div>
+
+      <!-- Statistics 窗口仿真 -->
+      <div class="canoe-window">
+        <div class="canoe-window-titlebar">
+          <div class="canoe-window-title">
+            <div class="win-icon" style="background: var(--accent-amber);">S</div>
+            Statistics — 总线统计
+          </div>
+          <div class="canoe-window-controls">
+            <div class="win-ctrl">&#8211;</div>
+            <div class="win-ctrl">&#9633;</div>
+            <div class="win-ctrl">&#10005;</div>
+          </div>
+        </div>
+        <div class="canoe-window-toolbar">
+          <button class="toolbar-btn" onclick="toggleStatsRunning()">
+            <svg id="stats-run-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+            <span id="stats-run-text">暂停统计</span>
+          </button>
+          <button class="toolbar-btn" onclick="resetStats()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            重置统计
+          </button>
+          <div class="toolbar-sep"></div>
+          <button class="toolbar-btn" onclick="copyStatsToClipboard()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+            Copy to Clipboard
+          </button>
+          <button class="toolbar-btn" onclick="adaptColumns()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+            自适应列宽
+          </button>
+        </div>
+
+        <!-- Busload 仪表 -->
+        <div class="busload-gauge">
+          <div class="gauge-circle" id="busload-gauge">
+            <div class="gauge-inner">
+              <div class="gauge-value" id="busload-value">0.0</div>
+              <div class="gauge-label">Busload %</div>
+            </div>
+          </div>
+          <div class="gauge-info">
+            <h4>CAN 1 — 500 kbps</h4>
+            <p id="busload-desc">总线负载率实时监控。稳态通常 &lt; 30% 为健康。</p>
+          </div>
+          <div class="gauge-status healthy" id="busload-status">健康</div>
+        </div>
+
+        <div class="stats-channel-bar">
+          <span style="color: var(--text-muted);">通道:</span>
+          <select id="stats-channel" onchange="switchChannel()">
+            <option>CAN 1</option>
+            <option>CAN 2</option>
+            <option>CAN FD 1</option>
+          </select>
+          <span style="color: var(--text-muted); margin-left: 16px;">统计时长:</span>
+          <span id="stats-duration" style="font-family: var(--mono); color: var(--accent-green);">00:00</span>
+        </div>
+
+        <div class="stats-window-body">
+          <div class="stats-table-header">
+            <div>统计项</div>
+            <div style="text-align:right;">Current</div>
+            <div style="text-align:right;">Min</div>
+            <div style="text-align:right;">Max</div>
+            <div style="text-align:right;">Avg</div>
+          </div>
+          <div id="stats-rows-container"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></span> Statistics 窗口要点</h2>
+
+        <h3>1. 总线负载率（Busload）</h3>
+        <p>总线被报文占用的时间百分比。500kbps 的 CAN 总线，负载率 30% 意味着总线 30% 的时间在传数据。</p>
+        <table class="data-table">
+          <thead><tr><th>负载率</th><th>状态</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><strong style="color: var(--accent-green);">&lt; 30%</strong></td><td>健康</td><td>余量充足</td></tr>
+            <tr><td><strong style="color: var(--accent-amber);">30% - 50%</strong></td><td>偏忙</td><td>峰值可能拥塞</td></tr>
+            <tr><td><strong style="color: var(--accent-amber);">50% - 70%</strong></td><td>繁忙</td><td>有丢帧风险</td></tr>
+            <tr><td><strong style="color: var(--accent-red);">&gt; 70%</strong></td><td>危险</td><td>可能出现通信故障</td></tr>
+          </tbody>
+        </table>
+        <div class="warn-box">
+          <span class="warn-label">注意：</span>30% 是业内常用安全红线，但不是绝对标准。刷写等场景短暂超过 50% 也正常，关键是稳态工况不要长期超过 30%。
+        </div>
+
+        <h3>2. 错误帧与错误计数</h3>
+        <p>错误帧是 CAN 协议层面的错误（CRC 错误、位错误、格式错误等）。除了 Errorframes，还要关注 <strong>Transmit Error Count</strong> 和 <strong>Receive Error Count</strong>——它们比错误帧更敏感，持续增长但错误帧还没明显增加时，说明总线质量已经在恶化。</p>
+        <div class="tip-box">
+          <span class="tip-label">排查思路：</span>错误帧持续增长时，先查终端电阻（CAN_H/CAN_L 各 120Ω，并联后 60Ω），再查波特率是否匹配，最后查线束有没有破损或接触不良。
+        </div>
+
+        <h3>3. 右键菜单</h3>
+        <table class="data-table">
+          <thead><tr><th>菜单项</th><th>作用</th></tr></thead>
+          <tbody>
+            <tr><td>Configuration...</td><td>配置显示项、通道、统计参数</td></tr>
+            <tr><td>Adapt Columns Width</td><td>自动调整所有列宽</td></tr>
+            <tr><td>Sort</td><td>对统计项排序</td></tr>
+            <tr><td>Copy to Clipboard</td><td>复制数据到剪贴板，粘贴到 Excel</td></tr>
+            <tr><td>Collapse / Expand All</td><td>折叠/展开所有分组</td></tr>
+            <tr><td>Reset All Statistics</td><td>清空累计值，从头开始统计</td></tr>
+            <tr><td>Pause All Statistics</td><td>暂停统计，当前数值定格</td></tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <span class="tip-label">提示：</span>CANoe 11.0 SP2 的 Statistics 窗口右键没有独立的 Export CSV 入口，数据复制靠 Copy to Clipboard（制表符分隔），粘贴到 Excel 后另存即可。
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：三窗口对比 ===== -->
+    <section class="view" id="view-compare">
+      <div class="page-header">
+        <h1>Trace / Graphic / Data 三窗口对比</h1>
+        <p class="subtitle">三个窗口都能"看数据"，但各看各的角度。搭配着用，日常分析基本够用。</p>
+      </div>
+
+      <div class="compare-grid">
+        <!-- Trace -->
+        <div class="compare-card trace">
+          <div class="compare-card-header">
+            <div class="icon-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            </div>
+            <div>
+              <h3>Trace 窗口</h3>
+              <div class="sub">报文列表 · 流水账</div>
+            </div>
+          </div>
+          <div class="compare-card-body">
+            <div class="row"><span class="label">显示形式</span><span class="value">报文列表</span></div>
+            <div class="row"><span class="label">看什么</span><span class="value">每帧是什么</span></div>
+            <div class="row"><span class="label">数据粒度</span><span class="value">每一帧/每字节</span></div>
+            <div class="row"><span class="label">需 DBC</span><span class="value">看信号才需要</span></div>
+            <div class="row"><span class="label">时间维度</span><span class="value">历史可回看</span></div>
+            <div class="row"><span class="label">统计能力</span><span class="value">无</span></div>
+            <div class="mini-preview" id="mini-trace"></div>
+          </div>
+        </div>
+
+        <!-- Graphic -->
+        <div class="compare-card graphic">
+          <div class="compare-card-header">
+            <div class="icon-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+            </div>
+            <div>
+              <h3>Graphic 窗口</h3>
+              <div class="sub">实时曲线 · 走势图</div>
+            </div>
+          </div>
+          <div class="compare-card-body">
+            <div class="row"><span class="label">显示形式</span><span class="value">实时曲线图</span></div>
+            <div class="row"><span class="label">看什么</span><span class="value">信号趋势变化</span></div>
+            <div class="row"><span class="label">数据粒度</span><span class="value">信号随时间</span></div>
+            <div class="row"><span class="label">需 DBC</span><span class="value" style="color: var(--accent-amber);">必须</span></div>
+            <div class="row"><span class="label">时间维度</span><span class="value">实时+历史</span></div>
+            <div class="row"><span class="label">统计能力</span><span class="value">停止后 min/max/avg/std</span></div>
+            <div class="mini-preview">
+              <canvas class="mini-graphic-canvas" id="mini-graphic"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data -->
+        <div class="compare-card data">
+          <div class="compare-card-header">
+            <div class="icon-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            </div>
+            <div>
+              <h3>Data 窗口</h3>
+              <div class="sub">数字仪表盘 · 当前值</div>
+            </div>
+          </div>
+          <div class="compare-card-body">
+            <div class="row"><span class="label">显示形式</span><span class="value">数字仪表盘</span></div>
+            <div class="row"><span class="label">看什么</span><span class="value">当前精确值</span></div>
+            <div class="row"><span class="label">数据粒度</span><span class="value">当前最新值</span></div>
+            <div class="row"><span class="label">需 DBC</span><span class="value" style="color: var(--accent-green);">必须</span></div>
+            <div class="row"><span class="label">时间维度</span><span class="value">只有当前值</span></div>
+            <div class="row"><span class="label">统计能力</span><span class="value">Current / Min-Max</span></div>
+            <div class="mini-preview" style="display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center;">
+                <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent-green);" id="mini-data-value">87.5</div>
+                <div style="font-size:10px;color:var(--text-muted);">km/h · VehicleSpeed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span> 一句话总结</h2>
+        <table class="data-table">
+          <thead><tr><th>窗口</th><th>一句话</th><th>典型场景</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Trace</strong></td><td>看"每一帧是什么"</td><td>排查单帧报文问题</td></tr>
+            <tr><td><strong>Graphic</strong></td><td>看"信号怎么变"</td><td>看加速曲线/温升过程</td></tr>
+            <tr><td><strong>Data</strong></td><td>看"现在值多少"</td><td>看车速精确读数</td></tr>
+            <tr><td><strong>Statistics</strong></td><td>看"总线整体状态"</td><td>负载率、错误帧、帧分布</td></tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <span class="tip-label">搭配建议：</span>Statistics 窗口和上面三个不在一个维度——上面三个看"信号/报文内容"，Statistics 看"总线运行状态"。它不跟信号窗口竞争，而是补充了一个全局视角。
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：实操清单 ===== -->
+    <section class="view" id="view-practice">
+      <div class="page-header">
+        <h1>手把手 10 步实操</h1>
+        <p class="subtitle">从加信号看数字到复制统计数据，点一遍即可。勾选已完成的步骤，进度自动保存。</p>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-text">完成进度 <strong id="progress-count">0</strong>/10</div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+        <button class="toolbar-btn" onclick="resetChecklist()" style="flex-shrink:0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          重置
+        </button>
+      </div>
+
+      <div class="card" style="padding: 0; overflow: hidden;">
+        <ul class="checklist" id="checklist">
+          <li class="checklist-item" data-step="1">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">01</span>
+            <div class="step-content">
+              <div class="step-title">关联 DBC 并运行测量</div>
+              <div class="step-path">Simulation Setup → 通道右键 → Database 加 DBC；Home → Start</div>
+              <div class="step-expect">总线有报文在跑</div>
+              <div class="step-ref">详见：一、1.4</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="2">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">02</span>
+            <div class="step-content">
+              <div class="step-title">打开 Data 窗口</div>
+              <div class="step-path">Analysis → Data</div>
+              <div class="step-expect">弹出空白表格窗口</div>
+              <div class="step-ref">详见：1.2</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="3">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">03</span>
+            <div class="step-content">
+              <div class="step-title">添加车速信号</div>
+              <div class="step-path">空白区右键 → Add Signals...，选 VehicleSpeed</div>
+              <div class="step-expect">数字实时跳动，带单位 km/h</div>
+              <div class="step-ref">详见：2.1</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="4">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">04</span>
+            <div class="step-content">
+              <div class="step-title">切换显示格式</div>
+              <div class="step-path">右键信号 → Display Format（Physical / Raw / Decimal / Hex）</div>
+              <div class="step-expect">物理值 ↔ 原始值对照显示</div>
+              <div class="step-ref">详见：2.2</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="5">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">05</span>
+            <div class="step-content">
+              <div class="step-title">加多信号 / 切换显示模式</div>
+              <div class="step-path">继续 Add Signals...；右键 → Display Mode（Current / Min-Max）</div>
+              <div class="step-expect">多行仪表盘；当前值与历史极值并列</div>
+              <div class="step-ref">详见：2.1、3</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="6">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">06</span>
+            <div class="step-content">
+              <div class="step-title">打开 Statistics 窗口</div>
+              <div class="step-path">Analysis → Statistics</div>
+              <div class="step-expect">列出总线统计项（Busload、帧计数等）</div>
+              <div class="step-ref">详见：4.2</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="7">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">07</span>
+            <div class="step-content">
+              <div class="step-title">查看总线负载率</div>
+              <div class="step-path">找到 Busload [%] 行，观察 Current 列</div>
+              <div class="step-expect">显示当前负载率数值，判断是否 &lt; 30%</div>
+              <div class="step-ref">详见：5.3</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="8">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">08</span>
+            <div class="step-content">
+              <div class="step-title">复制统计数据</div>
+              <div class="step-path">Statistics 窗口右键 → Copy to Clipboard</div>
+              <div class="step-expect">粘贴到 Excel，Current/Min/Max/Avg 四列自动分列</div>
+              <div class="step-ref">详见：六</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="9">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">09</span>
+            <div class="step-content">
+              <div class="step-title">Data 窗口信号记录</div>
+              <div class="step-path">Data 窗口工具栏 → Signal Logging Configuration → Start Logging</div>
+              <div class="step-expect">生成 MDF 记录文件到指定目录</div>
+              <div class="step-ref">详见：2.4</div>
+            </div>
+          </li>
+          <li class="checklist-item" data-step="10">
+            <div class="check-checkbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
+            <span class="step-num">10</span>
+            <div class="step-content">
+              <div class="step-title">对比三窗口</div>
+              <div class="step-path">同时开 Data / Graphic / Trace 看同一信号</div>
+              <div class="step-expect">读数 / 曲线 / 报文三种视角对照</div>
+              <div class="step-ref">详见：七</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===== 视图：FAQ ===== -->
+    <section class="view" id="view-faq">
+      <div class="page-header">
+        <h1>常见问题排查</h1>
+        <p class="subtitle">新手最常遇到的 5 个问题，点击展开查看原因和解决方案。</p>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <span class="q-text">Q1：Data 窗口加不上信号（Add Signals 列表是空的）？</span>
+          <span class="q-tag">DBC</span>
+          <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            <div class="cause">可能原因：</div>
+            <ul>
+              <li>工程没有关联 DBC 数据库，或者 DBC 里没有定义信号</li>
+            </ul>
+            <div class="solution">解决方案：</div>
+            <ul>
+              <li>在 Simulation Setup 中右键通道 → Database，确认 DBC 文件已添加且无报错</li>
+              <li>用 CANdb++ 打开 DBC，确认里面有报文和信号定义</li>
+              <li>确认信号所在的报文确实分配给了当前通道（多通道工程容易搞混）</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <span class="q-text">Q2：Data 窗口信号加上了但数值不刷新？</span>
+          <span class="q-tag">数据</span>
+          <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            <div class="cause">可能原因：</div>
+            <ul>
+              <li>测量没在 Running——检查左下角状态</li>
+              <li>该信号所在报文根本没在总线上发</li>
+              <li>信号值确实没变化——事件触发信号不变化是正常的</li>
+            </ul>
+            <div class="solution">解决方案：</div>
+            <ul>
+              <li>先看 Trace 有没有对应报文在发</li>
+              <li>如果有报文但 Data 不刷新，检查信号是否正确关联到该报文</li>
+              <li>如果报文在发、信号也正确，可能是信号值本身没变化（稳态），属于正常现象</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <span class="q-text">Q3：Statistics 窗口的总线负载率一直显示 0？</span>
+          <span class="q-tag">统计</span>
+          <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            <div class="cause">可能原因：</div>
+            <ul>
+              <li>测量没在 Running——Statistics 只统计运行期间的数据</li>
+              <li>总线上没有报文——空跑的总线负载率就是 0</li>
+              <li>通道配错——Statistics 统计的是当前激活通道</li>
+            </ul>
+            <div class="solution">解决方案：</div>
+            <ul>
+              <li>先确认 Trace 窗口有报文在滚动（证明总线有数据）</li>
+              <li>确认 Statistics 窗口统计的通道与实际有报文的通道一致</li>
+              <li>如果 Trace 有报文但 Statistics 负载率为 0，尝试关闭重开 Statistics 窗口</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <span class="q-text">Q4：Statistics 窗口里 Std./Ext. Data 速率异常？</span>
+          <span class="q-tag">帧率</span>
+          <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            <div class="cause">可能原因：</div>
+            <ul>
+              <li>发送节点的周期配置有误——CAPL 里 setTimer 周期写错</li>
+              <li>多个节点发送同一 ID 的报文——重复发送导致帧率翻倍</li>
+              <li>报文被丢失——总线负载过高时部分帧被丢弃，计数偏低</li>
+            </ul>
+            <div class="solution">解决方案：</div>
+            <ul>
+              <li>去 Trace 窗口过滤该 ID，观察实际发送间隔是否均匀</li>
+              <li>检查 Simulation Setup 里发送节点的 CAPL 代码，确认 setTimer 周期</li>
+              <li>检查总线负载率是否过高导致丢帧</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          <span class="q-text">Q5：Copy to Clipboard 粘贴到 Excel 后格式错乱？</span>
+          <span class="q-tag">导出</span>
+          <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            <div class="cause">可能原因：</div>
+            <p>Statistics 窗口复制的是制表符分隔的文本，Excel 粘贴时没自动按列分列，导致所有数据挤在一列。</p>
+            <div class="solution">解决方案：</div>
+            <ul>
+              <li>粘贴到 Excel 后选中该列 → 数据 → 分列 → 选择「分隔符号」→ 勾选「Tab 键」→ 完成</li>
+              <li>或者先粘贴到记事本保存为 .txt，再用 Excel 的「数据 → 从文本/CSV」导入，分隔符选 Tab</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 视图：知识小结 ===== -->
+    <section class="view" id="view-summary">
+      <div class="page-header">
+        <h1>知识小结</h1>
+        <p class="subtitle">核心要点速查表，一页回顾全部知识点。</p>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <h4>Data 定位</h4>
+          <p>数字仪表盘，实时显示信号当前精确值</p>
+        </div>
+        <div class="summary-card">
+          <h4>Data 打开方式</h4>
+          <p>Analysis → Data</p>
+        </div>
+        <div class="summary-card">
+          <h4>Data 前提条件</h4>
+          <p>必须关联 DBC，才能添加信号</p>
+        </div>
+        <div class="summary-card">
+          <h4>Data 显示格式</h4>
+          <p>Physical 物理值 / Raw 原始值 / Decimal 十进制 / Hex 十六进制</p>
+        </div>
+        <div class="summary-card">
+          <h4>Data 显示模式</h4>
+          <p>Current 单值 / Min-Max 最小最大（Data 无 Average；平均值在 Graphic 窗口）</p>
+        </div>
+        <div class="summary-card">
+          <h4>Statistics 定位</h4>
+          <p>统计报表，汇总总线运行数据</p>
+        </div>
+        <div class="summary-card">
+          <h4>Statistics 打开方式</h4>
+          <p>Analysis → Statistics</p>
+        </div>
+        <div class="summary-card">
+          <h4>Statistics 前提条件</h4>
+          <p>不依赖 DBC，统计报文层数据</p>
+        </div>
+        <div class="summary-card">
+          <h4>Statistics 统计项</h4>
+          <p>Busload、帧类型分布（Std/Ext Data/Remote）、Errorframes、Chip State、错误计数等</p>
+        </div>
+        <div class="summary-card">
+          <h4>Statistics 右键菜单</h4>
+          <p>Configuration / Adapt Columns / Sort / Copy to Clipboard / Collapse / Expand / Reset / Pause</p>
+        </div>
+        <div class="summary-card">
+          <h4>负载率红线</h4>
+          <p>稳态 &lt; 30% 健康，&gt; 70% 危险</p>
+        </div>
+        <div class="summary-card">
+          <h4>数据复制</h4>
+          <p>Statistics 右键 → Copy to Clipboard，粘贴到 Excel/记事本</p>
+        </div>
+        <div class="summary-card">
+          <h4>Data 窗口记录</h4>
+          <p>工具栏 → Signal Logging Configuration / Start Logging，输出 MDF</p>
+        </div>
+        <div class="summary-card">
+          <h4>三窗口搭配</h4>
+          <p>Trace 看细节 + Graphic 看趋势 + Data 看读数</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h2><span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg></span> 实战经验</h2>
+        <p>调台架时常用最小最大值模式监控关键信号。比如刹车压力信号，跑一圈看最大值有没有达到预期，比逐帧翻 Trace 快太多了。</p>
+        <p>错误帧持续增长时，排查顺序：终端电阻 → 波特率匹配 → 线束破损/接触不良。Transmit/Receive Error Count 比错误帧更敏感，是总线质量恶化的早期信号。</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+  <span id="toast-text">已复制到剪贴板</span>
+</div>
+
+<script>
+// ===== 状态管理 =====
+const state = {
+  currentView: 'overview',
+  dataFormat: 'physical',
+  dataMode: 'current',
+  dataRunning: true,
+  statsRunning: true,
+  statsStartTime: Date.now(),
+  statsPausedTime: 0,
+  statsTotalPaused: 0,
+  checklist: JSON.parse(localStorage.getItem('canoe-checklist') || '{}'),
+};
+
+// ===== 信号数据 =====
+const signals = [
+  { name: 'VehicleSpeed', unit: 'km/h', factor: 0.25, offset: 0, min: 0, max: 250, base: 60, amp: 30, raw: 0, cur: 0, minSeen: Infinity, maxSeen: -Infinity },
+  { name: 'EngineSpeed', unit: 'rpm', factor: 1, offset: 0, min: 0, max: 8000, base: 2500, amp: 800, raw: 0, cur: 0, minSeen: Infinity, maxSeen: -Infinity },
+  { name: 'CoolantTemp', unit: '°C', factor: 0.1, offset: -40, min: -40, max: 150, base: 85, amp: 8, raw: 0, cur: 0, minSeen: Infinity, maxSeen: -Infinity },
+  { name: 'ThrottlePos', unit: '%', factor: 0.4, offset: 0, min: 0, max: 100, base: 35, amp: 20, raw: 0, cur: 0, minSeen: Infinity, maxSeen: -Infinity },
+  { name: 'BrakePressure', unit: 'bar', factor: 0.05, offset: 0, min: 0, max: 200, base: 10, amp: 15, raw: 0, cur: 0, minSeen: Infinity, maxSeen: -Infinity },
+];
+
+// ===== Statistics 数据 =====
+let statsData = {
+  busload: { cur: 18, min: 12, max: 35, avg: 20 },
+  minSendDist: { cur: 1.2, min: 0.8, max: 5.0, avg: 2.1 },
+  burstTime: { cur: 0, min: 0, max: 15, avg: 2 },
+  bursts: { cur: 0, min: 0, max: 3, avg: 0.5 },
+  framesPerBurst: { cur: 0, min: 0, max: 8, avg: 1.2 },
+  stdData: { cur: 120, min: 0, max: 150, avg: 115, total: 0 },
+  extData: { cur: 15, min: 0, max: 25, avg: 14, total: 0 },
+  stdRemote: { cur: 0, min: 0, max: 2, avg: 0.1, total: 0 },
+  extRemote: { cur: 0, min: 0, max: 1, avg: 0.05, total: 0 },
+  errorframes: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+  txErrCount: { cur: 0, min: 0, max: 0, avg: 0 },
+  rxErrCount: { cur: 0, min: 0, max: 0, avg: 0 },
+  transceiverErrors: { cur: 0, min: 0, max: 0, avg: 0 },
+  transceiverDelay: { cur: 120, min: 110, max: 140, avg: 122 },
+};
+
+// ===== 导航 =====
+function switchView(view) {
+  state.currentView = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.querySelectorAll('.ribbon-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  document.querySelectorAll('.sidebar-item').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  document.querySelector('.main-content').scrollTop = 0;
+}
+
+document.querySelectorAll('.ribbon-tab, .sidebar-item, .quick-nav-card').forEach(el => {
+  el.addEventListener('click', () => {
+    if (el.dataset.view) switchView(el.dataset.view);
+  });
+});
+
+// ===== Data 窗口渲染 =====
+function renderDataRows() {
+  const container = document.getElementById('data-rows-container');
+  container.innerHTML = '';
+  signals.forEach((sig, idx) => {
+    const row = document.createElement('div');
+    row.className = 'data-row' + (state.dataMode === 'minmax' ? ' minmax-mode' : '');
+    
+    let displayVal, rawVal;
+    if (state.dataFormat === 'physical') {
+      displayVal = sig.cur.toFixed(1);
+      rawVal = sig.raw.toString();
+    } else if (state.dataFormat === 'raw') {
+      displayVal = sig.raw.toString();
+      rawVal = sig.raw.toString();
+    } else if (state.dataFormat === 'decimal') {
+      displayVal = Math.round(sig.cur).toString();
+      rawVal = sig.raw.toString();
+    } else {
+      displayVal = '0x' + sig.raw.toString(16).toUpperCase();
+      rawVal = '0x' + sig.raw.toString(16).toUpperCase();
+    }
+    
+    const barPct = Math.min(100, Math.max(0, ((sig.cur - sig.min) / (sig.max - sig.min)) * 100));
+    
+    row.innerHTML = `
+      <div class="sig-name">${sig.name}</div>
+      <div class="sig-value" id="sig-val-${idx}">${displayVal}</div>
+      <div class="sig-unit">${state.dataFormat === 'physical' ? sig.unit : ''}</div>
+      <div class="sig-raw">${rawVal}</div>
+      <div class="sig-bar-wrap">
+        <div class="sig-bar"><div class="sig-bar-fill" style="width:${barPct}%"></div></div>
+        <div class="sig-bar-text">${barPct.toFixed(0)}%</div>
+      </div>
+      ${state.dataMode === 'minmax' ? `
+        <div class="minmax-extra">
+          <span>Min: <span class="min-val">${sig.minSeen === Infinity ? '--' : sig.minSeen.toFixed(1)}</span> ${sig.unit}</span>
+          <span>Max: <span class="max-val">${sig.maxSeen === -Infinity ? '--' : sig.maxSeen.toFixed(1)}</span> ${sig.unit}</span>
+          <span>Range: ${(sig.maxSeen - sig.minSeen).toFixed(1)} ${sig.unit}</span>
+        </div>
+      ` : ''}
+    `;
+    container.appendChild(row);
+  });
+}
+
+function updateSignals() {
+  if (!state.dataRunning) return;
+  const t = Date.now() / 1000;
+  signals.forEach((sig, idx) => {
+    // 模拟信号波动
+    const noise = (Math.random() - 0.5) * sig.amp * 0.3;
+    const wave = Math.sin(t * (0.5 + idx * 0.3) + idx) * sig.amp * 0.5;
+    let physical = sig.base + wave + noise;
+    physical = Math.max(sig.min, Math.min(sig.max, physical));
+    sig.cur = physical;
+    sig.raw = Math.round((physical - sig.offset) / sig.factor);
+    if (physical < sig.minSeen) sig.minSeen = physical;
+    if (physical > sig.maxSeen) sig.maxSeen = physical;
+    
+    // 更新显示
+    const valEl = document.getElementById('sig-val-' + idx);
+    if (valEl) {
+      let displayVal;
+      if (state.dataFormat === 'physical') displayVal = sig.cur.toFixed(1);
+      else if (state.dataFormat === 'raw') displayVal = sig.raw.toString();
+      else if (state.dataFormat === 'decimal') displayVal = Math.round(sig.cur).toString();
+      else displayVal = '0x' + sig.raw.toString(16).toUpperCase();
+      
+      valEl.textContent = displayVal;
+      valEl.classList.add('flash');
+      setTimeout(() => valEl.classList.remove('flash'), 200);
+    }
+  });
+  
+  // 更新迷你 Data 显示
+  const miniData = document.getElementById('mini-data-value');
+  if (miniData) miniData.textContent = signals[0].cur.toFixed(1);
+}
+
+function setDataFormat(fmt) {
+  state.dataFormat = fmt;
+  document.querySelectorAll('[data-format]').forEach(b => {
+    b.classList.toggle('active', b.dataset.format === fmt);
+  });
+  renderDataRows();
+}
+
+function setDataMode(mode) {
+  state.dataMode = mode;
+  document.querySelectorAll('[data-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  renderDataRows();
+}
+
+function toggleDataRunning() {
+  state.dataRunning = !state.dataRunning;
+  document.getElementById('data-run-text').textContent = state.dataRunning ? '暂停' : '运行';
+  document.getElementById('data-run-icon').innerHTML = state.dataRunning 
+    ? '<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+  showToast(state.dataRunning ? 'Data 窗口已恢复运行' : 'Data 窗口已暂停');
+}
+
+function resetDataMinMax() {
+  signals.forEach(sig => {
+    sig.minSeen = Infinity;
+    sig.maxSeen = -Infinity;
+  });
+  renderDataRows();
+  showToast('已重置最小/最大值');
+}
+
+// ===== Statistics 渲染 =====
+function renderStatsRows() {
+  const container = document.getElementById('stats-rows-container');
+  const d = statsData;
+  
+  const rows = [
+    { cat: '总线负载' },
+    { name: 'Busload', unit: '%', cur: d.busload.cur.toFixed(1), min: d.busload.min.toFixed(1), max: d.busload.max.toFixed(1), avg: d.busload.avg.toFixed(1), cls: 'highlight' },
+    { name: 'Min. Send Dist.', unit: 'ms', cur: d.minSendDist.cur.toFixed(1), min: d.minSendDist.min.toFixed(1), max: d.minSendDist.max.toFixed(1), avg: d.minSendDist.avg.toFixed(1) },
+    { cat: '突发传输' },
+    { name: 'Burst Time', unit: 'ms', cur: d.burstTime.cur.toFixed(0), min: d.burstTime.min.toFixed(0), max: d.burstTime.max.toFixed(0), avg: d.burstTime.avg.toFixed(0) },
+    { name: 'Bursts', unit: '', cur: d.bursts.cur.toFixed(0), min: d.bursts.min.toFixed(0), max: d.bursts.max.toFixed(0), avg: d.bursts.avg.toFixed(0) },
+    { name: 'Frames per Burst', unit: '', cur: d.framesPerBurst.cur.toFixed(0), min: d.framesPerBurst.min.toFixed(0), max: d.framesPerBurst.max.toFixed(0), avg: d.framesPerBurst.avg.toFixed(0) },
+    { cat: '帧类型分布 [fr/s] / [total]' },
+    { name: 'Std. Data', unit: '', cur: d.stdData.cur + ' / ' + d.stdData.total, min: d.stdData.min.toString(), max: d.stdData.max.toString(), avg: d.stdData.avg.toString() },
+    { name: 'Ext. Data', unit: '', cur: d.extData.cur + ' / ' + d.extData.total, min: d.extData.min.toString(), max: d.extData.max.toString(), avg: d.extData.avg.toString() },
+    { name: 'Std. Remote', unit: '', cur: d.stdRemote.cur + ' / ' + d.stdRemote.total, min: d.stdRemote.min.toString(), max: d.stdRemote.max.toString(), avg: d.stdRemote.avg.toString() },
+    { name: 'Ext. Remote', unit: '', cur: d.extRemote.cur + ' / ' + d.extRemote.total, min: d.extRemote.min.toString(), max: d.extRemote.max.toString(), avg: d.extRemote.avg.toString() },
+    { cat: '错误与控制器状态' },
+    { name: 'Errorframes', unit: '', cur: d.errorframes.cur + ' / ' + d.errorframes.total, min: d.errorframes.min.toString(), max: d.errorframes.max.toString(), avg: d.errorframes.avg.toString(), cls: d.errorframes.total > 0 ? 'danger' : '' },
+    { name: 'Chip State', unit: '', cur: 'Active', min: '-', max: '-', avg: '-' },
+    { name: 'Transmit Error Count', unit: '', cur: d.txErrCount.cur.toString(), min: d.txErrCount.min.toString(), max: d.txErrCount.max.toString(), avg: d.txErrCount.avg.toString(), cls: d.txErrCount.cur > 0 ? 'warn' : '' },
+    { name: 'Receive Error Count', unit: '', cur: d.rxErrCount.cur.toString(), min: d.rxErrCount.min.toString(), max: d.rxErrCount.max.toString(), avg: d.rxErrCount.avg.toString(), cls: d.rxErrCount.cur > 0 ? 'warn' : '' },
+    { name: 'Transceiver Errors', unit: '', cur: d.transceiverErrors.cur.toString(), min: d.transceiverErrors.min.toString(), max: d.transceiverErrors.max.toString(), avg: d.transceiverErrors.avg.toString() },
+    { name: 'Transceiver Delay', unit: 'ns', cur: d.transceiverDelay.cur.toString(), min: d.transceiverDelay.min.toString(), max: d.transceiverDelay.max.toString(), avg: d.transceiverDelay.avg.toString() },
+  ];
+  
+  container.innerHTML = rows.map(r => {
+    if (r.cat) {
+      return `<div class="stats-row category-header"><div>${r.cat}</div><div></div><div></div><div></div><div></div></div>`;
+    }
+    return `<div class="stats-row">
+      <div class="stat-name">${r.name}${r.unit ? ' <span class="unit">[' + r.unit + ']</span>' : ''}</div>
+      <div class="stat-val ${r.cls || ''}">${r.cur}</div>
+      <div class="stat-val">${r.min}</div>
+      <div class="stat-val">${r.max}</div>
+      <div class="stat-val">${r.avg}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateStats() {
+  if (!state.statsRunning) return;
+  
+  const d = statsData;
+  // 模拟负载率波动
+  d.busload.cur = 15 + Math.sin(Date.now() / 3000) * 8 + (Math.random() - 0.5) * 4;
+  d.busload.cur = Math.max(5, Math.min(65, d.busload.cur));
+  d.busload.min = Math.min(d.busload.min, d.busload.cur);
+  d.busload.max = Math.max(d.busload.max, d.busload.cur);
+  d.busload.avg = d.busload.avg * 0.99 + d.busload.cur * 0.01;
+  
+  // 帧计数
+  d.stdData.cur = Math.round(100 + Math.random() * 40);
+  d.stdData.total += Math.round(d.stdData.cur * 0.1);
+  d.extData.cur = Math.round(10 + Math.random() * 10);
+  d.extData.total += Math.round(d.extData.cur * 0.1);
+  
+  // 偶尔的突发
+  if (Math.random() < 0.05) {
+    d.bursts.cur = 1;
+    d.burstTime.cur = Math.round(Math.random() * 10);
+    d.framesPerBurst.cur = Math.round(Math.random() * 6);
+  } else {
+    d.bursts.cur = 0;
+    d.burstTime.cur = 0;
+    d.framesPerBurst.cur = 0;
+  }
+  
+  // 更新仪表
+  const gauge = document.getElementById('busload-gauge');
+  const valEl = document.getElementById('busload-value');
+  const statusEl = document.getElementById('busload-status');
+  const descEl = document.getElementById('busload-desc');
+  
+  if (gauge) {
+    const angle = (d.busload.cur / 100) * 360;
+    gauge.style.setProperty('--gauge-angle', angle + 'deg');
+    let color = 'var(--accent-green)';
+    if (d.busload.cur > 70) color = 'var(--accent-red)';
+    else if (d.busload.cur > 50) color = 'var(--accent-amber)';
+    gauge.style.background = `conic-gradient(${color} 0deg, ${color} ${angle}deg, var(--bg-deep) ${angle}deg)`;
+    valEl.textContent = d.busload.cur.toFixed(1);
+    valEl.style.color = color;
+    
+    if (d.busload.cur < 30) {
+      statusEl.className = 'gauge-status healthy';
+      statusEl.textContent = '健康';
+      descEl.textContent = '总线负载率正常，余量充足。';
+    } else if (d.busload.cur < 50) {
+      statusEl.className = 'gauge-status warning';
+      statusEl.textContent = '偏忙';
+      descEl.textContent = '负载率偏高，峰值可能出现拥塞。';
+    } else {
+      statusEl.className = 'gauge-status danger';
+      statusEl.textContent = '繁忙';
+      descEl.textContent = '负载率过高，有丢帧风险，请关注！';
+    }
+  }
+  
+  // 更新统计时长
+  const elapsed = Math.floor((Date.now() - state.statsStartTime - state.statsTotalPaused) / 1000);
+  const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const secs = String(elapsed % 60).padStart(2, '0');
+  const durEl = document.getElementById('stats-duration');
+  if (durEl) durEl.textContent = mins + ':' + secs;
+  
+  renderStatsRows();
+}
+
+function toggleStatsRunning() {
+  state.statsRunning = !state.statsRunning;
+  document.getElementById('stats-run-text').textContent = state.statsRunning ? '暂停统计' : '继续统计';
+  document.getElementById('stats-run-icon').innerHTML = state.statsRunning 
+    ? '<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+  if (!state.statsRunning) {
+    state.statsPauseStart = Date.now();
+  } else {
+    state.statsTotalPaused += Date.now() - state.statsPauseStart;
+  }
+  showToast(state.statsRunning ? '统计已继续' : '统计已暂停');
+}
+
+function resetStats() {
+  statsData = {
+    busload: { cur: 0, min: 100, max: 0, avg: 0 },
+    minSendDist: { cur: 0, min: 999, max: 0, avg: 0 },
+    burstTime: { cur: 0, min: 0, max: 0, avg: 0 },
+    bursts: { cur: 0, min: 0, max: 0, avg: 0 },
+    framesPerBurst: { cur: 0, min: 0, max: 0, avg: 0 },
+    stdData: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+    extData: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+    stdRemote: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+    extRemote: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+    errorframes: { cur: 0, min: 0, max: 0, avg: 0, total: 0 },
+    txErrCount: { cur: 0, min: 0, max: 0, avg: 0 },
+    rxErrCount: { cur: 0, min: 0, max: 0, avg: 0 },
+    transceiverErrors: { cur: 0, min: 0, max: 0, avg: 0 },
+    transceiverDelay: { cur: 120, min: 110, max: 140, avg: 122 },
+  };
+  state.statsStartTime = Date.now();
+  state.statsTotalPaused = 0;
+  renderStatsRows();
+  showToast('统计已重置');
+}
+
+function copyStatsToClipboard() {
+  let text = '统计项\tCurrent\tMin\tMax\tAvg\n';
+  const d = statsData;
+  text += `Busload [%]\t${d.busload.cur.toFixed(1)}\t${d.busload.min.toFixed(1)}\t${d.busload.max.toFixed(1)}\t${d.busload.avg.toFixed(1)}\n`;
+  text += `Std. Data [fr/s]/[total]\t${d.stdData.cur} / ${d.stdData.total}\t${d.stdData.min}\t${d.stdData.max}\t${d.stdData.avg}\n`;
+  text += `Ext. Data [fr/s]/[total]\t${d.extData.cur} / ${d.extData.total}\t${d.extData.min}\t${d.extData.max}\t${d.extData.avg}\n`;
+  text += `Errorframes [fr/s]/[total]\t${d.errorframes.cur} / ${d.errorframes.total}\t${d.errorframes.min}\t${d.errorframes.max}\t${d.errorframes.avg}\n`;
+  text += `Transmit Error Count\t${d.txErrCount.cur}\t${d.txErrCount.min}\t${d.txErrCount.max}\t${d.txErrCount.avg}\n`;
+  text += `Receive Error Count\t${d.rxErrCount.cur}\t${d.rxErrCount.min}\t${d.rxErrCount.max}\t${d.rxErrCount.avg}\n`;
+  
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('统计数据已复制到剪贴板');
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('统计数据已复制到剪贴板');
+  });
+}
+
+function adaptColumns() {
+  showToast('列宽已自适应调整');
+}
+
+function switchChannel() {
+  resetStats();
+  showToast('已切换通道，统计已重置');
+}
+
+// ===== 迷你 Trace 动画 =====
+let traceLines = [];
+function updateMiniTrace() {
+  const el = document.getElementById('mini-trace');
+  if (!el) return;
+  
+  const ids = ['0x100', '0x200', '0x300', '0x150', '0x400'];
+  const ts = (Date.now() % 100000 / 1000).toFixed(3);
+  const id = ids[Math.floor(Math.random() * ids.length)];
+  const data = Array.from({length: 8}, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase()).join(' ');
+  
+  traceLines.push(`<div class="mini-trace-line"><span class="ts">${ts}</span> <span class="id">${id}</span> <span class="data">${data}</span></div>`);
+  if (traceLines.length > 5) traceLines.shift();
+  el.innerHTML = traceLines.join('');
+}
+
+// ===== 迷你 Graphic 动画 =====
+let graphicData = [];
+function drawMiniGraphic() {
+  const canvas = document.getElementById('mini-graphic');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.offsetWidth;
+  const h = canvas.height = 60;
+  
+  graphicData.push(30 + Math.sin(Date.now() / 500) * 15 + (Math.random() - 0.5) * 8);
+  if (graphicData.length > w / 2) graphicData.shift();
+  
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#ffb547';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  graphicData.forEach((v, i) => {
+    const x = i * 2;
+    const y = h - (v / 60) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// ===== 实操清单 =====
+function updateChecklistUI() {
+  const items = document.querySelectorAll('.checklist-item');
+  let done = 0;
+  items.forEach(item => {
+    const step = item.dataset.step;
+    const isDone = state.checklist[step];
+    item.classList.toggle('done', isDone);
+    if (isDone) done++;
+  });
+  document.getElementById('progress-count').textContent = done;
+  document.getElementById('progress-fill').style.width = (done / 10 * 100) + '%';
+}
+
+document.querySelectorAll('.checklist-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const step = item.dataset.step;
+    state.checklist[step] = !state.checklist[step];
+    localStorage.setItem('canoe-checklist', JSON.stringify(state.checklist));
+    updateChecklistUI();
+  });
+});
+
+function resetChecklist() {
+  state.checklist = {};
+  localStorage.setItem('canoe-checklist', JSON.stringify(state.checklist));
+  updateChecklistUI();
+  showToast('实操清单已重置');
+}
+
+// ===== FAQ =====
+function toggleFaq(el) {
+  el.parentElement.classList.toggle('open');
+}
+
+// ===== Toast =====
+let toastTimer;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ===== 初始化 =====
+renderDataRows();
+renderStatsRows();
+updateChecklistUI();
+
+// 主循环
+setInterval(() => {
+  updateSignals();
+  updateStats();
+  updateMiniTrace();
+  drawMiniGraphic();
+}, 300);
+
+</script>
+</body>
+</html>

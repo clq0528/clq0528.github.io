@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLC 仿真工作台</title>
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+  /* ============ 设计令牌 ============ */
+  :root{
+    --bg0:#0c1015;        /* 页面底色 */
+    --bg1:#121821;        /* 面板 */
+    --bg2:#18202b;        /* 内层 */
+    --bg3:#1f2937;        /* 更内层 / 触点底色 */
+    --line:#26323f;       /* 边框 */
+    --line2:#37465a;      /* 亮边框 */
+    --ink:#e8eef5;        /* 主文字 */
+    --ink-dim:#8b98a6;    /* 次文字 */
+    --ink-faint:#5c6b7a;  /* 弱文字 */
+    --green:#3fb950;      /* 导通/ON */
+    --green-hi:#4ade80;
+    --amber:#ffb020;      /* 唯一强调色：信号琥珀 */
+    --amber-ink:#1a1508;
+    --red:#f85149;
+    --cyan:#39c5cf;
+    --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,'Courier New',monospace;
+    --sans:'Noto Sans SC',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--sans);
+    background:var(--bg0);
+    color:var(--ink);
+    min-width:1120px;
+    overflow-x:auto;
+    font-size:14px;
+  }
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#2c3948;border-radius:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .mono{font-family:var(--mono)}
+
+  /* ============ 顶部 ============ */
+  header.top{
+    height:58px;display:flex;align-items:center;gap:18px;padding:0 18px;
+    background:linear-gradient(180deg,#18202b,#121821);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .cab{width:34px;height:34px;border-radius:6px;background:var(--bg3);
+    border:1px solid var(--line2);display:flex;align-items:center;justify-content:center}
+  .brand h1{font-size:16px;font-weight:900;letter-spacing:.5px}
+  .brand .sub{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);letter-spacing:1px;margin-top:2px}
+  .top-spacer{flex:1}
+  .status-chip{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+    background:var(--bg2);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+  .led{width:9px;height:9px;border-radius:50%;background:#39424f;box-shadow:none;transition:all .15s}
+  .led.run{background:var(--green-hi);box-shadow:0 0 8px rgba(74,222,128,.9)}
+  .led.stop{background:var(--amber);box-shadow:0 0 8px rgba(255,176,32,.9)}
+  .num{color:var(--ink);font-weight:600}
+  .hazard{height:4px;background:repeating-linear-gradient(45deg,var(--amber) 0 14px,#0a0d12 14px 28px)}
+
+  /* ============ 按钮 ============ */
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+    background:var(--bg3);color:var(--ink);border:1px solid var(--line2);border-radius:5px;
+    font-family:var(--sans);font-size:12.5px;cursor:pointer;transition:all .12s;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--amber);color:#fff}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.38;cursor:not-allowed;border-color:var(--line)}
+  .btn.primary{background:var(--amber);color:var(--amber-ink);border-color:var(--amber);font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.danger:hover{border-color:var(--red);color:var(--red)}
+  .btn.small{height:26px;padding:0 9px;font-size:11.5px}
+  .btn svg{flex:none}
+
+  /* ============ 主体栅格 ============ */
+  main{
+    display:grid;grid-template-columns:272px minmax(0,1fr) 330px;
+    height:calc(100vh - 62px);min-height:560px;
+  }
+  .panel{background:var(--bg1);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .panel:last-child{border-right:none}
+  .phead{
+    display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);
+    font-size:12px;font-weight:700;letter-spacing:1px;color:var(--ink-dim);
+    background:var(--bg2);
+  }
+  .phead .dot{width:7px;height:7px;border-radius:50%;background:var(--amber)}
+  .pbody{flex:1;overflow:auto;padding:12px}
+
+  /* ============ 左：I/O ============ */
+  .io-title{font-size:11px;color:var(--ink-faint);margin:2px 0 8px;letter-spacing:1px;font-weight:700}
+  .swgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sw{
+    display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--bg2);
+    border:1px solid var(--line);border-radius:6px;cursor:pointer;user-select:none;transition:all .12s;
+  }
+  .sw:hover{border-color:var(--line2)}
+  .lamp{width:15px;height:15px;border-radius:50%;border:2px solid #2c3948;background:#1a2029;flex:none;transition:all .12s}
+  .sw.on .lamp{background:var(--green-hi);border-color:var(--green-hi);box-shadow:0 0 9px rgba(74,222,128,.85)}
+  .sw .tag{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim)}
+  .sw.on .tag{color:var(--ink)}
+  .sw .kind{font-size:10px;color:var(--ink-faint)}
+  .ana-box{margin-top:6px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:10px}
+  .ana-box label{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:6px}
+  .ana-box .val{font-family:var(--mono);color:var(--amber);font-weight:700}
+  input[type=range]{width:100%;accent-color:var(--amber)}
+  .out-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .outcell{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:9px;text-align:center}
+  .olamp{width:34px;height:34px;border-radius:50%;margin:0 auto 6px;background:#141a22;border:3px solid #2c3948;transition:all .15s}
+  .outcell.on .olamp{background:radial-gradient(circle at 35% 35%,#ffd27a,#ff9d1f);border-color:var(--amber);box-shadow:0 0 16px rgba(255,176,32,.8)}
+  .outcell .tag{font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+  .outcell.on .tag{color:var(--amber);font-weight:600}
+  .outcell .desc{font-size:10px;color:var(--ink-faint);margin-top:2px}
+  .io-note{margin-top:10px;font-size:10.5px;line-height:1.7;color:var(--ink-faint);border-top:1px dashed var(--line);padding-top:8px}
+  .io-note b{color:var(--ink-dim)}
+
+  /* ============ 中：程序 ============ */
+  .prog-panel{background:var(--bg1)}
+  .prog-toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center;background:var(--bg2)}
+  .prog-toolbar .sep{width:1px;height:22px;background:var(--line2);margin:0 2px}
+  .prog-toolbar select, .insp-field select, .insp-field input{
+    height:28px;background:var(--bg3);color:var(--ink);border:1px solid var(--line2);border-radius:5px;
+    padding:0 8px;font-family:var(--mono);font-size:12px;outline:none;
+  }
+  .prog-toolbar select:focus{border-color:var(--amber)}
+  .tool-label{font-size:11px;color:var(--ink-faint);letter-spacing:.5px}
+
+  .editor-scroll{flex:1;overflow:auto;padding:12px;background:
+    repeating-linear-gradient(0deg,transparent 0 30px, rgba(255,255,255,.012) 30px 31px)}
+  .rung-card{
+    background:var(--bg2);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden;
+  }
+  .rung-card.selected{border-color:var(--amber)}
+  .rung-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line)}
+  .rung-head .rno{font-family:var(--mono);font-size:11px;color:var(--amber);font-weight:700;flex:none}
+  .rung-head input.name{
+    background:transparent;border:1px solid transparent;color:var(--ink);font-size:12.5px;flex:1;outline:none;
+    font-family:var(--sans);padding:3px 6px;border-radius:4px;
+  }
+  .rung-head input.name:hover{border-color:var(--line)}
+  .rung-head input.name:focus{border-color:var(--amber)}
+  .rung-head .rhint{font-size:10.5px;color:var(--ink-faint);font-family:var(--mono)}
+  .ladder-wrap{padding:14px 10px 10px;overflow-x:auto}
+  .ladder-wrap svg{display:block}
+  .rung-empty{padding:18px;text-align:center;color:var(--ink-faint);font-size:12px;border:1px dashed var(--line2);border-radius:6px}
+  .hint-bar{padding:8px 12px;font-size:11px;color:var(--ink-faint);border-top:1px dashed var(--line);background:var(--bg2)}
+  .hint-bar b{color:var(--amber)}
+
+  /* SVG 梯形图 */
+  svg text{font-family:var(--mono);user-select:none}
+  .wire{stroke:var(--line2);stroke-width:2;fill:none}
+  .wire-on{stroke:var(--green);stroke-width:2.6;fill:none}
+  .bar{stroke:var(--ink-dim);stroke-width:2.4;fill:none}
+  .bar-on{stroke:var(--green-hi);stroke-width:3.2;fill:none}
+  .slash{stroke:var(--red);stroke-width:2}
+  .coil{fill:none;stroke:var(--ink-dim);stroke-width:2.4}
+  .coil-on{fill:rgba(74,222,128,.16);stroke:var(--green-hi);stroke-width:3}
+  .coil-letter{font-size:11px;font-weight:700;fill:var(--ink-dim)}
+  .coil-letter.on{fill:var(--green-hi)}
+  .box{fill:var(--bg3);stroke:var(--line2);stroke-width:1.6}
+  .box-on{fill:rgba(255,176,32,.1);stroke:var(--amber);stroke-width:2}
+  .box-t{font-size:11.5px;font-weight:700;fill:var(--ink)}
+  .box-s{font-size:10px;fill:var(--ink-dim)}
+  .box-s.cur-on{fill:var(--green-hi);font-weight:600}
+  .addr{font-size:11px;fill:var(--ink-faint)}
+  .addr-on{fill:var(--green-hi);font-weight:700}
+  .rail{stroke:var(--line2);stroke-width:3;fill:none}
+  .sel{fill:none;stroke:var(--amber);stroke-width:1.6;stroke-dasharray:4 3}
+  .el{cursor:pointer}
+
+  /* ============ 右：监控 ============ */
+  .tabbar{display:flex;border-bottom:1px solid var(--line);background:var(--bg2)}
+  .tab{padding:9px 12px;font-size:12px;color:var(--ink-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:700;letter-spacing:.5px}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+  .tabbody{flex:1;overflow:auto}
+  .tpage{display:none;padding:12px}
+  .tpage.active{display:block}
+
+  .mon-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+  .mon-table th{text-align:left;color:var(--ink-faint);font-weight:500;padding:4px 6px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:1px}
+  .mon-table td{padding:4px 6px;border-bottom:1px solid rgba(38,50,63,.5)}
+  .mon-table .st{width:8px;height:8px;border-radius:50%;display:inline-block;background:#2a3441;margin-right:6px;vertical-align:middle}
+  .mon-table tr.on .st{background:var(--green-hi);box-shadow:0 0 6px rgba(74,222,128,.8)}
+  .mon-table tr.on td:first-child{color:var(--green-hi);font-weight:600}
+  .mon-table .val{color:var(--ink-dim)}
+  .mon-table tr.on .val{color:var(--amber)}
+  .sec-title{font-size:11px;color:var(--ink-faint);letter-spacing:1px;margin:12px 0 6px;font-weight:700}
+
+  pre.code{
+    font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--ink);
+    background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all;
+  }
+  pre.code .c{color:var(--ink-faint)}
+  pre.code .k{color:var(--amber)}
+  pre.code .v{color:var(--green-hi)}
+
+  .explain-card{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+  .explain-card .et{font-size:11px;color:var(--ink-faint);margin-bottom:6px;font-family:var(--mono)}
+  .explain-card .et b{color:var(--ink-dim)}
+  .explain-line{font-size:12px;line-height:1.85;color:var(--ink)}
+  .explain-line .cond-on{color:var(--green-hi);font-weight:700}
+  .explain-line .cond-off{color:var(--ink-faint)}
+  .explain-line .act{color:var(--amber);font-weight:700}
+  .flow-line{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink-dim);
+    background:var(--bg3);border-radius:4px;padding:6px 8px;word-break:break-all}
+  .flow-line .f-on{color:var(--green-hi);font-weight:600}
+  .flow-line .f-off{color:var(--ink-faint)}
+  .flow-line .f-rail{color:var(--amber)}
+
+  .trend-ctl{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .trend-ctl select{height:26px;background:var(--bg3);color:var(--ink);border:1px solid var(--line2);border-radius:5px;font-family:var(--mono);font-size:11px;padding:0 6px}
+  .trend-ctl label{font-size:11px;color:var(--ink-faint)}
+  canvas.trend{width:100%;height:96px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;display:block}
+  .legend-note{font-size:10.5px;color:var(--ink-faint);margin-top:8px;line-height:1.8}
+  .legend-note i{display:inline-block;width:12px;height:3px;margin:0 4px 3px 0;vertical-align:middle}
+  .lg-green{background:var(--green)}
+  .lg-amber{background:var(--amber)}
+
+  /* 空/提示 */
+  .empty-tip{color:var(--ink-faint);font-size:12px;text-align:center;padding:26px 10px;line-height:2}
+  .empty-tip b{color:var(--amber)}
+
+  @media (max-width:1180px){
+    main{grid-template-columns:1fr;height:auto;overflow:visible}
+    body{min-width:760px}
+    .panel{border-right:none;border-bottom:1px solid var(--line)}
+    .editor-scroll{max-height:70vh}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="cab">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffb020" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2"/>
+        <circle cx="9" cy="9" r="1.6" fill="#ffb020" stroke="none"/>
+        <circle cx="15" cy="9" r="1.6" fill="#3fb950" stroke="none"/>
+        <circle cx="9" cy="15" r="1.6" fill="#3fb950" stroke="none"/>
+        <circle cx="15" cy="15" r="1.6" fill="#f85149" stroke="none"/>
+      </svg>
+    </div>
+    <div>
+      <h1>PLC 仿真工作台</h1>
+      <div class="sub">SIMATIC S7-200 · 梯形图 LAD / 结构化文本 ST</div>
+    </div>
+  </div>
+  <div class="top-spacer"></div>
+  <div class="status-chip"><span id="modeLed" class="led stop"></span><span id="modeText">STOP</span></div>
+  <div class="status-chip">扫描周期 <span class="num">10</span> ms</div>
+  <div class="status-chip">扫描次数 <span class="num" id="scanNum">0</span></div>
+</header>
+<div class="hazard"></div>
+
+<main>
+  <!-- ===== 左：I/O 仿真面板 ===== -->
+  <aside class="panel">
+    <div class="phead"><span class="dot"></span>I/O 仿真面板</div>
+    <div class="pbody">
+      <div class="io-title">数字输入 I（开关 / 按钮 / 传感器）</div>
+      <div class="swgrid" id="ioGrid"></div>
+
+      <div class="io-title" style="margin-top:16px">模拟量输入 AIW0</div>
+      <div class="ana-box">
+        <label><span>电位器 / 模拟信号</span><span class="val mono" id="aiwVal">0</span></label>
+        <input type="range" id="aiwRange" min="0" max="32000" step="100" value="0">
+        <label style="margin-top:6px;justify-content:flex-start"><span style="color:var(--ink-faint)">0 ～ 32000</span></label>
+      </div>
+
+      <div class="io-title" style="margin-top:16px">数字输出 Q（执行机构）</div>
+      <div class="out-grid" id="outGrid"></div>
+
+      <div class="io-note">
+        <b>地址约定：</b>I0.0～I0.7 输入 · Q0.0～Q0.3 输出 · M 中间继电器 · T37 定时器(10ms) · C0 计数器。<br>
+        点击开关即改变输入状态；运行后每个扫描周期刷新一次输出与导通状态。
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== 中：梯形图编辑与运行 ===== -->
+  <section class="panel prog-panel">
+    <div class="prog-toolbar">
+      <span class="tool-label">示例</span>
+      <select id="exampleSel">
+        <option value="motor">电机启停（自保持 + 急停）</option>
+        <option value="ton">定时器延时启动</option>
+        <option value="ctu">计数器（5 次计数）</option>
+        <option value="blink">定时器闪烁电路</option>
+        <option value="blank">空白工程</option>
+      </select>
+      <div class="sep"></div>
+      <button class="btn small" id="btnRun">▶ RUN</button>
+      <button class="btn small" id="btnStop">■ STOP</button>
+      <button class="btn small" id="btnStep">单步扫描</button>
+      <button class="btn small" id="btnReset">复位</button>
+    </div>
+
+    <div class="prog-toolbar" style="border-top:1px solid var(--line)">
+      <span class="tool-label">元件</span>
+      <button class="btn small" id="btnAddNO">常开触点 |</button>
+      <button class="btn small" id="btnAddNC">常闭触点 |/|</button>
+      <button class="btn small" id="btnPara">并联分支</button>
+      <div class="sep"></div>
+      <button class="btn small" id="btnCoil">线圈 ( )</button>
+      <button class="btn small" id="btnSet">置位 S</button>
+      <button class="btn small" id="btnResetOut">复位 R</button>
+      <button class="btn small" id="btnTON">定时器 TON</button>
+      <button class="btn small" id="btnCTU">计数器 CTU</button>
+      <div class="sep"></div>
+      <button class="btn small danger" id="btnDel">删除选中</button>
+    </div>
+
+    <div class="prog-toolbar" style="border-top:1px solid var(--line)" id="inspectorBar">
+      <span class="tool-label">元件属性</span>
+      <div id="inspector" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"></div>
+    </div>
+
+    <div class="editor-scroll" id="editorArea">
+      <div class="rung-empty" id="noRungTip">程序为空。点击「示例」选择工程，或用上方元件按钮从零搭建网络。</div>
+      <div id="rungList"></div>
+      <div class="hint-bar">提示：<b>点击梯形图中的元件</b>可选中并编辑属性；<b>并联分支</b>对选中触点生成并联支路；运行后<strong>绿色 = 电流导通</strong>，琥珀色 = 输出得电。</div>
+    </div>
+  </section>
+
+  <!-- ===== 右：监控 / 代码 / 解读 / 趋势 ===== -->
+  <aside class="panel">
+    <div class="tabbar">
+      <div class="tab active" data-tab="mon">监控</div>
+      <div class="tab" data-tab="st">ST 代码</div>
+      <div class="tab" data-tab="exp">回路解读</div>
+      <div class="tab" data-tab="trend">趋势</div>
+    </div>
+    <div class="tabbody">
+      <div class="tpage active" id="pg-mon">
+        <div id="monContent"></div>
+      </div>
+      <div class="tpage" id="pg-st">
+        <pre class="code" id="stCode"></pre>
+      </div>
+      <div class="tpage" id="pg-exp">
+        <div id="expContent"></div>
+      </div>
+      <div class="tpage" id="pg-trend">
+        <div class="trend-ctl">
+          <label>信号</label>
+          <select id="trendSel"></select>
+        </div>
+        <canvas class="trend" id="trendCanvas" width="600" height="190"></canvas>
+        <div class="legend-note">
+          <i class="lg-green"></i>高电平 1 · <i class="lg-amber"></i>低电平 0（最近约 2.4 秒窗口）
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+/* =====================================================================
+ * PLC 仿真工作台 —— 单文件应用
+ * 数据模型：程序 = 网络(梯形图 rung) 列表；每个网络 = 一棵「串/并」逻辑树
+ * 地址：I 输入 / Q 输出 / M 中间 / T 定时器(T37~T40, 10ms基) / C 计数器(C0~C2) / AIW0 模拟量
+ * 执行：扫描周期 10ms，每次扫描沿树求导通电状态 → 刷新线圈/定时器/计数器 → 更新监视画面
+ * ===================================================================== */
+
+/* ---------- 状态 ---------- */
+const state = {
+  running:false,
+  scan:0,
+  I:[false,false,false,false,false,false,false,false],
+  Q:[false,false,false,false],
+  M:[false,false,false,false,false,false,false,false],
+  AIW0:0,
+  T:{},   // T37/T38/T39/T40 -> {cur,pt,done}
+  C:{},   // C0/C1/C2       -> {cur,pv,done}
+};
+const edge = {};          // 计数器上升沿记忆（按元件 uid）
+let flowMap = {};         // 节点 uid -> 导通电
+let sel = {rungId:null, uid:null};   // 当前选中
+let timerHandle = null;
+
+/* ---------- 元件/网络构造 ---------- */
+let uidSeq = 0;
+const nid = () => 'n' + (++uidSeq);
+
+function mkContact(mode='NO', ref='I', addr=0, cmp=null){
+  return {kind:'contact', uid:nid(), mode, ref, addr, cmp};
+}
+function mkCoil(ref='Q', addr=0){ return {kind:'coil', uid:nid(), ref, addr}; }
+function mkSet(ref='Q', addr=0){ return {kind:'set', uid:nid(), ref, addr}; }
+function mkReset(ref='M', addr=0){ return {kind:'reset', uid:nid(), ref, addr}; }
+function mkTon(addr='T37', pt=50){ return {kind:'ton', uid:nid(), addr, pt}; }
+function mkCtu(addr='C0', pv=5){ return {kind:'ctu', uid:nid(), addr, pv}; }
+function mkParallel(branches){ return {kind:'parallel', uid:nid(), branches}; }
+function mkRung(name){
+  return {id:nid(), name:name||'', root:{kind:'series', uid:nid(), children:[]}};
+}
+
+function isOutput(el){ return el && (el.kind==='coil'||el.kind==='set'||el.kind==='reset'||el.kind==='ton'||el.kind==='ctu'); }
+function terminalIndex(children){
+  const last = children[children.length-1];
+  return isOutput(last) ? children.length-1 : -1;
+}
+function addrStr(ref, addr){
+  if(ref==='T') return 'T'+addr;
+  if(ref==='C') return 'C'+addr;
+  return ref + '.' + addr;
+}
+function refLabel(ref){
+  return {I:'输入',Q:'输出',M:'中间',T:'定时',C:'计数',AIW:'模拟'}[ref]||ref;
+}
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---------- 程序 ---------- */
+let program = [];
+
+/* ---------- 求值（沿逻辑树计算导通） ---------- */
+function getOperand(ref, addr){
+  if(ref==='I') return !!state.I[addr];
+  if(ref==='Q') return !!state.Q[addr];
+  if(ref==='M') return !!state.M[addr];
+  if(ref==='T') return (state.T['T'+addr]||{}).done===true;
+  if(ref==='C') return (state.C['C'+addr]||{}).done===true;
+  return false;
+}
+function evalContact(el){
+  if(el.ref==='AIW'){
+    const k = el.cmp || {op:'>', k:1000};
+    return k.op==='>' ? state.AIW0 > k.k : state.AIW0 < k.k;
+  }
+  const v = getOperand(el.ref, el.addr);
+  return el.mode==='NC' ? !v : !!v;
+}
+function timerRt(addr){ if(!state.T['T'+addr]) state.T['T'+addr]={cur:0,pt:50,done:false}; return state.T['T'+addr]; }
+function counterRt(addr){ if(!state.C['C'+addr]) state.C['C'+addr]={cur:0,pv:5,done:false}; return state.C['C'+addr]; }
+
+function evalSeries(children, ctx){
+  let power = true;
+  for(const ch of children){
+    if(ch.kind==='contact'){
+      const v = evalContact(ch);
+      flowMap[ch.uid] = v;
+      power = power && v;
+    } else if(ch.kind==='parallel'){
+      const v = evalParallel(ch, ctx);
+      flowMap[ch.uid] = v;
+      power = power && v;
+    } else if(ch.kind==='coil'){
+      setBit(ch, power);
+      flowMap[ch.uid] = power;
+      power = false;
+    } else if(ch.kind==='set'){
+      if(power) setBit(ch, true);
+      flowMap[ch.uid] = power;
+      power = false;
+    } else if(ch.kind==='reset'){
+      if(power) doReset(ch);
+      flowMap[ch.uid] = power;
+      power = false;
+    } else if(ch.kind==='ton'){
+      const rt = timerRt(ch.addr);
+      rt.pt = ch.pt;
+      if(ctx.advance){
+        rt.cur = power ? Math.min(rt.cur + 1, ch.pt) : 0;
+      }
+      rt.done = rt.cur >= ch.pt;
+      flowMap[ch.uid] = power;
+      power = false;
+    } else if(ch.kind==='ctu'){
+      const rt = counterRt(ch.addr);
+      rt.pv = ch.pv;
+      if(ctx.advance){
+        const prev = !!edge[ch.uid];
+        if(power && !prev) rt.cur = Math.min(rt.cur + 1, 999);
+        edge[ch.uid] = power;
+      }
+      rt.done = rt.cur >= ch.pv;
+      flowMap[ch.uid] = power;
+      power = false;
+    }
+  }
+  return power;
+}
+function evalParallel(node, ctx){
+  return node.branches.some(b => evalSeries(b, ctx));
+}
+function evalProgram(ctx){
+  flowMap = {};
+  for(const r of program){
+    r.lastFlow = evalSeries(r.root.children, ctx);
+  }
+}
+
+function setBit(el, v){
+  if(el.ref==='Q') state.Q[el.addr] = v;
+  else if(el.ref==='M') state.M[el.addr] = v;
+}
+function doReset(el){
+  if(el.ref==='Q') state.Q[el.addr] = false;
+  else if(el.ref==='M') state.M[el.addr] = false;
+  else if(el.ref==='T'){ if(state.T['T'+el.addr]){ state.T['T'+el.addr].cur=0; state.T['T'+el.addr].done=false; } }
+  else if(el.ref==='C'){ if(state.C['C'+el.addr]){ state.C['C'+el.addr].cur=0; state.C['C'+el.addr].done=false; } }
+}
+
+/* ---------- 运行控制 ---------- */
+function run(){
+  if(state.running) return;
+  state.running = true;
+  const loop = () => {
+    if(!state.running) return;
+    state.scan++;
+    evalProgram({advance:true});
+    renderAll();
+    timerHandle = setTimeout(loop, 10);
+  };
+  loop();
+  updateRunUI();
+}
+function stop(){
+  state.running = false;
+  if(timerHandle) clearTimeout(timerHandle);
+  updateRunUI();
+}
+function step(){
+  state.scan++;
+  evalProgram({advance:true});
+  renderAll();
+}
+function reset(){
+  state.Q = [false,false,false,false];
+  state.M = [false,false,false,false,false,false,false,false];
+  for(const k in state.T) state.T[k].cur = 0, state.T[k].done = false;
+  for(const k in state.C) state.C[k].cur = 0, state.C[k].done = false;
+  for(const k in edge) delete edge[k];
+  state.scan = 0;
+  evalProgram({advance:false});
+  renderAll();
+}
+function updateRunUI(){
+  const led = document.getElementById('modeLed');
+  const txt = document.getElementById('modeText');
+  led.className = 'led ' + (state.running?'run':'stop');
+  txt.textContent = state.running ? 'RUN' : 'STOP';
+  document.getElementById('btnRun').disabled = state.running;
+  document.getElementById('btnStop').disabled = !state.running;
+}
+
+/* ---------- 布局：计算逻辑树占位 ---------- */
+function layoutNode(node){
+  if(node.kind==='contact') return node.mode==='CMP' ? {w:120,h:66} : {w:56,h:66};
+  if(node.kind==='coil'||node.kind==='set'||node.kind==='reset') return {w:62,h:66};
+  if(node.kind==='ton') return {w:160,h:78};
+  if(node.kind==='ctu') return {w:180,h:90};
+  if(node.kind==='parallel'){
+    const bs = node.branches.map(b=>layoutSeries(b));
+    const w = Math.max.apply(null, bs.map(b=>b.w)) + 28;
+    const h = bs.reduce((s,b)=>s+b.h,0) + (bs.length-1)*10 + 14;
+    return {w,h};
+  }
+  return {w:0,h:0};
+}
+function layoutSeries(children){
+  let w = 0;
+  for(const c of children) w += layoutNode(c).w;
+  w += Math.max(0, children.length-1)*10;
+  const h = children.length ? Math.max.apply(null, children.map(c=>layoutNode(c).h)) : 40;
+  return {w,h};
+}
+
+/* ---------- 渲染：梯形图 SVG ---------- */
+function drawNode(ch, x, top, w, h, ctx){
+  const mid = top + h/2;
+  let s = '<g class="el" data-uid="'+ch.uid+'">';
+  if(sel.uid === ch.uid){
+    s += '<rect class="sel" x="'+(x-3)+'" y="'+(top-3)+'" width="'+(w+6)+'" height="'+(h+6)+'"/>';
+  }
+  if(ch.kind==='contact'){
+    s += drawContact(ch, x, top, w, h);
+  } else if(ch.kind==='coil' || ch.kind==='set' || ch.kind==='reset'){
+    const on = !!flowMap[ch.uid];
+    const r = 15, cx = x + w/2;
+    s += '<line x1="'+x+'" y1="'+mid+'" x2="'+(cx-r)+'" y2="'+mid+'" class="'+(on?'wire-on':'wire')+'"/>';
+    s += '<circle cx="'+cx+'" cy="'+mid+'" r="'+r+'" class="'+(on?'coil-on':'coil')+'"/>';
+    const letter = ch.kind==='coil' ? '' : (ch.kind==='set'?'S':'R');
+    if(letter) s += '<text x="'+cx+'" y="'+(mid+4)+'" text-anchor="middle" class="coil-letter'+(on?' on':'')+'">'+letter+'</text>';
+    s += '<text x="'+cx+'" y="'+(top+h-4)+'" text-anchor="middle" class="addr'+(on?' addr-on':'')+'">'+addrStr(ch.ref,ch.addr)+'</text>';
+  } else if(ch.kind==='ton'){
+    s += drawTimer(ch, x, top, w, h, 'TON', 'T', 'PT='+(ch.pt*10)+'ms', state.T['T'+ch.addr]);
+  } else if(ch.kind==='ctu'){
+    s += drawTimer(ch, x, top, w, h, 'CTU', 'C', 'PV='+ch.pv, state.C['C'+ch.addr], 'CV');
+  } else if(ch.kind==='parallel'){
+    s += drawParallel(ch, x, top, w, h, ctx);
+  }
+  s += '</g>';
+  return s;
+}
+
+function drawContact(ch, x, top, w, h){
+  const mid = top + h/2;
+  const active = !!flowMap[ch.uid];
+  let s = '';
+  if(ch.mode==='CMP'){
+    const bx=x+2, by=top+4, bw=w-4, bh=h-22;
+    s += '<line x1="'+x+'" y1="'+mid+'" x2="'+(x+4)+'" y2="'+mid+'" class="'+(active?'wire-on':'wire')+'"/>';
+    s += '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="3" class="box'+(active?' box-on':'')+'"/>';
+    const k = ch.cmp || {op:'>',k:1000};
+    s += '<text x="'+(x+w/2)+'" y="'+(by+18)+'" text-anchor="middle" class="box-t">'+k.op+' '+k.k+'</text>';
+    s += '<text x="'+(x+w/2)+'" y="'+(by+34)+'" text-anchor="middle" class="box-s">AIW0</text>';
+    s += '<text x="'+(x+w/2)+'" y="'+(top+h-4)+'" text-anchor="middle" class="addr'+(active?' addr-on':'')+'">AIW0 '+k.op+' '+k.k+'</text>';
+    return s;
+  }
+  const b1 = x+9, b2 = x + w - 9;
+  const topY = top+8, botY = top + h - 16;
+  s += '<line x1="'+x+'" y1="'+mid+'" x2="'+b1+'" y2="'+mid+'" class="'+(active?'wire-on':'wire')+'"/>';
+  s += '<line x1="'+b1+'" y1="'+topY+'" x2="'+b1+'" y2="'+botY+'" class="'+(active?'bar-on':'bar')+'"/>';
+  s += '<line x1="'+b2+'" y1="'+topY+'" x2="'+b2+'" y2="'+botY+'" class="'+(active?'bar-on':'bar')+'"/>';
+  if(ch.mode==='NC'){
+    // 常闭：导线断开 + 斜杠
+    s += '<line x1="'+b1+'" y1="'+mid+'" x2="'+(b1+(b2-b1)*0.42)+'" y2="'+mid+'" class="'+(active?'wire-on':'wire')+'"/>';
+    s += '<line x1="'+(b1+(b2-b1)*0.58)+'" y1="'+mid+'" x2="'+b2+'" y2="'+mid+'" class="'+(active?'wire-on':'wire')+'"/>';
+    s += '<line x1="'+b1+'" y1="'+topY+'" x2="'+b2+'" y2="'+botY+'" class="slash"/>';
+  } else {
+    s += '<line x1="'+b1+'" y1="'+mid+'" x2="'+b2+'" y2="'+mid+'" class="'+(active?'wire-on':'wire')+'"/>';
+  }
+  s += '<text x="'+(x+w/2)+'" y="'+(top+h-4)+'" text-anchor="middle" class="addr'+(active?' addr-on':'')+'">'+addrStr(ch.ref,ch.addr)+'</text>';
+  return s;
+}
+
+function drawTimer(ch, x, top, w, h, tag, refPrefix, ptText, rt, livePrefix){
+  const mid = top + h/2;
+  const on = !!flowMap[ch.uid];
+  const bx=x+2, by=top+4, bw=w-4, bh=h-20;
+  let s = '';
+  s += '<line x1="'+x+'" y1="'+mid+'" x2="'+bx+'" y2="'+mid+'" class="'+(on?'wire-on':'wire')+'"/>';
+  s += '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="3" class="box'+(on?' box-on':'')+'"/>';
+  s += '<text x="'+(bx+7)+'" y="'+(by+17)+'" class="box-t">'+tag+'</text>';
+  s += '<text x="'+(bx+bw-7)+'" y="'+(by+17)+'" text-anchor="end" class="box-t">'+refPrefix+ch.addr+'</text>';
+  s += '<text x="'+(bx+7)+'" y="'+(by+33)+'" class="box-s">'+ptText+'</text>';
+  if(rt){
+    const liveVal = livePrefix==='CV' ? rt.cur : (rt.cur*10).toFixed(0)+'ms';
+    s += '<text x="'+(bx+bw-7)+'" y="'+(by+33)+'" text-anchor="end" class="box-s'+(on?' cur-on':'')+'">'+(livePrefix||'')+(livePrefix?' ':'')+liveVal+'</text>';
+  }
+  s += '<text x="'+(x+w/2)+'" y="'+(top+h-3)+'" text-anchor="middle" class="addr'+(on?' addr-on':'')+'">'+refPrefix+ch.addr+' · '+(livePrefix==='CV'?'计数':'定时')+'</text>';
+  return s;
+}
+
+function drawParallel(node, x, top, w, h, ctx){
+  const bs = node.branches.map(b=>layoutSeries(b));
+  let s = '';
+  // 左右母线
+  s += '<line x1="'+(x+7)+'" y1="'+(top+6)+'" x2="'+(x+7)+'" y2="'+(top+h-6)+'" class="wire"/>';
+  s += '<line x1="'+(x+w-7)+'" y1="'+(top+6)+'" x2="'+(x+w-7)+'" y2="'+(top+h-6)+'" class="wire"/>';
+  let cy = top + 7;
+  const innerX = x + 14, innerW = w - 28;
+  for(const b of node.branches){
+    const lh = layoutSeries(b).h;
+    const bmid = cy + lh/2;
+    // 左母线 → 支路
+    s += '<line x1="'+(x+7)+'" y1="'+bmid+'" x2="'+innerX+'" y2="'+bmid+'" class="wire"/>';
+    const endX = drawSeriesInner(b, innerX, cy, innerX + innerW, ctx);
+    // 支路 → 右母线
+    s += '<line x1="'+endX+'" y1="'+bmid+'" x2="'+(x+w-7)+'" y2="'+bmid+'" class="wire"/>';
+    cy += lh + 10;
+  }
+  return s;
+}
+
+function drawSeriesInner(children, x, top, stopX, ctx){
+  let s = '';
+  let cursor = x;
+  let prevEnd = null, prevMid = null;
+  const rowH = Math.max.apply(null, children.map(c=>layoutNode(c).h));
+  for(const ch of children){
+    const {w,h} = layoutNode(ch);
+    const childTop = top + (rowH-h)/2;
+    const mid = childTop + h/2;
+    if(prevEnd!=null){
+      s += '<line x1="'+prevEnd+'" y1="'+prevMid+'" x2="'+cursor+'" y2="'+prevMid+'" class="wire"/>';
+      if(prevMid!==mid) s += '<line x1="'+cursor+'" y1="'+prevMid+'" x2="'+cursor+'" y2="'+mid+'" class="wire"/>';
+    }
+    s += drawNode(ch, cursor, childTop, w, h, ctx);
+    prevEnd = cursor + w;
+    prevMid = mid;
+    cursor = cursor + w + 10;
+  }
+  // 若给出终止点（并联支路右母线），补一段导线
+  if(stopX!=null && prevEnd!=null && stopX>prevEnd){
+    s += '<line x1="'+prevEnd+'" y1="'+prevMid+'" x2="'+stopX+'" y2="'+prevMid+'" class="wire"/>';
+  }
+  return prevEnd == null ? x : prevEnd;
+}
+
+function renderRungLadder(r, container){
+  const children = r.root.children;
+  if(!children.length){
+    container.innerHTML = '<div class="rung-empty">该网络为空，用上方元件按钮添加触点与输出元件。</div>';
+    return;
+  }
+  const rowH = Math.max.apply(null, children.map(c=>layoutNode(c).h));
+  const w = layoutSeries(children).w + 18;
+  const h = rowH + 4;
+  const firstMid = 2 + rowH/2;
+  const firstIsPara = children[0] && children[0].kind==='parallel';
+  const railEnd = firstIsPara ? 25 : 18;
+  let s = '<svg viewBox="0 0 '+w+' '+h+'" width="100%" style="min-width:'+Math.min(w,520)+'px">';
+  s += '<line class="rail" x1="6" y1="0" x2="6" y2="'+h+'"/>';
+  s += '<line class="wire" x1="6" y1="'+firstMid+'" x2="'+railEnd+'" y2="'+firstMid+'"/>';
+  s += drawSeriesInner(children, 18, 2, 18 + layoutSeries(children).w, {});
+  s += '</svg>';
+  container.innerHTML = s;
+}
+
+/* ---------- 渲染：程序列表 ---------- */
+function renderProgram(){
+  const list = document.getElementById('rungList');
+  const noTip = document.getElementById('noRungTip');
+  noTip.style.display = program.length ? 'none' : 'block';
+  list.innerHTML = '';
+  program.forEach((r, i) => {
+    const card = document.createElement('div');
+    card.className = 'rung-card' + (sel.rungId===r.id ? ' selected' : '');
+    const head = document.createElement('div');
+    head.className = 'rung-head';
+    const no = document.createElement('span');
+    no.className = 'rno'; no.textContent = '网络' + (i+1);
+    const name = document.createElement('input');
+    name.className = 'name'; name.value = r.name;
+    name.placeholder = '网络 ' + (i+1) + ' 名称';
+    name.addEventListener('input', () => { r.name = name.value; });
+    name.addEventListener('click', (e) => e.stopPropagation());
+    const hint = document.createElement('span');
+    hint.className = 'rhint';
+    hint.textContent = r.root.children.length + ' 个元件';
+    head.appendChild(no); head.appendChild(name); head.appendChild(hint);
+    head.addEventListener('click', () => {
+      sel = {rungId:r.id, uid:null};
+      renderProgram(); renderInspector(); renderLadders(); renderExplanations();
+    });
+    const wrap = document.createElement('div');
+    wrap.className = 'ladder-wrap';
+    wrap.addEventListener('click', (e) => {
+      const g = e.target.closest('.el');
+      if(g){
+        sel = {rungId:r.id, uid:g.getAttribute('data-uid')};
+        renderProgram(); renderLadders(); renderInspector();
+      }
+    });
+    card.appendChild(head); card.appendChild(wrap);
+    list.appendChild(card);
+    renderRungLadder(r, wrap);
+  });
+}
+function renderLadders(){
+  const wraps = document.querySelectorAll('#rungList .ladder-wrap');
+  program.forEach((r, i) => {
+    renderRungLadder(r, wraps[i]);
+  });
+}
+
+/* ---------- 渲染：I/O 面板 ---------- */
+function buildIO(){
+  const grid = document.getElementById('ioGrid');
+  grid.innerHTML = '';
+  for(let i=0;i<8;i++){
+    const b = document.createElement('button');
+    b.className = 'sw'; b.type='button';
+    b.innerHTML = '<span class="lamp"></span><span><span class="tag mono">I0.'+i+'</span><br><span class="kind">'+(i<2?'启动/按钮':i<4?'限位/行程':i<6?'传感器/检测':'急停/其他')+'</span></span>';
+    b.addEventListener('click', () => {
+      state.I[i] = !state.I[i];
+      if(!state.running) refreshPreview();
+      updateIO();
+    });
+    grid.appendChild(b);
+  }
+  const out = document.getElementById('outGrid');
+  out.innerHTML = '';
+  const descs = ['主电机','指示灯','电磁阀','蜂鸣器'];
+  for(let i=0;i<4;i++){
+    const c = document.createElement('div');
+    c.className = 'outcell';
+    c.innerHTML = '<div class="olamp"></div><div class="tag mono">Q0.'+i+'</div><div class="desc">'+descs[i]+'</div>';
+    out.appendChild(c);
+  }
+  document.getElementById('aiwRange').addEventListener('input', (e) => {
+    state.AIW0 = +e.target.value;
+    refreshPreview();
+  });
+  document.getElementById('trendSel').addEventListener('change', (e) => {
+    trend.signal = e.target.value;
+    trend.buf = [];
+  });
+}
+function updateIO(){
+  const sws = document.querySelectorAll('#ioGrid .sw');
+  sws.forEach((el, i) => el.classList.toggle('on', state.I[i]));
+  document.getElementById('aiwVal').textContent = state.AIW0;
+  const out = document.querySelectorAll('#outGrid .outcell');
+  out.forEach((el, i) => el.classList.toggle('on', state.Q[i]));
+}
+
+/* ---------- 渲染：监控表 ---------- */
+function buildMonitor(){
+  const box = document.getElementById('monContent');
+  box.innerHTML = '';
+  function table(title, headers){
+    const st = document.createElement('div');
+    st.className = 'sec-title'; st.textContent = title;
+    const t = document.createElement('table');
+    t.className = 'mon-table';
+    let h = '<tr>';
+    headers.forEach(x => h += '<th>'+x+'</th>');
+    h += '</tr>';
+    t.innerHTML = h;
+    box.appendChild(st); box.appendChild(t);
+    return t;
+  }
+  const tI = table('输入 I', ['地址','状态']);
+  for(let i=0;i<8;i++){ const tr=document.createElement('tr'); tr.innerHTML='<td><span class="st"></span>I0.'+i+'</td><td class="val">OFF</td>'; tr.dataset.k='I'+i; tI.appendChild(tr); }
+  const tQ = table('输出 Q', ['地址','状态']);
+  for(let i=0;i<4;i++){ const tr=document.createElement('tr'); tr.innerHTML='<td><span class="st"></span>Q0.'+i+'</td><td class="val">OFF</td>'; tr.dataset.k='Q'+i; tQ.appendChild(tr); }
+  const tM = table('中间 M', ['地址','状态']);
+  for(let i=0;i<8;i++){ const tr=document.createElement('tr'); tr.innerHTML='<td><span class="st"></span>M0.'+i+'</td><td class="val">OFF</td>'; tr.dataset.k='M'+i; tM.appendChild(tr); }
+  const tT = table('定时器 T（10ms 基）', ['地址','当前','设定','触点']);
+  ['T37','T38','T39','T40'].forEach(k => { const tr=document.createElement('tr'); tr.innerHTML='<td><span class="st"></span>'+k+'</td><td class="val">0</td><td class="val">-</td><td class="val">OFF</td>'; tr.dataset.k=k; tT.appendChild(tr); });
+  const tC = table('计数器 C', ['地址','当前','设定','触点']);
+  ['C0','C1','C2'].forEach(k => { const tr=document.createElement('tr'); tr.innerHTML='<td><span class="st"></span>'+k+'</td><td class="val">0</td><td class="val">-</td><td class="val">OFF</td>'; tr.dataset.k=k; tC.appendChild(tr); });
+}
+function updateMonitor(){
+  const rows = document.querySelectorAll('#monContent tr');
+  rows.forEach(tr => {
+    const k = tr.dataset.k;
+    if(!k) return;
+    if(k[0]==='I'){ const v=state.I[+k.slice(1)]; tr.classList.toggle('on',v); tr.cells[1].textContent = v?'ON':'OFF'; }
+    else if(k[0]==='Q'){ const v=state.Q[+k.slice(1)]; tr.classList.toggle('on',v); tr.cells[1].textContent = v?'ON':'OFF'; }
+    else if(k[0]==='M'){ const v=state.M[+k.slice(1)]; tr.classList.toggle('on',v); tr.cells[1].textContent = v?'ON':'OFF'; }
+    else if(k[0]==='T'){ const rt=state.T[k]; if(rt){ tr.classList.toggle('on',rt.done); tr.cells[1].textContent=(rt.cur*10)+'ms'; tr.cells[2].textContent=(rt.pt*10)+'ms'; tr.cells[3].textContent=rt.done?'ON':'OFF'; } }
+    else if(k[0]==='C'){ const rt=state.C[k]; if(rt){ tr.classList.toggle('on',rt.done); tr.cells[1].textContent=rt.cur; tr.cells[2].textContent=rt.pv; tr.cells[3].textContent=rt.done?'ON':'OFF'; } }
+  });
+  document.getElementById('scanNum').textContent = state.scan;
+}
+
+/* ---------- 渲染：ST 代码 ---------- */
+function exprNode(node){
+  if(node.kind==='contact'){
+    const e = node.ref==='AIW'
+      ? 'AIW0 '+((node.cmp||{op:'>',k:1000}).op)+' '+((node.cmp||{op:'>',k:1000}).k)
+      : addrStr(node.ref,node.addr);
+    return node.mode==='NC' ? '(NOT '+e+')' : e;
+  }
+  if(node.kind==='parallel'){
+    return '(' + node.branches.map(b => exprSeries(b)).join(' OR ') + ')';
+  }
+  return '';
+}
+function exprSeries(children){
+  const parts = children.filter(c => c.kind==='contact' || c.kind==='parallel').map(exprNode);
+  return parts.join(' AND ');
+}
+function stBody(r){
+  const children = r.root.children;
+  const ti = terminalIndex(children);
+  const power = exprSeries(ti===-1 ? children : children.slice(0,ti));
+  const term = ti===-1 ? null : children[ti];
+  const indent = '  ';
+  let out = '';
+  const ifWrap = (cond, body) => {
+    return 'IF ('+cond+') THEN\n'+indent+body+'\nELSE\n'+indent+body+'ELSE_BODY\nEND_IF;';
+  };
+  if(!term){
+    return out + '(* 无输出元件 *)';
+  }
+  const cond = power || 'TRUE';
+  if(term.kind==='coil'){
+    out += ifWrap(cond, addrStr(term.ref,term.addr)+' := TRUE;').replace('ELSE_BODY', addrStr(term.ref,term.addr)+' := FALSE;') + '\n';
+  } else if(term.kind==='set'){
+    out += 'IF ('+cond+') THEN\n'+indent+addrStr(term.ref,term.addr)+' := TRUE;\nEND_IF;\n';
+  } else if(term.kind==='reset'){
+    out += 'IF ('+cond+') THEN\n'+indent+addrStr(term.ref,term.addr)+' := FALSE;\nEND_IF;\n';
+  } else if(term.kind==='ton'){
+    out += 'T'+term.addr+'(IN := ('+cond+'), PT := T#'+(term.pt*10)+'ms);\n';
+  } else if(term.kind==='ctu'){
+    out += 'C'+term.addr+'(CU := ('+cond+'), PV := '+term.pv+', R := FALSE);\n';
+  }
+  return out;
+}
+function renderST(){
+  let code = '(* ===== PLC 仿真工作台 · 结构化文本（自动生成）===== *)\n';
+  program.forEach((r,i) => {
+    code += '\n(* 网络'+(i+1)+'：'+(r.name||'')+' *)\n';
+    code += stBody(r);
+  });
+  // 简单高亮
+  const esc = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.getElementById('stCode').innerHTML = esc;
+}
+
+/* ---------- 渲染：回路解读 ---------- */
+function describeContact(ch){
+  const k = ch.cmp || {op:'>',k:1000};
+  const base = ch.ref==='AIW'
+    ? 'AIW0 '+k.op+' '+k.k
+    : addrStr(ch.ref,ch.addr);
+  if(ch.mode==='NC') return {t: base+' 未动作（常闭导通）', on: !flowMap[ch.uid], offText: base+' 已动作（常闭断开）'};
+  return {t: base+' 接通（常开闭合）', on: !!flowMap[ch.uid], offText: base+' 断开（常开未闭合）'};
+}
+function seriesText(children){
+  const conds = [];
+  for(const ch of children){
+    if(ch.kind==='contact'){
+      const d = describeContact(ch);
+      conds.push('<span class="'+(d.on?'cond-on':'cond-off')+'">'+(d.on?d.t:d.offText)+'</span>');
+    } else if(ch.kind==='parallel'){
+      const branchTex = ch.branches.map(b => '（' + b.map(c => {
+        const d = describeContact(c);
+        return d.on ? d.t : d.offText;
+      }).join(' 且 ') + '）').join(' 或 ');
+      conds.push(branchTex);
+    }
+  }
+  return conds.join(' 且 ');
+}
+function termText(term){
+  const on = !!flowMap[term.uid];
+  if(term.kind==='coil') return '线圈 <span class="act">'+addrStr(term.ref,term.addr)+'</span> '+(on?'得电输出':'断电');
+  if(term.kind==='set') return '置位 <span class="act">'+addrStr(term.ref,term.addr)+'</span>';
+  if(term.kind==='reset') return '复位 <span class="act">'+addrStr(term.ref,term.addr)+'</span>';
+  if(term.kind==='ton') return '定时器 <span class="act">T'+term.addr+'</span> 通电延时 '+(term.pt*10)+'ms 后触点导通'+(on?'（正在计时）':'');
+  if(term.kind==='ctu') return '计数器 <span class="act">C'+term.addr+'</span> 上升沿计数，满 '+term.pv+' 后触点导通';
+  return '';
+}
+function flowLine(children){
+  // 电流路径
+  let parts = ['<span class="f-rail">L+</span>'];
+  const walk = (arr) => {
+    for(const ch of arr){
+      if(ch.kind==='contact'){
+        const on = !!flowMap[ch.uid];
+        const k = ch.cmp || {op:'>',k:1000};
+        const label = ch.ref==='AIW' ? ('AIW0 '+k.op+' '+k.k) : addrStr(ch.ref,ch.addr);
+        parts.push('<span class="'+(on?'f-on':'f-off')+'">'+(on?'●':'○')+' '+label+'</span>');
+      } else if(ch.kind==='parallel'){
+        parts.push('<span class="f-rail">[并]</span>');
+        ch.branches.forEach(b => walk(b));
+      } else if(isOutput(ch)){
+        const on = !!flowMap[ch.uid];
+        const label = ch.kind==='ton'?'T'+ch.addr : ch.kind==='ctu'?'C'+ch.addr : addrStr(ch.ref,ch.addr);
+        parts.push('<span class="'+(on?'f-on':'f-off')+'">'+(on?'●':'○')+' '+label+'</span>');
+      }
+    }
+  };
+  walk(children);
+  parts.push('<span class="f-rail">L-</span>');
+  return parts.join(' → ');
+}
+function renderExplanations(){
+  const box = document.getElementById('expContent');
+  if(!program.length){
+    box.innerHTML = '<div class="empty-tip">暂无程序。选择左侧「示例」或手动添加元件后，这里会用<b>电流回路</b>的语言逐条解读每段梯形图。</div>';
+    return;
+  }
+  let html = '';
+  program.forEach((r, i) => {
+    const children = r.root.children;
+    const ti = terminalIndex(children);
+    const inputs = ti===-1 ? children : children.slice(0,ti);
+    const term = ti===-1 ? null : children[ti];
+    html += '<div class="explain-card">';
+    html += '<div class="et">网络'+(i+1)+' · <b>'+esc(r.name||'未命名')+'</b></div>';
+    html += '<div class="explain-line">'+(inputs.length?'当 '+seriesText(inputs)+' 时，':term?'始终：':'')+(term?termText(term):'<span class="cond-off">（缺输出元件）</span>')+'</div>';
+    html += '<div class="flow-line">'+flowLine(children)+'</div>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+}
+
+/* ---------- 渲染：趋势图 ---------- */
+const trend = { signal:'Q0.0', buf:[] };
+function signalValue(sig){
+  if(sig[0]==='I') return state.I[+sig.slice(1)]?1:0;
+  if(sig[0]==='Q') return state.Q[+sig.slice(1)]?1:0;
+  if(sig[0]==='M') return state.M[+sig.slice(1)]?1:0;
+  if(sig[0]==='T'){ const rt=state.T[sig]; return rt? (rt.done?1:0):0; }
+  if(sig[0]==='C'){ const rt=state.C[sig]; return rt? (rt.done?1:0):0; }
+  return 0;
+}
+function buildTrendOptions(){
+  const sel = document.getElementById('trendSel');
+  const opts = [];
+  for(let i=0;i<8;i++) opts.push('I0.'+i);
+  for(let i=0;i<4;i++) opts.push('Q0.'+i);
+  for(let i=0;i<8;i++) opts.push('M0.'+i);
+  ['T37','T38','T39','T40'].forEach(k=>opts.push(k+' 触点'));
+  ['C0','C1','C2'].forEach(k=>opts.push(k+' 触点'));
+  sel.innerHTML = opts.map(o => '<option value="'+o.replace(' 触点','')+'">'+o+'</option>').join('');
+}
+function updateTrend(){
+  trend.buf.push(signalValue(trend.signal));
+  if(trend.buf.length > 240) trend.buf.shift();
+  const cv = document.getElementById('trendCanvas');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = '#26323f'; ctx.lineWidth = 1;
+  for(let gy=0; gy<H; gy+=H/2){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+  const n = trend.buf.length;
+  const stepX = W / 240;
+  // 低电平基线 amber、高电平 green
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const x = W - (n-1-i)*stepX;
+    const y = H - 6 - trend.buf[i]*(H-18);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#3fb950';
+  ctx.stroke();
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const x = W - (n-1-i)*stepX;
+    const y = H - 6 - trend.buf[i]*(H-18);
+    ctx.lineTo(x,y); ctx.lineTo(x+stepX*0.9,y); ctx.moveTo(x+stepX,y);
+  }
+  ctx.strokeStyle = '#ffb020'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = '#8b98a6'; ctx.font = '10px "IBM Plex Mono", monospace';
+  ctx.fillText('信号 '+trend.signal, 6, 14);
+}
+
+/* ---------- 元件属性检查器 ---------- */
+function renderInspector(){
+  const box = document.getElementById('inspector');
+  box.innerHTML = '';
+  const rung = program.find(r => r.id === sel.rungId);
+  if(!rung){ box.innerHTML = '<span style="color:var(--ink-faint);font-size:11px">点击梯形图元件后可在此编辑地址与参数。</span>'; return; }
+  if(!sel.uid){
+    box.innerHTML = '<span style="color:var(--ink-faint);font-size:11px">已选中网络「'+esc(rung.name||'未命名')+'」，点击元件继续编辑。</span>';
+    return;
+  }
+  // 找节点
+  let node = null;
+  (function find(arr){
+    for(const c of arr){
+      if(c.uid===sel.uid){ node=c; return; }
+      if(c.kind==='parallel') c.branches.forEach(find);
+    }
+  })(rung.root.children);
+  if(!node){ box.innerHTML=''; return; }
+
+  const add = (label) => {
+    const sp = document.createElement('span');
+    sp.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-faint)';
+    sp.innerHTML = label;
+    box.appendChild(sp);
+  };
+  const field = (innerHTML) => {
+    const d = document.createElement('span');
+    d.style.cssText = 'display:flex;align-items:center;gap:5px';
+    d.innerHTML = innerHTML;
+    box.appendChild(d);
+    return d;
+  };
+
+  if(node.kind==='contact'){
+    add('触点');
+    field('<select id="ipMode">'+
+      '<option value="NO"'+(node.mode==='NO'?' selected':'')+'>常开 |</option>'+
+      '<option value="NC"'+(node.mode==='NC'?' selected':'')+'>常闭 |/|</option>'+
+      '<option value="CMP"'+(node.mode==='CMP'?' selected':'')+'>模拟比较</option></select>');
+    const refField = field('<select id="ipRef">'+
+      ['I','Q','M','T','C','AIW'].map(r=>'<option value="'+r+'"'+(node.ref===r?' selected':'')+'>'+r+'·'+refLabel(r)+'</option>').join('')+
+      '</select>');
+    const addrWrap = field('<span id="ipAddrWrap"></span>');
+    const cmpWrap = field('<span id="ipCmpWrap" style="display:none"></span>');
+    function renderAddr(){
+      const ref = document.getElementById('ipRef').value;
+      const mode = document.getElementById('ipMode').value;
+      document.getElementById('ipCmpWrap').style.display = (ref==='AIW') ? '' : 'none';
+      if(ref==='AIW'){ cmpWrap.innerHTML='<select id="ipCmpOp"><option value=">">AIW0 &gt;</option><option value="<">AIW0 &lt;</option></select><input id="ipCmpK" type="number" min="0" max="32000" style="width:74px" value="'+(node.cmp?node.cmp.k:1000)+'">'; 
+        const op=document.getElementById('ipCmpOp'); op.value = node.cmp?node.cmp.op:'>';
+        op.addEventListener('change', save); document.getElementById('ipCmpK').addEventListener('change', save);
+        return; }
+      let list;
+      if(ref==='I') list=[0,1,2,3,4,5,6,7].map(a=>'<option value="'+a+'"'+(node.addr===a?' selected':'')+'>'+ref+'.'+a+'</option>');
+      else if(ref==='Q') list=[0,1,2,3].map(a=>'<option value="'+a+'"'+(node.addr===a?' selected':'')+'>'+ref+'.'+a+'</option>');
+      else if(ref==='M') list=[0,1,2,3,4,5,6,7].map(a=>'<option value="'+a+'"'+(node.addr===a?' selected':'')+'>'+ref+'.'+a+'</option>');
+      else if(ref==='T') list=['37','38','39','40'].map(a=>'<option value="'+a+'"'+(String(node.addr)===a?' selected':'')+'>'+ref+a+'</option>');
+      else if(ref==='C') list=['0','1','2'].map(a=>'<option value="'+a+'"'+(String(node.addr)===a?' selected':'')+'>'+ref+a+'</option>');
+      addrWrap.innerHTML='<select id="ipAddr" style="width:82px">'+list.join('')+'</select>';
+      document.getElementById('ipAddr').addEventListener('change', save);
+      // 模式联动：AIW 之外不允许 CMP
+      const m = document.getElementById('ipMode');
+      if(ref!=='AIW'){ m.value = (node.mode==='CMP' ? 'NO' : node.mode); }
+    }
+    function save(){
+      const ref = document.getElementById('ipRef').value;
+      const mode = document.getElementById('ipMode').value;
+      if(ref==='AIW'){
+        node.ref='AIW'; node.mode='CMP';
+        node.cmp = {op: document.getElementById('ipCmpOp').value, k: +document.getElementById('ipCmpK').value};
+      } else {
+        node.ref = ref;
+        node.mode = document.getElementById('ipMode').value;
+        node.addr = ref==='T'||ref==='C' ? document.getElementById('ipAddr').value : +document.getElementById('ipAddr').value;
+      }
+      if(!state.running) evalProgram({advance:false});
+      renderLadders(); renderST(); renderExplanations(); updateMonitor();
+    }
+    document.getElementById('ipRef').addEventListener('change', () => { renderAddr(); save(); });
+    document.getElementById('ipMode').addEventListener('change', () => { renderAddr(); save(); });
+    renderAddr();
+  }
+  else if(node.kind==='coil'||node.kind==='set'||node.kind==='reset'){
+    const tag = node.kind==='coil'?'线圈':node.kind==='set'?'置位 S':'复位 R';
+    add(tag);
+    field('<select id="opRef">'+
+      ['Q','M'].map(r=>'<option value="'+r+'"'+(node.ref===r?' selected':'')+'>'+r+'·'+refLabel(r)+'</option>').join('')+
+      '</select><select id="opAddr">'+
+      (node.ref==='Q'?[0,1,2,3]:[0,1,2,3,4,5,6,7]).map(a=>'<option value="'+a+'"'+(node.addr===a?' selected':'')+'>'+node.ref+'.'+a+'</option>').join('')+
+      '</select>');
+    document.getElementById('opRef').addEventListener('change', () => {
+      const ref = document.getElementById('opRef').value;
+      node.ref = ref;
+      const selEl = document.getElementById('opAddr');
+      selEl.innerHTML = (ref==='Q'?[0,1,2,3]:[0,1,2,3,4,5,6,7]).map(a=>'<option value="'+a+'">'+ref+'.'+a+'</option>').join('');
+      node.addr = +selEl.value;
+      saveOut();
+    });
+    document.getElementById('opAddr').addEventListener('change', () => { node.addr = +document.getElementById('opAddr').value; saveOut(); });
+    function saveOut(){ if(!state.running) evalProgram({advance:false}); renderLadders(); renderST(); renderExplanations(); updateMonitor(); }
+  }
+  else if(node.kind==='ton'){
+    add('定时器 TON');
+    field('<select id="tnAddr">'+['37','38','39','40'].map(a=>'<option value="'+a+'"'+(String(node.addr)===a?' selected':'')+'>T'+a+'</option>').join('')+'</select>'+
+      '<input id="tnPt" type="number" min="1" max="990" style="width:70px" value="'+node.pt+'"><span style="font-size:10px;color:var(--ink-faint)">×10ms</span>');
+    function saveTn(){ node.addr = document.getElementById('tnAddr').value; node.pt = Math.max(1,+document.getElementById('tnPt').value||1); if(!state.running) evalProgram({advance:false}); renderLadders(); renderST(); renderExplanations(); updateMonitor(); }
+    document.getElementById('tnAddr').addEventListener('change', saveTn);
+    document.getElementById('tnPt').addEventListener('change', saveTn);
+  }
+  else if(node.kind==='ctu'){
+    add('计数器 CTU');
+    field('<select id="cuAddr">'+['0','1','2'].map(a=>'<option value="'+a+'"'+(String(node.addr)===a?' selected':'')+'>C'+a+'</option>').join('')+'</select>'+
+      '<input id="cuPv" type="number" min="1" max="99" style="width:60px" value="'+node.pv+'">');
+    function saveCu(){ node.addr = document.getElementById('cuAddr').value; node.pv = Math.max(1,+document.getElementById('cuPv').value||1); if(!state.running) evalProgram({advance:false}); renderLadders(); renderST(); renderExplanations(); updateMonitor(); }
+    document.getElementById('cuAddr').addEventListener('change', saveCu);
+    document.getElementById('cuPv').addEventListener('change', saveCu);
+  }
+}
+
+/* ---------- 编辑操作 ---------- */
+function findNode(children, uid){
+  for(let i=0;i<children.length;i++){
+    if(children[i].uid===uid) return {arr:children, idx:i};
+    if(children[i].kind==='parallel'){
+      for(const b of children[i].branches){
+        const r = findNode(b, uid);
+        if(r) return r;
+      }
+    }
+  }
+  return null;
+}
+function activeRung(){
+  return program.find(r => r.id === sel.rungId) || program[program.length-1] || null;
+}
+function ensureRung(){
+  let r = activeRung();
+  if(!r){ r = mkRung('网络 '+(program.length+1)); program.push(r); sel.rungId = r.id; sel.uid=null; }
+  return r;
+}
+function addContact(mode){
+  const r = ensureRung();
+  const ti = terminalIndex(r.root.children);
+  const el = mkContact(mode, 'I', 0);
+  r.root.children.splice(ti===-1 ? r.root.children.length : ti, 0, el);
+  sel = {rungId:r.id, uid:el.uid};
+  refreshAfterEdit();
+}
+function setTerminal(builder){
+  const r = ensureRung();
+  const ti = terminalIndex(r.root.children);
+  const el = builder();
+  if(ti===-1) r.root.children.push(el);
+  else r.root.children[ti] = el;
+  sel = {rungId:r.id, uid:el.uid};
+  refreshAfterEdit();
+}
+function parallelOp(){
+  const r = activeRung();
+  if(!r || !sel.uid){ 
+    const nr = ensureRung();
+    const ti = terminalIndex(nr.root.children);
+    const el = mkContact('NO','I',0);
+    nr.root.children.splice(ti===-1?nr.root.children.length:ti,0,el);
+    sel = {rungId:nr.id, uid:el.uid};
+    refreshAfterEdit();
+    return;
+  }
+  const node = findNode(r.root.children, sel.uid);
+  if(!node) return;
+  const ch = node.arr[node.idx];
+  if(ch.kind==='parallel'){
+    ch.branches.push([mkContact('NO','I',0)]);
+  } else if(ch.kind==='contact'){
+    // 找到该触点所处的串联容器：可能是根或某条并联支路
+    const parent = findParentSeries(r.root, ch);
+    if(parent){
+      const p = mkParallel([[ch],[mkContact('NO','I',0)]]);
+      parent.arr[parent.idx] = p;
+      sel = {rungId:r.id, uid:p.branches[1][0].uid};
+    }
+  }
+  refreshAfterEdit();
+}
+function findParentSeries(root, node){
+  // 在根 children 或任意 parallel 支路中找到 node 所在数组
+  const children = root.children;
+  for(let i=0;i<children.length;i++){
+    if(children[i]===node) return {arr:children, idx:i};
+    if(children[i].kind==='parallel'){
+      for(const b of children[i].branches){
+        for(let j=0;j<b.length;j++) if(b[j]===node) return {arr:b, idx:j};
+        const deep = findParentSeries(b.length?{children:b}:{children:[]}, node);
+        if(deep) return deep;
+      }
+    }
+  }
+  return null;
+}
+function deleteSelected(){
+  const r = activeRung();
+  if(!r || !sel.uid){ 
+    if(program.length>1){ program.pop(); sel={rungId:program[program.length-1].id,uid:null}; refreshAfterEdit(); }
+    return; 
+  }
+  const node = findNode(r.root.children, sel.uid);
+  if(node){ node.arr.splice(node.idx,1); }
+  sel = {rungId:r.id, uid:null};
+  refreshAfterEdit();
+}
+function refreshAfterEdit(){
+  if(!state.running) evalProgram({advance:false});
+  renderProgram(); renderInspector(); renderLadders(); renderST(); renderExplanations(); updateMonitor(); updateIO();
+}
+
+/* ---------- 示例程序 ---------- */
+function buildExample(kind){
+  program = [];
+  if(kind==='blank'){ program.push(mkRung('网络 1')); }
+  if(kind==='motor'){
+    let r1 = mkRung('电机启动（自保持）');
+    r1.root.children.push(
+      mkParallel([[mkContact('NO','I',0)],[mkContact('NO','Q',0)]]),
+      mkContact('NC','I',1),
+      mkCoil('Q',0)
+    );
+    let r2 = mkRung('运行指示灯');
+    r2.root.children.push(mkContact('NO','Q',0), mkCoil('Q',1));
+    program.push(r1,r2);
+  }
+  if(kind==='ton'){
+    let r1 = mkRung('启动按钮延时');
+    r1.root.children.push(mkContact('NO','I',0), mkTon('37',30));
+    let r2 = mkRung('延时后输出');
+    r2.root.children.push(mkContact('NO','T','37'), mkCoil('Q',0));
+    program.push(r1,r2);
+  }
+  if(kind==='ctu'){
+    let r1 = mkRung('按钮计数');
+    r1.root.children.push(mkContact('NO','I',0), mkCtu('0',5));
+    let r2 = mkRung('计满复位');
+    r2.root.children.push(mkContact('NO','I',1), mkReset('C','0'));
+    let r3 = mkRung('计满输出');
+    r3.root.children.push(mkContact('NO','C','0'), mkCoil('Q',0));
+    program.push(r1,r2,r3);
+  }
+  if(kind==='blink'){
+    let r1 = mkRung('定时器1计时');
+    r1.root.children.push(mkContact('NO','I',0), mkTon('37',20));
+    let r2 = mkRung('定时器2计时');
+    r2.root.children.push(mkContact('NO','T','37'), mkTon('38',20));
+    let r3 = mkRung('输出闪烁');
+    r3.root.children.push(mkContact('NO','T','37'), mkCoil('Q',0));
+    let r4 = mkRung('定时器1复位（自复位闪烁）');
+    r4.root.children.push(mkContact('NO','T','38'), mkReset('T','37'));
+    program.push(r1,r2,r3,r4);
+  }
+  sel = {rungId: program.length?program[0].id:null, uid:null};
+  reset();
+  renderProgram(); renderInspector(); renderST(); renderExplanations();
+}
+
+/* ---------- 全部渲染 ---------- */
+function refreshPreview(){
+  if(!state.running) evalProgram({advance:false});
+  renderLadders(); updateMonitor(); updateIO(); renderExplanations();
+}
+function renderAll(){
+  document.getElementById('scanNum').textContent = state.scan;
+  updateIO();
+  renderLadders();
+  updateMonitor();
+  updateTrend();
+  renderExplanations();
+}
+
+/* ---------- Tab 切换 ---------- */
+function initTabs(){
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.tpage').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('pg-'+t.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+/* ---------- 初始化 ---------- */
+function init(){
+  buildIO();
+  buildMonitor();
+  buildTrendOptions();
+  initTabs();
+  document.getElementById('btnRun').addEventListener('click', run);
+  document.getElementById('btnStop').addEventListener('click', stop);
+  document.getElementById('btnStep').addEventListener('click', step);
+  document.getElementById('btnReset').addEventListener('click', reset);
+  document.getElementById('btnAddNO').addEventListener('click', () => addContact('NO'));
+  document.getElementById('btnAddNC').addEventListener('click', () => addContact('NC'));
+  document.getElementById('btnPara').addEventListener('click', parallelOp);
+  document.getElementById('btnCoil').addEventListener('click', () => setTerminal(() => mkCoil('Q',0)));
+  document.getElementById('btnSet').addEventListener('click', () => setTerminal(() => mkSet('Q',0)));
+  document.getElementById('btnResetOut').addEventListener('click', () => setTerminal(() => mkReset('M',0)));
+  document.getElementById('btnTON').addEventListener('click', () => setTerminal(() => mkTon('37',30)));
+  document.getElementById('btnCTU').addEventListener('click', () => setTerminal(() => mkCtu('0',5)));
+  document.getElementById('btnDel').addEventListener('click', deleteSelected);
+  document.getElementById('exampleSel').addEventListener('change', (e) => buildExample(e.target.value));
+  buildExample('motor');
+  updateRunUI();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
